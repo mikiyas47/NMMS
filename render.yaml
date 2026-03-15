@@ -1,11 +1,9 @@
 services:
   - type: web
     name: nmms-backend
-    env: php
+    env: docker
     plan: free
     rootDir: backend
-    buildCommand: ./render-build.sh
-    startCommand: php artisan serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production
@@ -17,31 +15,10 @@ services:
         generateValue: true
       - key: DB_CONNECTION
         value: pgsql
-      - key: DB_HOST
-        fromService:
+      - key: DB_URL
+        fromDatabase:
           name: nmms-db
-          type: db
-          property: host
-      - key: DB_PORT
-        fromService:
-          name: nmms-db
-          type: db
-          property: port
-      - key: DB_DATABASE
-        fromService:
-          name: nmms-db
-          type: db
-          property: database
-      - key: DB_USERNAME
-        fromService:
-          name: nmms-db
-          type: db
-          property: user
-      - key: DB_PASSWORD
-        fromService:
-          name: nmms-db
-          type: db
-          property: password
+          property: connectionString
 
 databases:
   - name: nmms-db
