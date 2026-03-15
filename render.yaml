@@ -16,10 +16,4 @@ services:
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_URL
-        fromDatabase:
-          name: nmms-db
-          property: connectionString
-
-databases:
-  - name: nmms-db
-    plan: free
+        value: postgresql://neondb_owner:npg_7ZLWexJBQ3uN@ep-little-frost-ad8et1v2.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
