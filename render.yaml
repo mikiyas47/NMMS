@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: nmms-backend
+    env: php
+    plan: free
+    rootDir: backend
+    buildCommand: ./render-build.sh
+    startCommand: php artisan serve --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        value: https://nmms-backend.onrender.com
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromService:
+          name: nmms-db
+          type: db
+          property: host
+      - key: DB_PORT
+        fromService:
+          name: nmms-db
+          type: db
+          property: port
+      - key: DB_DATABASE
+        fromService:
+          name: nmms-db
+          type: db
+          property: database
+      - key: DB_USERNAME
+        fromService:
+          name: nmms-db
+          type: db
+          property: user
+      - key: DB_PASSWORD
+        fromService:
+          name: nmms-db
+          type: db
+          property: password
+
+databases:
+  - name: nmms-db
+    plan: free
