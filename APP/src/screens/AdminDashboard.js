@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   Dimensions,
   SafeAreaView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  Users, 
+  Users as UsersIcon, 
   DollarSign, 
   Activity, 
   TrendingUp, 
@@ -21,22 +23,53 @@ import {
   ChevronRight,
   ShieldCheck
 } from 'lucide-react-native';
+import axios from 'axios';
 
 const { width } = Dimensions.get('window');
 
 const AdminDashboard = ({ navigation }) => {
-  const stats = [
-    { label: 'Total Users', value: '1,280', icon: Users, color: '#3B82F6' },
-    { label: 'Paid Users', value: '842', icon: ShieldCheck, color: '#10B981' },
-    { label: 'Revenue', value: '$45.2k', icon: DollarSign, color: '#F59E0B' },
-    { label: 'Active Now', value: '24', icon: Activity, color: '#EF4444' },
-  ];
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState([
+    { label: 'Total Users', value: '-', icon: UsersIcon, color: '#3B82F6' },
+    { label: 'Paid Users', value: '-', icon: ShieldCheck, color: '#10B981' },
+    { label: 'Revenue', value: '-', icon: DollarSign, color: '#F59E0B' },
+    { label: 'Active Now', value: '-', icon: Activity, color: '#EF4444' },
+  ]);
 
-  const recentUsers = [
-    { id: 1, name: 'Mikiyas', email: 'mikishemels@gmail.com', role: 'Admin', status: 'Active', isPaid: true },
-    { id: 2, name: 'John Doe', email: 'john@example.com', role: 'User', status: 'Pending', isPaid: false },
-    { id: 3, name: 'Sarah Wilson', email: 'sarah@netgrow.com', role: 'User', status: 'Active', isPaid: true },
-  ];
+  const fetchUsers = async () => {
+    try {
+      const response = await axios.get('https://nmms-backend.onrender.com/api/all-users');
+      const allUsers = response.data;
+      setUsers(allUsers);
+      
+      // Calculate real stats
+      const paidCount = allUsers.filter(u => u.isPaid).length;
+      const activeCount = allUsers.filter(u => u.status === 'active').length;
+      
+      setStats([
+        { label: 'Total Users', value: allUsers.length.toString(), icon: UsersIcon, color: '#3B82F6' },
+        { label: 'Paid Users', value: paidCount.toString(), icon: ShieldCheck, color: '#10B981' },
+        { label: 'Revenue', value: `$${(paidCount * 50).toLocaleString()}`, icon: DollarSign, color: '#F59E0B' }, // Assuming $50/user
+        { label: 'Active Now', value: activeCount.toString(), icon: Activity, color: '#EF4444' },
+      ]);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchUsers();
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -57,7 +90,13 @@ const AdminDashboard = ({ navigation }) => {
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />
+          }
+        >
           {/* Stats Grid */}
           <View style={styles.statsGrid}>
             {stats.map((stat, index) => (
@@ -73,32 +112,38 @@ const AdminDashboard = ({ navigation }) => {
 
           {/* Activity Section */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAll}>View All</Text>
+            <Text style={styles.sectionTitle}>User Directory</Text>
+            <TouchableOpacity onPress={onRefresh}>
+              <Text style={styles.viewAll}>Refresh</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.activityCard}>
-            {recentUsers.map((user, index) => (
-              <View key={user.id} style={[styles.userRow, index === recentUsers.length - 1 && styles.lastRow]}>
-                <View style={styles.userAvatar}>
-                  <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
-                </View>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{user.name}</Text>
-                  <Text style={styles.userEmail}>{user.email}</Text>
-                </View>
-                <View style={styles.userMeta}>
-                  <View style={[styles.badge, user.isPaid ? styles.paidBadge : styles.pendingBadge]}>
-                    <Text style={[styles.badgeText, user.isPaid ? styles.paidText : styles.pendingText]}>
-                      {user.isPaid ? 'PAID' : 'PENDING'}
-                    </Text>
+            {loading ? (
+              <ActivityIndicator color="#3B82F6" style={{ marginVertical: 20 }} />
+            ) : users.length === 0 ? (
+              <Text style={{ color: '#9CA3AF', textAlign: 'center', marginVertical: 20 }}>No users found</Text>
+            ) : (
+              users.map((user, index) => (
+                <View key={user.userid} style={[styles.userRow, index === users.length - 1 && styles.lastRow]}>
+                  <View style={[styles.userAvatar, { backgroundColor: user.role === 'admin' ? '#EF4444' : '#3B82F6' }]}>
+                    <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
                   </View>
-                  <ChevronRight color="#4B5563" size={18} />
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{user.name}</Text>
+                    <Text style={styles.userEmail}>{user.email}</Text>
+                  </View>
+                  <View style={styles.userMeta}>
+                    <View style={[styles.badge, user.isPaid ? styles.paidBadge : styles.pendingBadge]}>
+                      <Text style={[styles.badgeText, user.isPaid ? styles.paidText : styles.pendingText]}>
+                        {user.isPaid ? 'PAID' : 'UNPAID'}
+                      </Text>
+                    </View>
+                    <ChevronRight color="#4B5563" size={18} />
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
 
           {/* Quick Actions */}
