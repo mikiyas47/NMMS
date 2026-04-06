@@ -40,15 +40,15 @@ const RegistrationScreen = ({ navigation }) => {
         { text: 'OK', onPress: () => navigation.navigate('Login') }
       ]);
     } catch (error) {
-        // Handle validation errors or network errors
-        const message = error.message || 'Registration failed. Please check your details.';
-        if (error.errors) {
-            // Laravel validation errors
-            const firstError = Object.values(error.errors)[0][0];
-            Alert.alert('Registration Failed', firstError);
-        } else {
-            Alert.alert('Registration Failed', message);
-        }
+      // Handle validation errors or network errors
+      const message = error.message || 'Registration failed. Please check your details.';
+      if (error.errors) {
+        // Laravel validation errors
+        const firstError = Object.values(error.errors)[0][0];
+        Alert.alert('Registration Failed', firstError);
+      } else {
+        Alert.alert('Registration Failed', message);
+      }
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ const RegistrationScreen = ({ navigation }) => {
             style={styles.keyboardView}
           >
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-              
+
               {/* Back Button */}
               <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                 <ChevronLeft color="#FFFFFF" size={24} />
@@ -84,7 +84,7 @@ const RegistrationScreen = ({ navigation }) => {
               {/* Form Card */}
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Create Account</Text>
-                
+
                 <View style={styles.inputContainer}>
                   <User color="#6B7280" size={20} style={styles.inputIcon} />
                   <TextInput
@@ -133,8 +133,8 @@ const RegistrationScreen = ({ navigation }) => {
                   />
                 </View>
 
-                <TouchableOpacity 
-                  style={styles.registerButton} 
+                <TouchableOpacity
+                  style={styles.registerButton}
                   onPress={handleRegister}
                   disabled={loading}
                 >
