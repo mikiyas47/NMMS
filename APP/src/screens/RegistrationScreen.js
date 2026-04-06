@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   TextInput,
@@ -9,16 +8,14 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
-  Dimensions,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Mail, Phone, Lock, ArrowRight, TrendingUp, ChevronLeft } from 'lucide-react-native';
+import { User, Mail, Phone, Lock, ArrowRight, TrendingUp, ChevronLeft, Sun, Moon } from 'lucide-react-native';
 import { register as registerApi } from '../api/authService';
-
-const { width, height } = Dimensions.get('window');
+import { useTheme } from '../context/ThemeContext';
 
 const RegistrationScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -26,129 +23,119 @@ const RegistrationScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { isDark, toggleTheme, colors: C } = useTheme();
 
   const handleRegister = async () => {
     if (!name || !email || !phone || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-
     setLoading(true);
     try {
-      const data = await registerApi({ name, email, phone, password });
+      await registerApi({ name, email, phone, password });
       Alert.alert('Success', 'Account created successfully! Please login.', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') }
+        { text: 'OK', onPress: () => navigation.navigate('Login') },
       ]);
     } catch (error) {
-      // Handle validation errors or network errors
-      const message = error.message || 'Registration failed. Please check your details.';
       if (error.errors) {
-        // Laravel validation errors
         const firstError = Object.values(error.errors)[0][0];
         Alert.alert('Registration Failed', firstError);
       } else {
-        Alert.alert('Registration Failed', message);
+        Alert.alert('Registration Failed', error.message || 'Registration failed.');
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const Field = ({ icon: Icon, placeholder, value, onChangeText, keyboard, secure }) => (
+    <View
+      className="flex-row items-center rounded-xl mb-4 px-4 h-14"
+      style={{ backgroundColor: C.inputBg }}
+    >
+      <Icon color={C.muted} size={20} />
+      <TextInput
+        placeholder={placeholder}
+        placeholderTextColor={C.muted}
+        className="flex-1 ml-3 text-base"
+        style={{ color: C.text }}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboard || 'default'}
+        secureTextEntry={!!secure}
+        autoCapitalize="none"
+      />
+    </View>
+  );
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        <LinearGradient
-          colors={['#1E3A8A', '#1E40AF', '#111827']}
-          style={styles.background}
-        >
+      <View className="flex-1">
+        <LinearGradient colors={C.gradBrand} className="flex-1">
+
+          {/* Theme Toggle */}
+          <TouchableOpacity
+            onPress={toggleTheme}
+            className="absolute top-12 right-5 z-10 w-10 h-10 rounded-full items-center justify-center"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+          >
+            {isDark ? <Sun color="#F59E0B" size={20} /> : <Moon color="#FFFFFF" size={20} />}
+          </TouchableOpacity>
+
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardView}
+            className="flex-1"
           >
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-              {/* Back Button */}
-              <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <ScrollView
+              contentContainerStyle={{ paddingHorizontal: 24, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 40, alignItems: 'center' }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Back button */}
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                className="self-start w-10 h-10 rounded-full items-center justify-center mb-5"
+                style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+              >
                 <ChevronLeft color="#FFFFFF" size={24} />
               </TouchableOpacity>
 
               {/* Header */}
-              <View style={styles.logoContainer}>
-                <View style={styles.iconCircle}>
+              <View className="items-center mb-8">
+                <View
+                  className="w-16 h-16 rounded-full items-center justify-center mb-4"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
+                >
                   <TrendingUp color="#F59E0B" size={32} />
                 </View>
-                <Text style={styles.brandTitle}>Join NetGrow</Text>
-                <Text style={styles.brandSubtitle}>Start your network marketing journey</Text>
+                <Text className="text-2xl font-bold text-white tracking-wider">Join NetGrow</Text>
+                <Text className="text-sm text-gray-300 mt-1 opacity-80">Start your network marketing journey</Text>
               </View>
 
               {/* Form Card */}
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Create Account</Text>
+              <View className="w-full rounded-3xl p-7 shadow-2xl" style={{ backgroundColor: C.surface }}>
+                <Text className="text-xl font-bold text-center mb-6" style={{ color: C.text }}>Create Account</Text>
 
-                <View style={styles.inputContainer}>
-                  <User color="#6B7280" size={20} style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="Full Name"
-                    placeholderTextColor="#9CA3AF"
-                    style={styles.input}
-                    value={name}
-                    onChangeText={setName}
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Mail color="#6B7280" size={20} style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="Email Address"
-                    placeholderTextColor="#9CA3AF"
-                    style={styles.input}
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Phone color="#6B7280" size={20} style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="Phone Number"
-                    placeholderTextColor="#9CA3AF"
-                    style={styles.input}
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Lock color="#6B7280" size={20} style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="Create Password"
-                    placeholderTextColor="#9CA3AF"
-                    style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                  />
-                </View>
+                <Field icon={User}  placeholder="Full Name"       value={name}     onChangeText={setName} />
+                <Field icon={Mail}  placeholder="Email Address"   value={email}    onChangeText={setEmail} keyboard="email-address" />
+                <Field icon={Phone} placeholder="Phone Number"    value={phone}    onChangeText={setPhone} keyboard="phone-pad" />
+                <Field icon={Lock}  placeholder="Create Password" value={password} onChangeText={setPassword} secure />
 
                 <TouchableOpacity
-                  style={styles.registerButton}
+                  className="w-full h-14 rounded-xl overflow-hidden mt-2"
                   onPress={handleRegister}
                   disabled={loading}
                 >
                   <LinearGradient
-                    colors={['#0D9488', '#0F766E']}
+                    colors={['#6366F1', '#4F46E5']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={styles.gradientButton}
+                    className="flex-1 flex-row justify-center items-center"
                   >
                     {loading ? (
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
                       <>
-                        <Text style={styles.registerButtonText}>REGISTER NOW</Text>
+                        <Text className="text-white text-base font-bold mr-3 tracking-widest">REGISTER NOW</Text>
                         <ArrowRight color="#FFFFFF" size={20} />
                       </>
                     )}
@@ -157,10 +144,10 @@ const RegistrationScreen = ({ navigation }) => {
               </View>
 
               {/* Footer */}
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Already have an account? </Text>
+              <View className="flex-row mt-8">
+                <Text className="text-sm text-gray-300">Already have an account? </Text>
                 <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                  <Text style={styles.loginText}>Sign In</Text>
+                  <Text className="text-sm font-bold text-yellow-400">Sign In</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -172,126 +159,3 @@ const RegistrationScreen = ({ navigation }) => {
 };
 
 export default RegistrationScreen;
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 25,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  iconCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  brandTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 1.2,
-  },
-  brandSubtitle: {
-    fontSize: 14,
-    color: '#D1D5DB',
-    marginTop: 5,
-    opacity: 0.8,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 25,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  cardTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    marginBottom: 15,
-    paddingHorizontal: 15,
-    height: 55,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    color: '#111827',
-    fontSize: 16,
-  },
-  registerButton: {
-    width: '100%',
-    height: 55,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: 10,
-  },
-  gradientButton: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  registerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginRight: 10,
-    letterSpacing: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    marginTop: 30,
-  },
-  footerText: {
-    color: '#D1D5DB',
-    fontSize: 14,
-  },
-  loginText: {
-    color: '#F59E0B',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-});

@@ -1,92 +1,136 @@
 import React from 'react';
 import {
-  StyleSheet,
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   User,
   TrendingUp,
   LogOut,
-  ChevronRight,
   CreditCard,
   Target,
-  Users
+  Users,
+  Sun,
+  Moon,
 } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const UserDashboard = ({ navigation }) => {
+  const { isDark, toggleTheme, colors: C } = useTheme();
+
+  const stats = [
+    { icon: Target,     color: C.amber,  label: 'Directs',   value: '8'    },
+    { icon: Users,      color: C.blue,   label: 'Team Size', value: '42'   },
+    { icon: CreditCard, color: C.green,  label: 'Earnings',  value: '$2.4k' },
+  ];
+
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient colors={['#1E3A8A', '#1E40AF', '#111827']} style={styles.background}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: C.bg }}>
+      <LinearGradient colors={C.gradBg} className="flex-1">
+
         {/* Header */}
-        <View style={styles.header}>
+        <View className="flex-row justify-between items-center px-6 pt-8 pb-5">
           <View>
-            <Text style={styles.greeting}>Member Portal</Text>
-            <Text style={styles.subtitle}>Welcome to the Network</Text>
+            <Text className="text-2xl font-bold" style={{ color: C.text }}>Member Portal</Text>
+            <Text className="text-sm mt-1" style={{ color: C.muted }}>Welcome to the Network</Text>
           </View>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Login')}>
-            <LogOut color="#EF4444" size={20} />
-          </TouchableOpacity>
+          <View className="flex-row items-center" style={{ gap: 10 }}>
+            {/* Theme Toggle */}
+            <TouchableOpacity
+              onPress={toggleTheme}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}
+            >
+              {isDark ? <Sun color="#F59E0B" size={18} /> : <Moon color={C.muted} size={18} />}
+            </TouchableOpacity>
+            {/* Logout */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Login')}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}
+            >
+              <LogOut color={C.red} size={20} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+
           {/* User Card */}
-          <View style={styles.userCard}>
-            <View style={styles.userInfo}>
-              <View style={styles.avatar}>
-                <User color="#FFFFFF" size={30} />
+          <View
+            className="rounded-3xl p-5 mb-6"
+            style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}
+          >
+            <View className="flex-row items-center">
+              <View
+                className="w-14 h-14 rounded-full items-center justify-center"
+                style={{ backgroundColor: C.accentLight }}
+              >
+                <User color={C.accent} size={28} />
               </View>
-              <View style={styles.details}>
-                <Text style={styles.userName}>Mikiyas</Text>
-                <Text style={styles.userRole}>Standard Member</Text>
+              <View className="flex-1 ml-4">
+                <Text className="text-xl font-bold" style={{ color: C.text }}>Mikiyas</Text>
+                <Text className="text-sm mt-0.5" style={{ color: C.muted }}>Standard Member</Text>
               </View>
-              <View style={[styles.badge, styles.activeBadge]}>
-                <Text style={styles.badgeText}>ACTIVE</Text>
+              <View className="px-3 py-1 rounded-lg" style={{ backgroundColor: 'rgba(16,185,129,0.15)' }}>
+                <Text className="text-xs font-bold" style={{ color: C.green }}>ACTIVE</Text>
               </View>
             </View>
           </View>
 
-          {/* User Stats/Shortcuts */}
-          <View style={styles.statsRow}>
-            <View style={styles.miniStat}>
-              <Target color="#F59E0B" size={24} />
-              <Text style={styles.statVal}>8</Text>
-              <Text style={styles.statLab}>Directs</Text>
-            </View>
-            <View style={styles.miniStat}>
-              <Users color="#3B82F6" size={24} />
-              <Text style={styles.statVal}>42</Text>
-              <Text style={styles.statLab}>Team Size</Text>
-            </View>
-            <View style={styles.miniStat}>
-              <CreditCard color="#10B981" size={24} />
-              <Text style={styles.statVal}>$2.4k</Text>
-              <Text style={styles.statLab}>Earnings</Text>
-            </View>
+          {/* Stats Row */}
+          <View className="flex-row justify-between mb-6">
+            {stats.map((s, i) => (
+              <View
+                key={i}
+                className="items-center rounded-2xl p-4"
+                style={{ width: (width - 64) / 3, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}
+              >
+                <s.icon color={s.color} size={24} />
+                <Text className="text-lg font-bold mt-2" style={{ color: C.text }}>{s.value}</Text>
+                <Text className="text-xs mt-0.5" style={{ color: C.muted }}>{s.label}</Text>
+              </View>
+            ))}
           </View>
 
           {/* Call to Action */}
-          <TouchableOpacity style={styles.mainCall}>
+          <TouchableOpacity className="rounded-2xl overflow-hidden mb-6">
             <LinearGradient
-              colors={['#0D9488', '#0F766E']}
+              colors={['#6366F1', '#4F46E5']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.callGradient}
+              className="p-6 flex-row justify-between items-center"
             >
               <View>
-                <Text style={styles.callTitle}>Network Growth</Text>
-                <Text style={styles.callSub}>Invite new members to grow</Text>
+                <Text className="text-white text-lg font-bold">Network Growth</Text>
+                <Text className="text-white/70 text-sm mt-1">Invite new members to grow</Text>
               </View>
-              <TrendingUp color="#FFFFFF" size={24} />
+              <TrendingUp color="#FFFFFF" size={28} />
             </LinearGradient>
           </TouchableOpacity>
+
+          {/* Info Cards */}
+          {[
+            { label: 'My Rank',        value: 'Silver',    color: C.amber  },
+            { label: 'Pending Bonus',  value: '$320',      color: C.green  },
+            { label: 'Next Goal',      value: '50 members',color: C.purple },
+          ].map((item, i) => (
+            <View
+              key={i}
+              className="flex-row justify-between items-center rounded-2xl px-5 py-4 mb-3"
+              style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}
+            >
+              <Text className="text-base font-medium" style={{ color: C.text }}>{item.label}</Text>
+              <Text className="text-base font-bold" style={{ color: item.color }}>{item.value}</Text>
+            </View>
+          ))}
 
         </ScrollView>
       </LinearGradient>
@@ -95,133 +139,3 @@ const UserDashboard = ({ navigation }) => {
 };
 
 export default UserDashboard;
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  background: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 25,
-    paddingTop: 30,
-    paddingBottom: 20,
-  },
-  greeting: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#D1D5DB',
-    marginTop: 4,
-  },
-  iconBtn: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  scrollContent: {
-    paddingHorizontal: 25,
-  },
-  userCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  details: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  userName: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  userRole: {
-    color: '#9CA3AF',
-    fontSize: 14,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  activeBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-  },
-  badgeText: {
-    color: '#10B981',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 25,
-  },
-  miniStat: {
-    width: (width - 70) / 3,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 15,
-    alignItems: 'center',
-  },
-  statVal: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginTop: 8,
-  },
-  statLab: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  mainCall: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 30,
-  },
-  callGradient: {
-    padding: 25,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  callTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  callSub: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    marginTop: 4,
-  }
-});
