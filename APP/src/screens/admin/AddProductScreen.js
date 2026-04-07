@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Package, Plus, Check, Image as ImageIcon } from 'lucide-react-native';
@@ -88,16 +89,26 @@ const AddProductScreen = ({ C }) => {
       if (form.description) formData.append('description', form.description);
 
       if (form.image) {
-        const uriParts = form.image.split('.');
-        const fileType = uriParts[uriParts.length - 1];
+        console.log('Image URI:', form.image);
+        // For React Native, we need to format the file object correctly
+        const filename = form.image.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        
+        console.log('Image filename:', filename);
+        console.log('Image type:', type);
+        
         formData.append('image', {
-          uri: form.image,
-          name: `photo.${fileType}`,
-          type: `image/${fileType}`,
+          uri: Platform.OS === 'ios' ? form.image.replace('file://', '') : form.image,
+          name: filename,
+          type: type,
         });
       }
       
+      console.log('Submitting form data...');
       const response = await apiClient.post('/products', formData);
+      
+      console.log('Response:', response.data);
       
       if (response.data && response.data.status === 'success') {
         const newProduct = response.data.data;

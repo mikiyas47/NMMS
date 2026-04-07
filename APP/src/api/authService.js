@@ -18,6 +18,13 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // For FormData in React Native, check using _parts property
+    if (config.data && typeof config.data === 'object' && config.data._parts) {
+      // This is a FormData object in React Native
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error) => {
