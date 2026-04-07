@@ -97,11 +97,7 @@ const AddProductScreen = ({ C }) => {
         });
       }
       
-      const response = await apiClient.post('/products', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await apiClient.post('/products', formData);
       
       if (response.data && response.data.status === 'success') {
         const newProduct = response.data.data;
@@ -117,6 +113,9 @@ const AddProductScreen = ({ C }) => {
       }
     } catch (err) {
       console.log('Error adding product:', err);
+      console.log('Error response:', err.response);
+      console.log('Error data:', err.response?.data);
+      console.log('Error status:', err.response?.status);
       const errorMessage = err.response && err.response.data && err.response.data.message 
                            ? err.response.data.message 
                            : err.message || 'Unknown error occurred';
