@@ -5,7 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from './src/screens/LoginScreen';
 import AdminDashboard from './src/screens/AdminDashboard';
-import UserDashboard from './src/screens/UserDashboard';
+import DistributorDashboard from './src/screens/DistributorDashboard';
 import RegistrationScreen from './src/screens/RegistrationScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
@@ -23,7 +23,7 @@ function AppNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegistrationScreen} />
           <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
-          <Stack.Screen name="UserDashboard" component={UserDashboard} />
+          <Stack.Screen name="UserDashboard" component={DistributorDashboard} />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style={isDark ? 'light' : 'dark'} />

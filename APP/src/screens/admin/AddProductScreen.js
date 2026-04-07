@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
   View,
   Text,
@@ -7,9 +8,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Package, Plus, Check } from 'lucide-react-native';
+import { Package, Plus, Check, Image as ImageIcon } from 'lucide-react-native';
+import apiClient from '../../api/authService';
 
 const AddProductScreen = ({ C }) => {
   const [form, setForm] = useState({
@@ -17,10 +20,15 @@ const AddProductScreen = ({ C }) => {
     price: '',
     description: '',
     stock: '',
+    image: null,
   });
   const [selCat, setSelCat] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  
+  // Local state to store products
+  const [addedProducts, setAddedProducts] = useState([]);
+  const [showProducts, setShowProducts] = useState(false);
 
   const categories = [
     'Electronics',
@@ -31,7 +39,37 @@ const AddProductScreen = ({ C }) => {
     'Other',
   ];
 
-  const handleSubmit = () => {
+  // Fetch products from backend
+  const fetchProducts = async () => {
+    try {
+      const response = await apiClient.get('/products');
+      if (response.data && response.data.data) {
+        setAddedProducts(response.data.data);
+      }
+    } catch (error) {
+      console.log('Error fetching products:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const pickImage = async () => {
+    // No permissions request is necessary for launching the image library
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setForm(p => ({ ...p, image: result.assets[0].uri }));
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!form.name || !form.price || !selCat) {
       Alert.alert(
         'Missing Fields',
@@ -40,15 +78,49 @@ const AddProductScreen = ({ C }) => {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    
+    try {
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('price', parseFloat(form.price));
+      formData.append('category', selCat);
+      formData.append('stock', form.stock ? parseInt(form.stock) : 0);
+      if (form.description) formData.append('description', form.description);
+
+      if (form.image) {
+        const uriParts = form.image.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+        formData.append('image', {
+          uri: form.image,
+          name: `photo.${fileType}`,
+          type: `image/${fileType}`,
+        });
+      }
+      
+      const response = await apiClient.post('/products', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      if (response.data && response.data.status === 'success') {
+        const newProduct = response.data.data;
+        // Optionally prepend instead of append, but fetching again also works
+        setAddedProducts(prev => [newProduct, ...prev]);
+        
+        setSubmitted(true);
+        setTimeout(() => {
+          setSubmitted(false);
+          setForm({ name: '', price: '', description: '', stock: '', image: null });
+          setSelCat('');
+        }, 2500);
+      }
+    } catch (err) {
+      console.log('Error adding product:', err);
+      Alert.alert('Error', 'Failed to add the product.');
+    } finally {
       setLoading(false);
-      setSubmitted(true);
-      setTimeout(() => {
-        setSubmitted(false);
-        setForm({ name: '', price: '', description: '', stock: '' });
-        setSelCat('');
-      }, 2500);
-    }, 1500);
+    }
   };
 
   if (submitted) {
@@ -92,16 +164,61 @@ const AddProductScreen = ({ C }) => {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="flex-row items-center mb-1">
-        <Package color={C.amber} size={26} />
-        <Text className="text-xl font-bold ml-2" style={{ color: C.text }}>
-          Add Product
-        </Text>
+      <View className="flex-row items-center justify-between mb-1">
+        <View className="flex-row items-center">
+          <Package color={C.amber} size={26} />
+          <Text className="text-xl font-bold ml-2" style={{ color: C.text }}>
+            {showProducts ? 'Added Products' : 'Add Product'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => setShowProducts(!showProducts)}
+          className="px-3 py-1.5 rounded-full"
+          style={{ backgroundColor: C.accent + '20' }}
+        >
+          <Text className="text-xs font-semibold" style={{ color: C.accent }}>
+            {showProducts ? 'Add New' : `View Products (${addedProducts.length})`}
+          </Text>
+        </TouchableOpacity>
       </View>
       <Text className="text-sm mb-5" style={{ color: C.muted }}>
-        Add a new product to the system catalog
+        {showProducts ? 'View all products currently added during this session' : 'Add a new product to the system catalog'}
       </Text>
 
+      {showProducts ? (
+        <View className="mb-4">
+          {addedProducts.length === 0 ? (
+            <View className="py-10 items-center justify-center">
+              <Text style={{ color: C.muted }}>No products added yet.</Text>
+            </View>
+          ) : (
+            addedProducts.map(product => (
+              <View 
+                key={product.id} 
+                className="rounded-xl p-4 mb-3"
+                style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}
+              >
+                <View className="flex-row justify-between mb-1">
+                  <Text className="font-bold text-base" style={{ color: C.text }}>{product.name}</Text>
+                  <Text className="font-bold" style={{ color: C.green }}>${product.price}</Text>
+                </View>
+                <View className="flex-row items-center mb-2">
+                  <View className="px-2 py-0.5 rounded-md mr-2" style={{ backgroundColor: C.accent + '20' }}>
+                    <Text className="text-[10px] font-semibold" style={{ color: C.accent }}>{product.category}</Text>
+                  </View>
+                  <Text className="text-xs" style={{ color: C.muted }}>Stock: {product.stock || '0'}</Text>
+                </View>
+                {product.image && (
+                  <Image source={{ uri: product.image }} className="w-full h-32 rounded-lg mb-2" resizeMode="cover" />
+                )}
+                {product.description ? (
+                  <Text className="text-xs" style={{ color: C.muted }}>{product.description}</Text>
+                ) : null}
+              </View>
+            ))
+          )}
+        </View>
+      ) : (
       <View
         className="rounded-2xl p-5 mb-4"
         style={{
@@ -110,6 +227,28 @@ const AddProductScreen = ({ C }) => {
           borderColor: C.border,
         }}
       >
+        {/* Image Picker */}
+        <Text
+          className="text-xs font-semibold mb-1.5"
+          style={{ color: C.muted }}
+        >
+          Product Image
+        </Text>
+        <TouchableOpacity 
+          onPress={pickImage}
+          className="w-full h-32 rounded-xl mb-4 items-center justify-center overflow-hidden"
+          style={{ backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border, borderStyle: 'dashed' }}
+        >
+          {form.image ? (
+            <Image source={{ uri: form.image }} className="w-full h-full" resizeMode="cover" />
+          ) : (
+            <View className="items-center">
+              <ImageIcon color={C.muted} size={30} />
+              <Text className="text-xs mt-2" style={{ color: C.muted }}>Tap to upload an image</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         {/* Name */}
         <Text
           className="text-xs font-semibold mb-1.5"
@@ -235,6 +374,7 @@ const AddProductScreen = ({ C }) => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+      )}
     </ScrollView>
   );
 };
