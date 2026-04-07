@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('location', 255)->nullable();
             $table->timestamp('created_at')->useCurrent();
 
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('user_id')->references('userid')->on('users')->onDelete('cascade');
         });
     }
 
