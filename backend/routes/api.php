@@ -19,19 +19,56 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
 });
 
-// Temporary migration endpoint - REMOVE THIS AFTER RUNNING ONCE
+// ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
+
+// Shows all tables + previously-run migrations
+Route::get('/db-status', function() {
+    try {
+        $tables = \Illuminate\Support\Facades\DB::select(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
+        );
+        $migrations = [];
+        try {
+            $migrations = \Illuminate\Support\Facades\DB::select('SELECT * FROM migrations ORDER BY id');
+        } catch (\Exception $e) {
+            $migrations = ['error' => $e->getMessage()];
+        }
+        return response()->json([
+            'status'     => 'ok',
+            'tables'     => array_column($tables, 'table_name'),
+            'migrations' => $migrations,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+});
+
+// Drops all tables and re-runs all migrations (USE ONLY ONCE TO FIX BROKEN STATE)
+Route::get('/migrate-fresh', function() {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true, '--seed' => true]);
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Fresh migration completed',
+            'output'  => \Illuminate\Support\Facades\Artisan::output(),
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+});
+
+// Runs pending migrations only
 Route::get('/migrate', function() {
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Migrations completed',
-            'output' => \Illuminate\Support\Facades\Artisan::output()
+            'output'  => \Illuminate\Support\Facades\Artisan::output(),
         ]);
     } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $e->getMessage()
-        ], 500);
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
