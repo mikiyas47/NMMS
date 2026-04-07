@@ -17,14 +17,16 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::create([
-            'name' => 'Mikiyas',
-            'email' => 'mikishemels@gmail.com',
-            'phone' => '0947482468',
-            'password' => \Hash::make('Mikiyas7'),
-            'role' => 'admin',
-            'status' => 'active',
-            'isPaid' => true,
-        ]);
+        User::firstOrCreate(
+            ['email' => 'mikishemels@gmail.com'],
+            [
+                'name'     => 'Mikiyas',
+                'phone'    => '0947482468',
+                'password' => \Hash::make('Mikiyas7'),
+                'role'     => 'admin',
+                'status'   => 'active',
+                'isPaid'   => true,
+            ]
+        );
     }
 }
