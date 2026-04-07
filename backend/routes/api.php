@@ -18,3 +18,20 @@ Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index'
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
 });
+
+// Temporary migration endpoint - REMOVE THIS AFTER RUNNING ONCE
+Route::get('/migrate', function() {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Migrations completed',
+            'output' => \Illuminate\Support\Facades\Artisan::output()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});
