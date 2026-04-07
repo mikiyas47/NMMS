@@ -17,6 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
+    Route::put('/products/{product}', [\App\Http\Controllers\ProductController::class, 'update']);
 });
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────

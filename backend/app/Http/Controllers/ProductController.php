@@ -93,4 +93,69 @@ class ProductController extends Controller
             ], 500);
         }
     }
+
+    public function update(Request $request, \App\Models\Product $product)
+    {
+        try {
+            $validatedData = $request->validate([
+                'name'         => 'sometimes|required|string|max:255',
+                'price'        => 'sometimes|required|numeric',
+                'category'     => 'sometimes|required|string',
+                'stock'        => 'nullable|integer',
+                'description'  => 'nullable|string',
+                // base64 approach
+                'image_base64' => 'nullable|string',
+                'image_mime'   => 'nullable|string',
+                // legacy
+                'image'        => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            ]);
+
+            if (isset($validatedData['stock']) && $validatedData['stock'] === null) {
+                $validatedData['stock'] = 0;
+            }
+
+            // ── Handle base64 image ───────────────────────────────────────
+            if ($request->filled('image_base64')) {
+                $base64   = $request->input('image_base64');
+                $mime     = $request->input('image_mime', 'image/jpeg');
+                $ext      = explode('/', $mime)[1] ?? 'jpg';
+                $ext      = ($ext === 'jpeg') ? 'jpg' : $ext;
+                $filename = 'products/' . uniqid('img_', true) . '.' . $ext;
+
+                $decoded = base64_decode($base64, true);
+                if ($decoded !== false) {
+                    Storage::disk('public')->put($filename, $decoded);
+                    $validatedData['image'] = url('storage/' . $filename);
+                }
+            }
+            // ── Handle classic file upload ────────────────────────────────
+            elseif ($request->hasFile('image')) {
+                $path = $request->file('image')->store('products', 'public');
+                $validatedData['image'] = url('storage/' . $path);
+            }
+
+            unset($validatedData['image_base64'], $validatedData['image_mime']);
+
+            $product->update($validatedData);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Product updated successfully',
+                'data'    => $product,
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Validation failed',
+                'errors'  => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Product update error: ' . $e->getMessage());
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Failed to update product: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }
