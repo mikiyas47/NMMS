@@ -25,6 +25,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { logout as logoutApi } from '../api/authService';
 import DistributorOverview from './distributor/DistributorOverview';
 import MyNetwork from './distributor/MyNetwork';
 import EarningsScreen from './distributor/EarningsScreen';
@@ -127,7 +128,10 @@ const DistributorDashboard = ({ navigation }) => {
             </TouchableOpacity>
             {/* Logout */}
             <TouchableOpacity
-              onPress={() => navigation.navigate('Login')}
+              onPress={async () => {
+                              await logoutApi();
+                              navigation.navigate('Login');
+                            }}
               className="w-9 h-9 rounded-xl items-center justify-center"
               style={{ backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}
             >
@@ -217,7 +221,10 @@ const DistributorDashboard = ({ navigation }) => {
 
             {/* Footer */}
             <TouchableOpacity
-              onPress={() => navigation.navigate('Login')}
+              onPress={async () => {
+                              await logoutApi();
+                              navigation.navigate('Login');
+                            }}
               className="flex-row items-center px-5 py-5 mx-3 mb-4 rounded-xl"
               style={{ backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}
             >

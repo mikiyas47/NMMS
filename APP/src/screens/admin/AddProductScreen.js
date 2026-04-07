@@ -117,7 +117,10 @@ const AddProductScreen = ({ C }) => {
       }
     } catch (err) {
       console.log('Error adding product:', err);
-      Alert.alert('Error', 'Failed to add the product.');
+      const errorMessage = err.response && err.response.data && err.response.data.message 
+                           ? err.response.data.message 
+                           : err.message || 'Unknown error occurred';
+      Alert.alert('Error', `Failed to add the product: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
