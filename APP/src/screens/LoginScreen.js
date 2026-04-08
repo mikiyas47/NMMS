@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Lock, ArrowRight, TrendingUp, Sun, Moon } from 'lucide-react-native';
+import { User, Lock, ArrowRight, TrendingUp, Sun, Moon, Eye, EyeOff } from 'lucide-react-native';
 import { login as loginApi } from '../api/authService';
 import { useTheme } from '../context/ThemeContext';
 
@@ -20,6 +20,7 @@ const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { isDark, toggleTheme, colors: C } = useTheme();
 
   const handleLogin = async () => {
@@ -114,8 +115,11 @@ const LoginScreen = ({ navigation }) => {
                     style={{ color: C.text }}
                     value={password}
                     onChangeText={setPassword}
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                   />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2">
+                    {showPassword ? <EyeOff color={C.muted} size={20} /> : <Eye color={C.muted} size={20} />}
+                  </TouchableOpacity>
                 </View>
 
                 {/* Forgot Password */}

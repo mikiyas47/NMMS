@@ -19,9 +19,13 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // For FormData in React Native, check using _parts property
-    if (config.data && typeof config.data === 'object' && config.data._parts) {
-      // This is a FormData object in React Native
+    // Detect FormData in React Native (can be _parts or FormData instance)
+    const isFormData =
+      config.data instanceof FormData ||
+      (config.data && typeof config.data === 'object' && config.data._parts);
+
+    if (isFormData) {
+      // Let the browser/RN set the correct multipart boundary automatically
       delete config.headers['Content-Type'];
     }
     
@@ -69,6 +73,15 @@ export const logout = async () => {
     // Clear stored tokens
     await AsyncStorage.removeItem('authToken');
     await AsyncStorage.removeItem('user');
+  }
+};
+
+export const getProducts = async () => {
+  try {
+    const response = await apiClient.get('/products');
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
   }
 };
 

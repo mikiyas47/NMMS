@@ -23,6 +23,7 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  ShoppingBag,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { logout as logoutApi } from '../api/authService';
@@ -31,6 +32,7 @@ import MyNetwork from './distributor/MyNetwork';
 import EarningsScreen from './distributor/EarningsScreen';
 import GoalsScreen from './distributor/GoalsScreen';
 import ProfileScreen from './distributor/ProfileScreen';
+import ProductsScreen from './distributor/ProductsScreen';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = 260;
@@ -39,6 +41,7 @@ const SIDEBAR_WIDTH = 260;
 const MENU = [
   { id: 'overview', label: 'Overview', icon: Home, gradient: ['#6366F1', '#818CF8'] },
   { id: 'network', label: 'My Network', icon: Users, gradient: ['#10B981', '#34D399'] },
+  { id: 'products', label: 'Products', icon: ShoppingBag, gradient: ['#8B5CF6', '#A78BFA'] },
   { id: 'earnings', label: 'Earnings', icon: DollarSign, gradient: ['#F59E0B', '#FCD34D'] },
   { id: 'goals', label: 'Goals', icon: Target, gradient: ['#EC4899', '#F472B6'] },
   { id: 'profile', label: 'Profile', icon: User, gradient: ['#3B82F6', '#60A5FA'] },
@@ -78,6 +81,8 @@ const DistributorDashboard = ({ navigation }) => {
         return <DistributorOverview C={C} />;
       case 'network':
         return <MyNetwork C={C} />;
+      case 'products':
+        return <ProductsScreen C={C} />;
       case 'earnings':
         return <EarningsScreen C={C} />;
       case 'goals':

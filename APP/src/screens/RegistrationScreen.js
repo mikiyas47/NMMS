@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Mail, Phone, Lock, ArrowRight, TrendingUp, ChevronLeft, Sun, Moon } from 'lucide-react-native';
+import { User, Mail, Phone, Lock, ArrowRight, TrendingUp, ChevronLeft, Sun, Moon, Eye, EyeOff } from 'lucide-react-native';
 import { register as registerApi } from '../api/authService';
 import { useTheme } from '../context/ThemeContext';
 
@@ -23,6 +23,7 @@ const RegistrationScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { isDark, toggleTheme, colors: C } = useTheme();
 
   const handleRegister = async () => {
@@ -62,9 +63,14 @@ const RegistrationScreen = ({ navigation }) => {
         value={value}
         onChangeText={onChangeText}
         keyboardType={keyboard || 'default'}
-        secureTextEntry={!!secure}
+        secureTextEntry={secure && !showPassword}
         autoCapitalize="none"
       />
+      {secure && (
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2">
+          {showPassword ? <EyeOff color={C.muted} size={20} /> : <Eye color={C.muted} size={20} />}
+        </TouchableOpacity>
+      )}
     </View>
   );
 
