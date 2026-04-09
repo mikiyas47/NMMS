@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Video } from 'expo-av';
 import {
   View,
   Text,
@@ -91,6 +92,16 @@ const ProductCard = ({ item, onSell, C }) => {
               source={{ uri: imageUri }}
               style={{ width: '100%', height: '100%' }}
               resizeMode="cover"
+            />
+          ) : imageUri && isVideo ? (
+            <Video
+              key={imageUri}
+              source={{ uri: imageUri }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+              useNativeControls={false}
+              shouldPlay={false}
+              isMuted={true}
             />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -268,7 +279,23 @@ const SellModal = ({ product, onClose, onConfirm, C }) => {
           <View style={{ flexDirection: 'row', backgroundColor: C.inputBg, borderRadius: 16, padding: 14, marginBottom: 18, alignItems: 'center' }}>
             <View style={{ width: 62, height: 80, borderRadius: 12, overflow: 'hidden', backgroundColor: C.border, marginRight: 14 }}>
               {product?.image ? (
-                <Image source={{ uri: toHttps(product.image) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                (() => {
+                  const uri = toHttps(product.image);
+                  const isVid = uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') || uri.endsWith('.mkv');
+                  return isVid ? (
+                    <Video
+                      key={uri}
+                      source={{ uri }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                      useNativeControls={false}
+                      shouldPlay={false}
+                      isMuted={true}
+                    />
+                  ) : (
+                    <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  );
+                })()
               ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <Package color={C.muted} size={24} />
