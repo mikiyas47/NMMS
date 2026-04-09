@@ -17,6 +17,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Package, Plus, Check, Image as ImageIcon, Video as VideoIcon } from 'lucide-react-native';
 import apiClient from '../../api/authService';
+import { deleteProduct } from '../../api/authService';
 
 const AddProductScreen = ({ C }) => {
   const [form, setForm] = useState({
@@ -280,6 +281,29 @@ const AddProductScreen = ({ C }) => {
     setShowProducts(true);
   };
 
+  const handleDeleteProduct = (product) => {
+    Alert.alert(
+      'Delete Product',
+      `Are you sure you want to delete "${product.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteProduct(product.id);
+              setAddedProducts(prev => prev.filter(p => p.id !== product.id));
+              Alert.alert('Deleted', `"${product.name}" has been removed.`);
+            } catch (err) {
+              Alert.alert('Error', err.message || 'Failed to delete product.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -349,17 +373,25 @@ const AddProductScreen = ({ C }) => {
                       </View>
                       <Text className="text-xs" style={{ color: C.muted }}>Stock: {product.stock || '0'}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleEditClick(product)}>
-                      <Text className="text-xs font-bold" style={{ color: C.amber }}>Edit</Text>
-                    </TouchableOpacity>
+                    <View className="flex-row items-center gap-3">
+                      <TouchableOpacity onPress={() => handleEditClick(product)}>
+                        <Text className="text-xs font-bold" style={{ color: C.amber }}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteProduct(product)}>
+                        <Text className="text-xs font-bold" style={{ color: '#EF4444' }}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 {product.image && (
                   isVideoUrl(product.image) ? (
-                    <Video 
+                    <Video
+                      key={getSecureUrl(product.image)}
                       source={{ uri: getSecureUrl(product.image) }}
                       useNativeControls
+                      shouldPlay={false}
                       style={{ width: '100%', height: 160, borderRadius: 8, marginBottom: 8 }}
                       resizeMode="cover"
+                      onError={(e) => console.log('Video load error:', e)}
                     />
                   ) : (
                     <Image source={{ uri: getSecureUrl(product.image) }} className="w-full h-32 rounded-lg mb-2" resizeMode="cover" />

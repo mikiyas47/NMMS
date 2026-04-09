@@ -114,4 +114,31 @@ class ProductController extends Controller
             ], 500);
         }
     }
+
+    public function destroy(\App\Models\Product $product)
+    {
+        try {
+            // Delete the associated file from storage if it exists
+            if ($product->image) {
+                // Extract the path after /storage/
+                $relativePath = ltrim(parse_url($product->image, PHP_URL_PATH), '/');
+                // Remove the leading 'storage/' to get the disk path
+                $diskPath = preg_replace('#^storage/#', '', $relativePath);
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($diskPath);
+            }
+
+            $product->delete();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Product deleted successfully',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Product delete error: ' . $e->getMessage());
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Failed to delete product: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

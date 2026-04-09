@@ -85,6 +85,15 @@ export const getProducts = async () => {
   }
 };
 
+export const deleteProduct = async (productId) => {
+  try {
+    const response = await apiClient.delete(`/products/${productId}`);
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};
+
 export const getUser = async () => {
   try {
     const user = await AsyncStorage.getItem('user');
