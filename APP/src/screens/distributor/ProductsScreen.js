@@ -21,6 +21,9 @@ import { getProducts } from '../../api/authService';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2; // 2 columns with 16px side padding & 16px gap
 
+// Force https so Android doesn't block http:// image URLs
+const toHttps = (url) => url ? url.replace(/^http:\/\//, 'https://') : url;
+
 // ─── Category pill colours ────────────────────────────────────────────────────
 const CATEGORY_COLORS = {
   default:  { bg: '#6366F1', light: 'rgba(99,102,241,0.12)' },
@@ -40,12 +43,13 @@ const getCategoryColor = (category = '') => {
 const ProductCard = ({ item, onSell, C }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const catColor = getCategoryColor(item.category);
+  const imageUri = toHttps(item.image);
   const isVideo =
-    item.image &&
-    (item.image.endsWith('.mp4') ||
-      item.image.endsWith('.mov') ||
-      item.image.endsWith('.avi') ||
-      item.image.endsWith('.mkv'));
+    imageUri &&
+    (imageUri.endsWith('.mp4') ||
+      imageUri.endsWith('.mov') ||
+      imageUri.endsWith('.avi') ||
+      imageUri.endsWith('.mkv'));
 
   const handlePressIn = () =>
     Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 30 }).start();
@@ -82,9 +86,9 @@ const ProductCard = ({ item, onSell, C }) => {
       >
         {/* ── Image Frame 3:4 ── */}
         <View style={{ width: '100%', aspectRatio: 3 / 4, backgroundColor: C.inputBg }}>
-          {item.image && !isVideo ? (
+          {imageUri && !isVideo ? (
             <Image
-              source={{ uri: item.image }}
+              source={{ uri: imageUri }}
               style={{ width: '100%', height: '100%' }}
               resizeMode="cover"
             />
@@ -264,7 +268,7 @@ const SellModal = ({ product, onClose, onConfirm, C }) => {
           <View style={{ flexDirection: 'row', backgroundColor: C.inputBg, borderRadius: 16, padding: 14, marginBottom: 18, alignItems: 'center' }}>
             <View style={{ width: 62, height: 80, borderRadius: 12, overflow: 'hidden', backgroundColor: C.border, marginRight: 14 }}>
               {product?.image ? (
-                <Image source={{ uri: product.image }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                <Image source={{ uri: toHttps(product.image) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
               ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <Package color={C.muted} size={24} />

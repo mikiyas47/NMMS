@@ -43,7 +43,7 @@ class ProductController extends Controller
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
                 $path = $request->file('image')->store('products', 'public');
-                $validatedData['image'] = url('storage/' . $path);
+                $validatedData['image'] = secure_url('storage/' . $path);
             }
 
             $newProduct = \App\Models\Product::create($validatedData);
@@ -89,7 +89,7 @@ class ProductController extends Controller
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
                 $path = $request->file('image')->store('products', 'public');
-                $validatedData['image'] = url('storage/' . $path);
+                $validatedData['image'] = secure_url('storage/' . $path);
             }
 
             $product->update($validatedData);
