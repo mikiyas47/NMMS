@@ -100,7 +100,8 @@ const ProductCard = ({ item, onSell, C }) => {
               style={{ width: '100%', height: '100%' }}
               resizeMode="cover"
               useNativeControls={false}
-              shouldPlay={false}
+              shouldPlay={true}
+              isLooping={true}
               isMuted={true}
             />
           ) : (
@@ -288,9 +289,9 @@ const SellModal = ({ product, onClose, onConfirm, C }) => {
                       source={{ uri }}
                       style={{ width: '100%', height: '100%' }}
                       resizeMode="cover"
-                      useNativeControls={false}
+                      useNativeControls={true}
                       shouldPlay={false}
-                      isMuted={true}
+                      isMuted={false}
                     />
                   ) : (
                     <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
