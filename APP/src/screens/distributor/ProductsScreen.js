@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Video } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  AppState,
 } from 'react-native';
 import { ShoppingCart, Search, X, Package, Tag, Star, RefreshCw, AlertCircle, CheckCircle, Filter } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,6 +39,65 @@ const CATEGORY_COLORS = {
 const getCategoryColor = (category = '') => {
   const key = category.toLowerCase();
   return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
+};
+
+// ─── Video Player Components ──────────────────────────────────────────────────
+const ProductVideo = ({ uri }) => {
+  const player = useVideoPlayer(uri, p => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        player.play();
+      } else if (nextAppState.match(/inactive|background/)) {
+        player.pause();
+      }
+    });
+    return () => subscription.remove();
+  }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={{ width: '100%', height: '100%' }}
+      contentFit="cover"
+      nativeControls={false}
+      allowsFullscreen={false}
+      allowsPictureInPicture={false}
+    />
+  );
+};
+
+const ModalVideo = ({ uri }) => {
+  const player = useVideoPlayer(uri, p => {
+    p.loop = true;
+    p.muted = false;
+    p.play();
+  });
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        player.play();
+      } else if (nextAppState.match(/inactive|background/)) {
+        player.pause();
+      }
+    });
+    return () => subscription.remove();
+  }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={{ width: '100%', height: '100%' }}
+      contentFit="cover"
+      nativeControls={true}
+    />
+  );
 };
 
 // ─── Single Product Card ──────────────────────────────────────────────────────
@@ -94,16 +154,7 @@ const ProductCard = ({ item, onSell, C }) => {
               resizeMode="cover"
             />
           ) : imageUri && isVideo ? (
-            <Video
-              key={imageUri}
-              source={{ uri: imageUri }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-              useNativeControls={false}
-              shouldPlay={true}
-              isLooping={true}
-              isMuted={true}
-            />
+            <ProductVideo uri={imageUri} />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Package color={C.muted} size={40} />
@@ -284,15 +335,7 @@ const SellModal = ({ product, onClose, onConfirm, C }) => {
                   const uri = toHttps(product.image);
                   const isVid = uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') || uri.endsWith('.mkv');
                   return isVid ? (
-                    <Video
-                      key={uri}
-                      source={{ uri }}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode="cover"
-                      useNativeControls={true}
-                      shouldPlay={false}
-                      isMuted={false}
-                    />
+                    <ModalVideo uri={uri} />
                   ) : (
                     <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                   );
@@ -361,6 +404,7 @@ const ProductsScreen = ({ C }) => {
   const [search, setSearch]           = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [sellTarget, setSellTarget]   = useState(null);
+  const appState = useRef(AppState.currentState);
 
   // ── Fetch from API ──────────────────────────────────────────────────────────
   const fetchProducts = useCallback(async (showLoader = true) => {
@@ -378,6 +422,18 @@ const ProductsScreen = ({ C }) => {
       setRefreshing(false);
     }
   }, []);
+
+  // ── AppState listener: refetch when app becomes active ──────
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // App just came to foreground — user may have been offline
+        fetchProducts(false);            // silently re-fetch product list
+      }
+      appState.current = nextAppState;
+    });
+    return () => subscription.remove();
+  }, [fetchProducts]);
 
   useEffect(() => { fetchProducts(); }, []);
 

@@ -79,4 +79,33 @@ class AuthController extends Controller
     {
         return response()->json(User::all());
     }
+    public function update(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        
+        $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|string|email|max:255|unique:users,email,'.$id.',userid',
+            'phone' => 'sometimes|required|string|max:20|unique:users,phone,'.$id.',userid',
+            'password' => 'nullable|string|min:8',
+        ]);
+
+        $data = $request->only(['name', 'email', 'phone']);
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($request->password);
+        }
+
+        $user->update($data);
+
+        return response()->json(['message' => 'User updated successfully', 'user' => $user]);
+    }
+
+    public function toggleStatus($id)
+    {
+        $user = User::findOrFail($id);
+        $user->status = $user->status === 'active' ? 'inactive' : 'active';
+        $user->save();
+
+        return response()->json(['message' => 'User status updated', 'user' => $user]);
+    }
 }

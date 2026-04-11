@@ -8,7 +8,8 @@ use App\Http\Controllers\Api\AuthController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/all-users', [AuthController::class, 'index']);
-
+Route::put('/users/{id}', [AuthController::class, 'update']);
+Route::patch('/users/{id}/status', [AuthController::class, 'toggleStatus']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
