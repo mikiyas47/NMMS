@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ContactController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -21,6 +22,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/products/{product}', [\App\Http\Controllers\ProductController::class, 'update']);
     Route::delete('/products/{product}', [\App\Http\Controllers\ProductController::class, 'destroy']);
 });
+
+// ── Contacts (Prospects / Followups / Closings) ───────────────────────────────
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/contacts',                        [ContactController::class, 'index']);
+    Route::post('/contacts',                       [ContactController::class, 'store']);
+    Route::get('/contacts/followups',              [ContactController::class, 'followups']);
+    Route::get('/contacts/closings',               [ContactController::class, 'closings']);
+    Route::get('/contacts/{id}',                   [ContactController::class, 'show']);
+    Route::put('/contacts/{id}',                   [ContactController::class, 'update']);
+    Route::delete('/contacts/{id}',                [ContactController::class, 'destroy']);
+    Route::post('/contacts/{id}/followups',        [ContactController::class, 'storeFollowup']);
+    Route::post('/contacts/{id}/closings',         [ContactController::class, 'storeClosing']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 

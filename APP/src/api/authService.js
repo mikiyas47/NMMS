@@ -104,4 +104,48 @@ export const getUser = async () => {
   }
 };
 
+// ── Contacts (Prospects) ──────────────────────────────────────────────────────
+export const getContacts = async () => {
+  const response = await apiClient.get('/contacts');
+  return response.data;
+};
+
+export const createContact = async (data) => {
+  const response = await apiClient.post('/contacts', data);
+  return response.data;
+};
+
+export const updateContact = async (id, data) => {
+  const response = await apiClient.put(`/contacts/${id}`, data);
+  return response.data;
+};
+
+export const deleteContact = async (id) => {
+  const response = await apiClient.delete(`/contacts/${id}`);
+  return response.data;
+};
+
+// ── Follow-ups ────────────────────────────────────────────────────────────────
+export const getFollowups = async () => {
+  const response = await apiClient.get('/contacts/followups');
+  return response.data;
+};
+
+export const createFollowup = async (contactId, data) => {
+  const response = await apiClient.post(`/contacts/${contactId}/followups`, data);
+  return response.data;
+};
+
+// ── Closing Attempts ──────────────────────────────────────────────────────────
+export const getClosings = async () => {
+  const response = await apiClient.get('/contacts/closings');
+  return response.data;
+};
+
+export const createClosing = async (contactId, data) => {
+  const response = await apiClient.post(`/contacts/${contactId}/closings`, data);
+  return response.data;
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default apiClient;
