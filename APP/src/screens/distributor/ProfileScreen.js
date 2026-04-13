@@ -1,98 +1,174 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { User, Mail, Phone, MapPin, Calendar, Edit, ChevronRight } from 'lucide-react-native';
+import React, { useRef, useEffect } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, Animated,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  User, Mail, Phone, MapPin, Calendar,
+  Edit, ChevronRight, Shield, Star, Award,
+  Bell, Lock, HelpCircle, LogOut,
+} from 'lucide-react-native';
+
+const FadeIn = ({ delay = 0, children }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(18)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(anim, { toValue:1, duration:420, delay, useNativeDriver:true }),
+      Animated.timing(slide, { toValue:0, duration:420, delay, useNativeDriver:true }),
+    ]).start();
+  }, []);
+  return <Animated.View style={{ opacity:anim, transform:[{ translateY:slide }] }}>{children}</Animated.View>;
+};
 
 const ProfileScreen = ({ C }) => {
-  const profileInfo = [
-    { icon: User, label: 'Full Name', value: 'Miki Prospect' },
-    { icon: Mail, label: 'Email', value: 'miki@gmail.com' },
-    { icon: Phone, label: 'Phone', value: '0912345678' },
-    { icon: Calendar, label: 'Member Since', value: 'December 2024' },
-    { icon: MapPin, label: 'Location', value: 'Addis Ababa, Ethiopia' },
+  const info = [
+    { icon:User,     label:'Full Name',     value:'Miki Prospect' },
+    { icon:Mail,     label:'Email',         value:'miki@gmail.com' },
+    { icon:Phone,    label:'Phone',         value:'0912345678' },
+    { icon:Calendar, label:'Member Since',  value:'December 2024' },
+    { icon:MapPin,   label:'Location',      value:'Addis Ababa, Ethiopia' },
   ];
 
-  const stats = [
-    { label: 'Rank', value: 'Silver', color: C.amber },
-    { label: 'Status', value: 'Active', color: C.green },
-    { label: 'Referrals', value: '8', color: C.blue },
+  const settingsGroups = [
+    {
+      title:'Account',
+      items:[
+        { label:'Change Password', icon:Lock,      color:'#6366F1' },
+        { label:'Notifications',   icon:Bell,      color:'#F59E0B' },
+        { label:'Privacy Settings',icon:Shield,    color:'#10B981' },
+      ],
+    },
+    {
+      title:'Support',
+      items:[
+        { label:'Help & Support',  icon:HelpCircle, color:'#3B82F6' },
+      ],
+    },
   ];
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
-      {/* Profile Header */}
-      <View className="items-center mb-5">
-        <View
-          className="w-24 h-24 rounded-full items-center justify-center mb-3"
-          style={{ backgroundColor: C.accentLight }}
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:24 }}>
+
+      {/* ── Profile hero ── */}
+      <FadeIn delay={0}>
+        <LinearGradient
+          colors={['#1E1B4B','#3730A3','#4F46E5']}
+          start={{ x:0, y:0 }} end={{ x:1, y:1 }}
+          style={{ borderRadius:26, padding:24, marginBottom:18, alignItems:'center', overflow:'hidden' }}
         >
-          <User color={C.accent} size={48} />
-        </View>
-        <Text className="text-2xl font-bold" style={{ color: C.text }}>Miki Prospect</Text>
-        <Text className="text-sm mt-1" style={{ color: C.muted }}>Distributor</Text>
-        <View className="mt-2 px-3 py-1 rounded-full" style={{ backgroundColor: 'rgba(245,158,11,0.15)' }}>
-          <Text className="text-xs font-bold" style={{ color: C.amber }}>SILVER MEMBER</Text>
-        </View>
-      </View>
+          {/* Background circles */}
+          <View style={{ position:'absolute', right:-40, top:-40, width:140, height:140, borderRadius:70, backgroundColor:'rgba(255,255,255,0.05)' }} />
+          <View style={{ position:'absolute', left:-30, bottom:-30, width:100, height:100, borderRadius:50, backgroundColor:'rgba(255,255,255,0.05)' }} />
 
-      {/* Stats Row */}
-      <View className="flex-row justify-between mb-5" style={{ gap: 8 }}>
-        {stats.map((stat, i) => (
-          <View
-            key={i}
-            className="flex-1 rounded-2xl p-4 items-center"
-            style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}
-          >
-            <Text className="text-lg font-bold" style={{ color: stat.color }}>{stat.value}</Text>
-            <Text className="text-xs mt-1" style={{ color: C.muted }}>{stat.label}</Text>
+          {/* Avatar */}
+          <View style={{ width:84, height:84, borderRadius:42, backgroundColor:'rgba(255,255,255,0.2)', alignItems:'center', justifyContent:'center', marginBottom:14, borderWidth:3, borderColor:'rgba(255,255,255,0.35)' }}>
+            <User color="#fff" size={40} />
           </View>
-        ))}
-      </View>
 
-      {/* Profile Information */}
-      <Text className="text-base font-bold mb-3" style={{ color: C.text }}>Profile Information</Text>
-      <View className="rounded-2xl overflow-hidden mb-5" style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}>
-        {profileInfo.map((info, i) => (
-          <View
-            key={i}
-            className="flex-row items-center px-4 py-3"
-            style={{ borderBottomWidth: i < profileInfo.length - 1 ? 1 : 0, borderBottomColor: C.border }}
-          >
-            <View className="w-8 h-8 rounded-lg items-center justify-center mr-3" style={{ backgroundColor: C.card }}>
-              <info.icon color={C.muted} size={16} />
+          <Text style={{ color:'#fff', fontSize:22, fontWeight:'800' }}>Miki Prospect</Text>
+          <Text style={{ color:'rgba(255,255,255,0.6)', fontSize:13, marginTop:4 }}>Distributor · Addis Ababa</Text>
+
+          <View style={{ flexDirection:'row', gap:8, marginTop:14 }}>
+            <View style={{ backgroundColor:'rgba(245,158,11,0.25)', borderRadius:20, paddingHorizontal:14, paddingVertical:6, borderWidth:1, borderColor:'rgba(245,158,11,0.4)' }}>
+              <Text style={{ color:'#FCD34D', fontSize:12, fontWeight:'800' }}>⭐ SILVER</Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-xs" style={{ color: C.muted }}>{info.label}</Text>
-              <Text className="text-sm font-semibold" style={{ color: C.text }}>{info.value}</Text>
+            <View style={{ backgroundColor:'rgba(16,185,129,0.25)', borderRadius:20, paddingHorizontal:14, paddingVertical:6, borderWidth:1, borderColor:'rgba(16,185,129,0.4)' }}>
+              <Text style={{ color:'#6EE7B7', fontSize:12, fontWeight:'800' }}>✦ ACTIVE</Text>
             </View>
           </View>
-        ))}
-      </View>
+        </LinearGradient>
+      </FadeIn>
 
-      {/* Edit Profile Button */}
-      <TouchableOpacity className="rounded-2xl overflow-hidden mb-5">
-        <View
-          className="p-4 flex-row justify-center items-center"
-          style={{ backgroundColor: C.accent }}
-        >
-          <Edit color="#fff" size={18} />
-          <Text className="text-white text-base font-bold ml-2">Edit Profile</Text>
+      {/* ── Stats ── */}
+      <FadeIn delay={80}>
+        <View style={{ flexDirection:'row', gap:10, marginBottom:20 }}>
+          {[
+            { label:'Referrals', value:'8',    icon:Award, color:'#6366F1', bg:'rgba(99,102,241,0.12)' },
+            { label:'Team',      value:'42',   icon:User,  color:'#10B981', bg:'rgba(16,185,129,0.12)' },
+            { label:'Earned',    value:'$2.4k',icon:Star,  color:'#F59E0B', bg:'rgba(245,158,11,0.12)' },
+          ].map((s, i) => (
+            <View key={i} style={{ flex:1, backgroundColor:C.surface, borderRadius:18, borderWidth:1, borderColor:C.border, padding:14, alignItems:'center' }}>
+              <View style={{ width:36, height:36, borderRadius:10, backgroundColor:s.bg, alignItems:'center', justifyContent:'center', marginBottom:8 }}>
+                <s.icon color={s.color} size={16} />
+              </View>
+              <Text style={{ fontSize:16, fontWeight:'800', color:C.text }}>{s.value}</Text>
+              <Text style={{ fontSize:10, color:C.muted, marginTop:3 }}>{s.label}</Text>
+            </View>
+          ))}
         </View>
-      </TouchableOpacity>
+      </FadeIn>
 
-      {/* Account Settings */}
-      <Text className="text-base font-bold mb-3" style={{ color: C.text }}>Account Settings</Text>
-      <View className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}>
-        {['Change Password', 'Notification Preferences', 'Privacy Settings', 'Help & Support'].map((item, i) => (
-          <TouchableOpacity
-            key={i}
-            className="flex-row items-center justify-between px-4 py-3"
-            style={{ borderBottomWidth: i < 3 ? 1 : 0, borderBottomColor: C.border }}
+      {/* ── Edit button ── */}
+      <FadeIn delay={120}>
+        <TouchableOpacity activeOpacity={0.85} style={{ marginBottom:20 }}>
+          <LinearGradient
+            colors={['#6366F1','#8B5CF6']}
+            start={{ x:0, y:0 }} end={{ x:1, y:0 }}
+            style={{ borderRadius:16, height:50, flexDirection:'row', alignItems:'center', justifyContent:'center' }}
           >
-            <Text className="text-sm" style={{ color: C.text }}>{item}</Text>
-            <ChevronRight color={C.muted} size={16} />
-          </TouchableOpacity>
+            <Edit color="#fff" size={17} />
+            <Text style={{ color:'#fff', fontWeight:'800', fontSize:15, marginLeft:8 }}>Edit Profile</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </FadeIn>
+
+      {/* ── Profile info list ── */}
+      <FadeIn delay={160}>
+        <Text style={{ fontSize:13, fontWeight:'700', color:C.muted, letterSpacing:1, marginBottom:10 }}>PROFILE INFO</Text>
+        <View style={{ backgroundColor:C.surface, borderRadius:20, borderWidth:1, borderColor:C.border, overflow:'hidden', marginBottom:20 }}>
+          {info.map((row, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection:'row', alignItems:'center',
+                paddingHorizontal:16, paddingVertical:14,
+                borderBottomWidth: i < info.length-1 ? 1 : 0,
+                borderBottomColor:C.border,
+              }}
+            >
+              <View style={{ width:36, height:36, borderRadius:10, backgroundColor:C.card, alignItems:'center', justifyContent:'center', marginRight:14 }}>
+                <row.icon color={C.muted} size={15} />
+              </View>
+              <View style={{ flex:1 }}>
+                <Text style={{ fontSize:11, color:C.muted, fontWeight:'600' }}>{row.label}</Text>
+                <Text style={{ fontSize:14, fontWeight:'700', color:C.text, marginTop:2 }}>{row.value}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </FadeIn>
+
+      {/* ── Settings groups ── */}
+      <FadeIn delay={220}>
+        {settingsGroups.map((group, gi) => (
+          <View key={gi} style={{ marginBottom:16 }}>
+            <Text style={{ fontSize:13, fontWeight:'700', color:C.muted, letterSpacing:1, marginBottom:10 }}>
+              {group.title.toUpperCase()}
+            </Text>
+            <View style={{ backgroundColor:C.surface, borderRadius:20, borderWidth:1, borderColor:C.border, overflow:'hidden' }}>
+              {group.items.map((item, ii) => (
+                <TouchableOpacity
+                  key={ii}
+                  activeOpacity={0.75}
+                  style={{
+                    flexDirection:'row', alignItems:'center',
+                    paddingHorizontal:16, paddingVertical:14,
+                    borderBottomWidth: ii < group.items.length-1 ? 1 : 0,
+                    borderBottomColor:C.border,
+                  }}
+                >
+                  <View style={{ width:36, height:36, borderRadius:10, backgroundColor:item.color+'18', alignItems:'center', justifyContent:'center', marginRight:14 }}>
+                    <item.icon color={item.color} size={16} />
+                  </View>
+                  <Text style={{ flex:1, fontSize:14, fontWeight:'600', color:C.text }}>{item.label}</Text>
+                  <ChevronRight color={C.border} size={16} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         ))}
-      </View>
+      </FadeIn>
     </ScrollView>
   );
 };

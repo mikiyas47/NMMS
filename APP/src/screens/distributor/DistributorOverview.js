@@ -1,158 +1,203 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
+  View, Text, ScrollView,
+  TouchableOpacity, Animated, Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Users,
-  DollarSign,
-  Target,
-  TrendingUp,
-  Star,
-  ArrowUp,
-  ChevronRight,
+  Users, DollarSign, Target, Star, ArrowUpRight,
+  Zap, Gift, TrendingUp, ChevronRight,
+  Award, Bell, BarChart2,
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
+const CARD_W = (width - 48) / 2;
+
+// Fade-in wrapper
+const FadeIn = ({ delay = 0, children }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(18)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(anim, { toValue: 1, duration: 420, delay, useNativeDriver: true }),
+      Animated.timing(slide, { toValue: 0, duration: 420, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+  return (
+    <Animated.View style={{ opacity: anim, transform: [{ translateY: slide }] }}>
+      {children}
+    </Animated.View>
+  );
+};
 
 const DistributorOverview = ({ C }) => {
   const stats = [
-    {
-      label: 'Direct Referrals',
-      value: '8',
-      icon: Users,
-      color: C.green,
-      bg: 'rgba(16,185,129,0.15)',
-      trend: '+3 this week',
-    },
-    {
-      label: 'Team Size',
-      value: '42',
-      icon: Users,
-      color: C.blue,
-      bg: 'rgba(59,130,246,0.15)',
-      trend: '+12 this month',
-    },
-    {
-      label: 'Total Earnings',
-      value: '$2,450',
-      icon: DollarSign,
-      color: C.amber,
-      bg: 'rgba(245,158,11,0.15)',
-      trend: '+$320 this week',
-    },
-    {
-      label: 'Current Rank',
-      value: 'Silver',
-      icon: Star,
-      color: C.purple,
-      bg: 'rgba(139,92,246,0.15)',
-      trend: 'Next: Gold',
-    },
+    { label: 'Direct', value: '8', sub: '+3 this wk', icon: Users, grad: ['#6366F1','#818CF8'], glow: '#6366F1' },
+    { label: 'Team', value: '42', sub: '+12 this mo', icon: Users, grad: ['#10B981','#34D399'], glow: '#10B981' },
+    { label: 'Earned', value: '$2,450', sub: '+$320 wk', icon: DollarSign, grad: ['#F59E0B','#FCD34D'], glow: '#F59E0B' },
+    { label: 'Rank', value: 'Silver', sub: 'Next: Gold', icon: Star, grad: ['#8B5CF6','#A78BFA'], glow: '#8B5CF6' },
   ];
 
-  const recentActivity = [
-    { id: 1, type: 'referral', text: 'New referral: John Doe', date: '2 hours ago', color: C.green },
-    { id: 2, type: 'earning', text: 'Commission earned: $45', date: '5 hours ago', color: C.amber },
-    { id: 3, type: 'milestone', text: 'Reached 40 team members!', date: '1 day ago', color: C.blue },
-    { id: 4, type: 'referral', text: 'New referral: Jane Smith', date: '2 days ago', color: C.green },
+  const quickActions = [
+    { label: 'Invite', icon: Users, grad: ['#6366F1','#8B5CF6'] },
+    { label: 'Earnings', icon: DollarSign, grad: ['#10B981','#059669'] },
+    { label: 'Goals', icon: Target, grad: ['#F59E0B','#EF4444'] },
+    { label: 'Alerts', icon: Bell, grad: ['#3B82F6','#6366F1'] },
+  ];
+
+  const activity = [
+    { id: 1, text: 'New referral: John Doe', sub: '2 hours ago', color: '#10B981', icon: Users },
+    { id: 2, text: 'Commission: $45 credited', sub: '5 hours ago', color: '#F59E0B', icon: DollarSign },
+    { id: 3, text: 'Milestone: 40 team members!', sub: '1 day ago', color: '#6366F1', icon: Award },
+    { id: 4, text: 'New referral: Jane Smith', sub: '2 days ago', color: '#10B981', icon: Users },
   ];
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
-      {/* Welcome Banner */}
-      <LinearGradient
-        colors={['#4F46E5', '#7C3AED']}
-        className="rounded-2xl p-5 mb-5"
-        start={[0, 0]}
-        end={[1, 1]}
-      >
-        <View className="flex-row justify-between items-center mb-3">
-          <View>
-            <Text className="text-white text-xl font-bold">Welcome, Miki! 👋</Text>
-            <Text className="text-white/70 text-sm mt-1">Keep growing your network</Text>
-          </View>
-          <View className="px-3 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
-            <Text className="text-yellow-300 text-xs font-bold">Silver Member</Text>
-          </View>
-        </View>
-        <View className="flex-row items-center">
-          <TrendingUp color="#FCD34D" size={16} />
-          <Text className="text-white/90 text-xs ml-2">You're in the top 30% of distributors!</Text>
-        </View>
-      </LinearGradient>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
 
-      {/* Stats Grid */}
-      <View className="flex-row flex-wrap justify-between mb-5">
-        {stats.map((s, i) => (
-          <View
-            key={i}
-            className="rounded-2xl p-4 mb-3"
-            style={{
-              width: (width - 48) / 2,
-              backgroundColor: C.surface,
-              borderWidth: 1,
-              borderColor: C.border,
-            }}
-          >
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: s.bg }}>
-                <s.icon color={s.color} size={20} />
-              </View>
-              <View className="flex-row items-center">
-                <ArrowUp color={C.green} size={12} />
+      {/* ── Hero Banner ── */}
+      <FadeIn delay={0}>
+        <LinearGradient
+          colors={['#4338CA', '#7C3AED', '#6366F1']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={{ borderRadius: 24, padding: 22, marginBottom: 18, overflow: 'hidden' }}
+        >
+          {/* Decorative circles */}
+          <View style={{ position:'absolute', right:-30, top:-30, width:120, height:120, borderRadius:60, backgroundColor:'rgba(255,255,255,0.07)' }} />
+          <View style={{ position:'absolute', right:40, bottom:-20, width:80, height:80, borderRadius:40, backgroundColor:'rgba(255,255,255,0.05)' }} />
+
+          <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+            <View>
+              <Text style={{ color:'rgba(255,255,255,0.7)', fontSize:13, fontWeight:'600', letterSpacing:0.5 }}>WELCOME BACK</Text>
+              <Text style={{ color:'#fff', fontSize:24, fontWeight:'800', marginTop:2 }}>Good day! 👋</Text>
+            </View>
+            <View style={{ backgroundColor:'rgba(255,255,255,0.18)', borderRadius:20, paddingHorizontal:12, paddingVertical:6, borderWidth:1, borderColor:'rgba(255,255,255,0.25)' }}>
+              <Text style={{ color:'#FCD34D', fontSize:11, fontWeight:'800', letterSpacing:0.5 }}>⭐ SILVER</Text>
+            </View>
+          </View>
+
+          {/* Progress to Gold */}
+          <View style={{ backgroundColor:'rgba(255,255,255,0.12)', borderRadius:14, padding:12 }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:6 }}>
+              <Text style={{ color:'rgba(255,255,255,0.8)', fontSize:12, fontWeight:'600' }}>Progress to Gold</Text>
+              <Text style={{ color:'#FCD34D', fontSize:12, fontWeight:'800' }}>8 / 15 referrals</Text>
+            </View>
+            <View style={{ height:6, backgroundColor:'rgba(255,255,255,0.2)', borderRadius:3 }}>
+              <View style={{ height:6, width:'53%', backgroundColor:'#FCD34D', borderRadius:3 }} />
+            </View>
+            <View style={{ flexDirection:'row', alignItems:'center', marginTop:8 }}>
+              <TrendingUp color="#86EFAC" size={13} />
+              <Text style={{ color:'rgba(255,255,255,0.75)', fontSize:12, marginLeft:6 }}>Top 30% of distributors this month</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </FadeIn>
+
+      {/* ── Stats Grid ── */}
+      <FadeIn delay={80}>
+        <Text style={{ fontSize:13, fontWeight:'700', color:C.muted, letterSpacing:1, marginBottom:10 }}>PERFORMANCE</Text>
+        <View style={{ flexDirection:'row', flexWrap:'wrap', gap:10, marginBottom:20 }}>
+          {stats.map((s, i) => (
+            <View
+              key={i}
+              style={{
+                width: CARD_W, borderRadius:20,
+                backgroundColor: C.surface,
+                borderWidth:1, borderColor:C.border,
+                padding:16, overflow:'hidden',
+              }}
+            >
+              {/* Glow accent */}
+              <View style={{ position:'absolute', top:-18, right:-18, width:64, height:64, borderRadius:32, backgroundColor:s.glow+'22' }} />
+              <LinearGradient colors={s.grad} style={{ width:40, height:40, borderRadius:12, alignItems:'center', justifyContent:'center', marginBottom:12 }}>
+                <s.icon color="#fff" size={18} />
+              </LinearGradient>
+              <Text style={{ fontSize:22, fontWeight:'800', color:C.text }}>{s.value}</Text>
+              <Text style={{ fontSize:11, color:C.muted, marginTop:2 }}>{s.label}</Text>
+              <View style={{ flexDirection:'row', alignItems:'center', marginTop:6 }}>
+                <ArrowUpRight color={s.glow} size={11} />
+                <Text style={{ fontSize:10, color:s.glow, fontWeight:'700', marginLeft:3 }}>{s.sub}</Text>
               </View>
             </View>
-            <Text className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.value}</Text>
-            <Text className="text-xs mb-1" style={{ color: C.muted }}>{s.label}</Text>
-            <Text className="text-xs" style={{ color: C.sub }}>{s.trend}</Text>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
+      </FadeIn>
 
-      {/* Quick Actions */}
-      <Text className="text-base font-bold mb-3" style={{ color: C.text }}>Quick Actions</Text>
-      <View className="flex-row flex-wrap justify-between mb-5">
-        {[
-          { label: 'Invite Friends', icon: Users, gradient: ['#10B981', '#34D399'] },
-          { label: 'View Team', icon: Target, gradient: ['#3B82F6', '#60A5FA'] },
-          { label: 'Withdraw', icon: DollarSign, gradient: ['#F59E0B', '#FCD34D'] },
-        ].map((action, i) => (
-          <TouchableOpacity
-            key={i}
-            className="rounded-2xl p-4 mb-3 items-center"
-            style={{ width: (width - 48) / 2, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}
-          >
-            <LinearGradient colors={action.gradient} className="w-12 h-12 rounded-xl items-center justify-center mb-2">
-              <action.icon color="#fff" size={24} />
-            </LinearGradient>
-            <Text className="text-sm font-semibold" style={{ color: C.text }}>{action.label}</Text>
+      {/* ── Quick Actions ── */}
+      <FadeIn delay={160}>
+        <Text style={{ fontSize:13, fontWeight:'700', color:C.muted, letterSpacing:1, marginBottom:10 }}>QUICK ACTIONS</Text>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:20 }}>
+          {quickActions.map((a, i) => (
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.75}
+              style={{ alignItems:'center', flex:1 }}
+            >
+              <LinearGradient
+                colors={a.grad}
+                style={{ width:52, height:52, borderRadius:16, alignItems:'center', justifyContent:'center', marginBottom:8 }}
+              >
+                <a.icon color="#fff" size={22} />
+              </LinearGradient>
+              <Text style={{ fontSize:11, fontWeight:'700', color:C.text }}>{a.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </FadeIn>
+
+      {/* ── Streak Banner ── */}
+      <FadeIn delay={220}>
+        <LinearGradient
+          colors={['rgba(245,158,11,0.15)','rgba(239,68,68,0.10)']}
+          start={{ x:0, y:0 }} end={{ x:1, y:0 }}
+          style={{ borderRadius:18, padding:16, marginBottom:20, borderWidth:1, borderColor:'rgba(245,158,11,0.25)' }}
+        >
+          <View style={{ flexDirection:'row', alignItems:'center' }}>
+            <Zap color="#F59E0B" size={20} />
+            <View style={{ flex:1, marginLeft:12 }}>
+              <Text style={{ color:C.text, fontWeight:'800', fontSize:14 }}>7-day Active Streak 🔥</Text>
+              <Text style={{ color:C.muted, fontSize:12, marginTop:2 }}>Keep it up to unlock a $50 bonus!</Text>
+            </View>
+            <View style={{ backgroundColor:'rgba(245,158,11,0.2)', borderRadius:12, paddingHorizontal:10, paddingVertical:4 }}>
+              <Text style={{ color:'#F59E0B', fontSize:12, fontWeight:'800' }}>7 days</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </FadeIn>
+
+      {/* ── Recent Activity ── */}
+      <FadeIn delay={280}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+          <Text style={{ fontSize:13, fontWeight:'700', color:C.muted, letterSpacing:1 }}>RECENT ACTIVITY</Text>
+          <TouchableOpacity style={{ flexDirection:'row', alignItems:'center' }}>
+            <Text style={{ fontSize:12, color:C.accent, fontWeight:'700' }}>See all</Text>
+            <ChevronRight color={C.accent} size={14} />
           </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Recent Activity */}
-      <Text className="text-base font-bold mb-3" style={{ color: C.text }}>Recent Activity</Text>
-      <View className="rounded-2xl overflow-hidden mb-4" style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}>
-        {recentActivity.map((activity, i) => (
-          <View
-            key={activity.id}
-            className="flex-row items-center px-4 py-3"
-            style={{ borderBottomWidth: i < recentActivity.length - 1 ? 1 : 0, borderBottomColor: C.border }}
-          >
-            <View className="w-2 h-2 rounded-full mr-3" style={{ backgroundColor: activity.color }} />
-            <View className="flex-1">
-              <Text className="text-sm" style={{ color: C.text }}>{activity.text}</Text>
-              <Text className="text-xs mt-0.5" style={{ color: C.muted }}>{activity.date}</Text>
-            </View>
-            <ChevronRight color={C.muted} size={16} />
-          </View>
-        ))}
-      </View>
+        </View>
+        <View style={{ backgroundColor:C.surface, borderRadius:20, borderWidth:1, borderColor:C.border, overflow:'hidden' }}>
+          {activity.map((item, i) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.7}
+              style={{
+                flexDirection:'row', alignItems:'center',
+                paddingHorizontal:16, paddingVertical:14,
+                borderBottomWidth: i < activity.length - 1 ? 1 : 0,
+                borderBottomColor:C.border,
+              }}
+            >
+              <View style={{ width:36, height:36, borderRadius:12, backgroundColor:item.color+'22', alignItems:'center', justifyContent:'center' }}>
+                <item.icon color={item.color} size={16} />
+              </View>
+              <View style={{ flex:1, marginLeft:12 }}>
+                <Text style={{ fontSize:13, fontWeight:'600', color:C.text }}>{item.text}</Text>
+                <Text style={{ fontSize:11, color:C.muted, marginTop:2 }}>{item.sub}</Text>
+              </View>
+              <ChevronRight color={C.border} size={16} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </FadeIn>
     </ScrollView>
   );
 };

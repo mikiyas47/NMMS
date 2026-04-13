@@ -103,152 +103,94 @@ const ModalVideo = ({ uri }) => {
 // ─── Single Product Card ──────────────────────────────────────────────────────
 const ProductCard = ({ item, onSell, C }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const catColor = getCategoryColor(item.category);
-  const imageUri = toHttps(item.image);
-  const isVideo =
+  const catColor  = getCategoryColor(item.category);
+  const imageUri  = toHttps(item.image);
+  const isVideo   =
     imageUri &&
     (imageUri.endsWith('.mp4') ||
-      imageUri.endsWith('.mov') ||
-      imageUri.endsWith('.avi') ||
-      imageUri.endsWith('.mkv'));
+     imageUri.endsWith('.mov') ||
+     imageUri.endsWith('.avi') ||
+     imageUri.endsWith('.mkv'));
 
-  const handlePressIn = () =>
-    Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 30 }).start();
-  const handlePressOut = () =>
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 30 }).start();
-
+  const handlePressIn  = () => Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
+  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1,    useNativeDriver: true, speed: 30 }).start();
   const inStock = (item.stock ?? 0) > 0;
 
   return (
-    <Animated.View
-      style={{
-        transform: [{ scale: scaleAnim }],
-        width: CARD_WIDTH,
-        marginBottom: 14,
-      }}
-    >
+    <Animated.View style={{ transform:[{ scale: scaleAnim }], width: CARD_WIDTH, marginBottom: 14 }}>
       <TouchableOpacity
         activeOpacity={1}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => inStock && onSell(item)}
         style={{
-          borderRadius: 20,
-          overflow: 'hidden',
-          backgroundColor: C.card,
-          elevation: 6,
-          shadowColor: '#000',
-          shadowOpacity: 0.12,
-          shadowRadius: 14,
-          shadowOffset: { width: 0, height: 4 },
-          borderWidth: 1,
-          borderColor: C.border,
+          borderRadius: 22, overflow: 'hidden',
+          backgroundColor: C.surface,
+          elevation: 8, shadowColor: catColor.bg,
+          shadowOpacity: 0.18, shadowRadius: 16,
+          shadowOffset: { width: 0, height: 5 },
+          borderWidth: 1, borderColor: C.border,
         }}
       >
         {/* ── Image Frame 3:4 ── */}
-        <View style={{ width: '100%', aspectRatio: 3 / 4, backgroundColor: C.inputBg }}>
+        <View style={{ width: '100%', aspectRatio: 3/4, backgroundColor: C.inputBg }}>
           {imageUri && !isVideo ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: imageUri }} style={{ width:'100%', height:'100%' }} resizeMode="cover" />
           ) : imageUri && isVideo ? (
             <ProductVideo uri={imageUri} />
           ) : (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Package color={C.muted} size={40} />
+            <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor:catColor.bg+'18' }}>
+              <Package color={catColor.bg} size={44} />
             </View>
           )}
 
           {/* Category badge */}
           {item.category ? (
-            <View
-              style={{
-                position: 'absolute',
-                top: 10,
-                left: 10,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: 20,
-                backgroundColor: catColor.bg,
-              }}
-            >
-              <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>
-                {item.category.toUpperCase()}
-              </Text>
+            <View style={{ position:'absolute', top:10, left:10, paddingHorizontal:9, paddingVertical:4, borderRadius:20, backgroundColor:catColor.bg }}>
+              <Text style={{ color:'#fff', fontSize:9, fontWeight:'700', letterSpacing:0.5 }}>{item.category.toUpperCase()}</Text>
             </View>
           ) : null}
 
+          {/* Gradient bottom fade */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.45)']}
+            style={{ position:'absolute', bottom:0, left:0, right:0, height:50 }}
+          />
+
+          {/* Price on image */}
+          <View style={{ position:'absolute', bottom:8, left:10 }}>
+            <Text style={{ color:'#fff', fontSize:15, fontWeight:'900' }}>${parseFloat(item.price).toFixed(2)}</Text>
+          </View>
+
           {/* Out-of-stock overlay */}
           {!inStock && (
-            <View
-              style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.55)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: 1 }}>
-                OUT OF STOCK
-              </Text>
+            <View style={{ position:'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.6)', alignItems:'center', justifyContent:'center' }}>
+              <Text style={{ color:'#fff', fontWeight:'800', fontSize:12, letterSpacing:1 }}>OUT OF STOCK</Text>
             </View>
           )}
         </View>
 
         {/* ── Info ── */}
-        <View style={{ padding: 11 }}>
-          <Text
-            numberOfLines={2}
-            style={{ fontSize: 12, fontWeight: '700', color: C.text, marginBottom: 4, lineHeight: 17 }}
-          >
+        <View style={{ padding: 12 }}>
+          <Text numberOfLines={2} style={{ fontSize:12, fontWeight:'700', color:C.text, marginBottom:6, lineHeight:17 }}>
             {item.name}
           </Text>
 
           {/* Stock indicator */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: inStock ? '#10B981' : '#EF4444',
-                marginRight: 5,
-              }}
-            />
-            <Text style={{ fontSize: 10, color: C.muted }}>
-              {inStock ? `${item.stock} in stock` : 'No stock'}
-            </Text>
-          </View>
-
-          {/* Price row */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: C.accent }}>
-              ${parseFloat(item.price).toFixed(2)}
-            </Text>
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+            <View style={{ width:6, height:6, borderRadius:3, backgroundColor: inStock ? '#10B981' : '#EF4444', marginRight:5 }} />
+            <Text style={{ fontSize:10, color:C.muted }}>{inStock ? `${item.stock} in stock` : 'No stock'}</Text>
           </View>
 
           {/* Sell button */}
-          <TouchableOpacity
-            onPress={() => inStock && onSell(item)}
-            disabled={!inStock}
-            style={{ marginTop: 9, borderRadius: 12, overflow: 'hidden' }}
-          >
+          <TouchableOpacity onPress={() => inStock && onSell(item)} disabled={!inStock} style={{ borderRadius:12, overflow:'hidden' }}>
             <LinearGradient
-              colors={inStock ? ['#6366F1', '#8B5CF6'] : ['#9CA3AF', '#9CA3AF']}
-              start={[0, 0]}
-              end={[1, 0]}
-              style={{
-                paddingVertical: 8,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
+              colors={inStock ? [catColor.bg, catColor.bg+'BB'] : ['#9CA3AF','#9CA3AF']}
+              start={[0,0]} end={[1,0]}
+              style={{ paddingVertical:9, flexDirection:'row', justifyContent:'center', alignItems:'center' }}
             >
               <ShoppingCart color="#fff" size={12} />
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11, marginLeft: 5, letterSpacing: 0.5 }}>
+              <Text style={{ color:'#fff', fontWeight:'700', fontSize:11, marginLeft:5, letterSpacing:0.5 }}>
                 {inStock ? 'SELL NOW' : 'UNAVAILABLE'}
               </Text>
             </LinearGradient>
@@ -467,40 +409,52 @@ const ProductsScreen = ({ C }) => {
   // ── Render helpers ──────────────────────────────────────────────────────────
   const renderHeader = () => (
     <View style={{ marginBottom: 4 }}>
-      {/* Title */}
-      <View style={{ marginBottom: 16, paddingHorizontal: 2 }}>
-        <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5 }}>
-          Product Catalog
+      {/* ── Hero Banner ── */}
+      <LinearGradient
+        colors={['#312E81','#4338CA','#6366F1']}
+        start={{ x:0, y:0 }} end={{ x:1, y:1 }}
+        style={{ borderRadius:24, padding:20, marginBottom:16, overflow:'hidden' }}
+      >
+        <View style={{ position:'absolute', right:-30, top:-30, width:120, height:120, borderRadius:60, backgroundColor:'rgba(255,255,255,0.06)' }} />
+        <View style={{ position:'absolute', left:60, bottom:-20, width:80, height:80, borderRadius:40, backgroundColor:'rgba(255,255,255,0.04)' }} />
+        <Text style={{ color:'rgba(255,255,255,0.65)', fontSize:12, fontWeight:'600', letterSpacing:1 }}>PRODUCT CATALOG</Text>
+        <Text style={{ color:'#fff', fontSize:24, fontWeight:'800', marginTop:4, marginBottom:14 }}>
+          {products.length} item{products.length !== 1 ? 's' : ''} available
         </Text>
-        <Text style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>
-          {products.length} product{products.length !== 1 ? 's' : ''} available to sell
-        </Text>
-      </View>
+        <View style={{ flexDirection:'row', gap:10 }}>
+          {[
+            { label:'In Stock', value: products.filter(p=>(p.stock??0)>0).length },
+            { label:'Categories', value: categories.length - 1 },
+          ].map((s,i) => (
+            <View key={i} style={{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:12, padding:10, alignItems:'center' }}>
+              <Text style={{ color:'#fff', fontWeight:'900', fontSize:18 }}>{s.value}</Text>
+              <Text style={{ color:'rgba(255,255,255,0.65)', fontSize:10, marginTop:2 }}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+      </LinearGradient>
 
       {/* Search bar */}
       <View style={{
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: C.inputBg, borderRadius: 16, paddingHorizontal: 14, marginBottom: 14,
-        borderWidth: 1, borderColor: search ? '#6366F1' : C.border,
-        height: 50,
+        flexDirection:'row', alignItems:'center',
+        backgroundColor: C.inputBg, borderRadius:16, paddingHorizontal:14, marginBottom:14,
+        borderWidth:1, borderColor: search ? '#6366F1' : C.border, height:50,
       }}>
         <Search color={search ? '#6366F1' : C.muted} size={18} />
         <TextInput
-          style={{ flex: 1, marginLeft: 10, fontSize: 14, color: C.text }}
+          style={{ flex:1, marginLeft:10, fontSize:14, color:C.text }}
           placeholder="Search products..."
           placeholderTextColor={C.muted}
           value={search}
           onChangeText={setSearch}
         />
         {search ? (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <X color={C.muted} size={16} />
-          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setSearch('')}><X color={C.muted} size={16} /></TouchableOpacity>
         ) : null}
       </View>
 
-      {/* Category filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ paddingRight: 4 }}>
+      {/* Category pills */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }} contentContainerStyle={{ paddingRight:4 }}>
         {categories.map(cat => {
           const isActive = activeCategory === cat;
           const cc = getCategoryColor(cat);
@@ -509,27 +463,22 @@ const ProductsScreen = ({ C }) => {
               key={cat}
               onPress={() => setActiveCategory(cat)}
               style={{
-                paddingHorizontal: 16,
-                paddingVertical: 7,
-                borderRadius: 20,
-                marginRight: 8,
+                paddingHorizontal:16, paddingVertical:8, borderRadius:20, marginRight:8,
                 backgroundColor: isActive ? cc.bg : C.inputBg,
-                borderWidth: 1,
-                borderColor: isActive ? cc.bg : C.border,
+                borderWidth:1, borderColor: isActive ? cc.bg : C.border,
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : C.muted, letterSpacing: 0.3 }}>
-                {cat === 'All' ? '🛍  All' : cat}
+              <Text style={{ fontSize:12, fontWeight:'700', color: isActive ? '#fff' : C.muted }}>
+                {cat === 'All' ? '🛍 All' : cat}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* Results count */}
       {!loading && (
-        <Text style={{ fontSize: 12, color: C.muted, marginBottom: 10, paddingHorizontal: 2 }}>
-          Showing {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+        <Text style={{ fontSize:12, color:C.muted, marginBottom:10 }}>
+          {filtered.length} result{filtered.length !== 1 ? 's' : ''}
         </Text>
       )}
     </View>
