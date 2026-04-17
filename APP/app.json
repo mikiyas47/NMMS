@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSContactsUsageDescription": "We need access to your contacts so you can import them as prospects."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +36,13 @@
       }
     },
     "plugins": [
-      "expo-video"
+      "expo-video",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow $(PRODUCT_NAME) to access your contacts so you can import them as prospects."
+        }
+      ]
     ]
   }
 }

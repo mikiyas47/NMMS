@@ -11,7 +11,12 @@ import {
   Platform,
   RefreshControl,
   Alert,
+  FlatList,
+  Linking,
+  AppState,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import * as Contacts from 'expo-contacts';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   BookUser,
@@ -31,6 +36,7 @@ import {
   TrendingUp,
   User,
   RefreshCw,
+  Smartphone,
 } from 'lucide-react-native';
 import {
   getContacts,
@@ -40,6 +46,7 @@ import {
   getClosings,
   createClosing,
 } from '../../api/authService';
+import FollowUpModal from '../../components/FollowUpModal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_META = {
@@ -133,9 +140,27 @@ const ContactsScreen = ({ C }) => {
   const [expandedId, setExpandedId] = useState(null);
 
   // ── modal state
-  const [modal, setModal]   = useState(null); // 'contact' | 'followup' | 'closing'
+  const [modal, setModal]   = useState(null); // 'contact' | 'followup' | 'closing' | 'phonePicker' | 'quickImport'
   const [saving, setSaving] = useState(false);
   const [targetId, setTargetId] = useState(null); // prospect_id for followup/closing
+
+  // ── phone contact picker state
+  const [phoneContacts, setPhoneContacts] = useState([]);
+  const [phoneSearch, setPhoneSearch]     = useState('');
+  const [phoneLoading, setPhoneLoading]   = useState(false);
+
+  // ── quick import state (intermediate dialog after picking a phone contact)
+  const [quickContact, setQuickContact] = useState(null); // { name, phone, email }
+  const [quickStatus, setQuickStatus]   = useState('New');
+
+  // ── follow-up wizard state
+  const [followupStep, setFollowupStep]         = useState('type');
+  const [followupPhone, setFollowupPhone]       = useState('');
+  const [followupName, setFollowupName]         = useState('');
+  const [callOutcomeVal, setCallOutcomeVal]     = useState('');
+  const [selectedScript, setSelectedScript]     = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [msgOutcomeVal, setMsgOutcomeVal]       = useState('');
 
   // contact form
   const [cName, setCName]   = useState('');
@@ -174,19 +199,103 @@ const ContactsScreen = ({ C }) => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Detect return from phone dialer → show call outcome automatically
+  useEffect(() => {
+    if (followupStep !== 'calling') return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') setFollowupStep('callOutcome');
+    });
+    return () => sub.remove();
+  }, [followupStep]);
+
   const onRefresh = () => { setRefreshing(true); load(true); };
 
   // ── Open modals ───────────────────────────────────────────────────
-  const openContactModal = () => {
-    setCName(''); setCPhone(''); setCEmail('');
-    setCStatus('New'); setCSource(''); setCRelation('');
+  const openContactModal = (prefill = {}) => {
+    setCName(prefill.name   ?? '');
+    setCPhone(prefill.phone ?? '');
+    setCEmail(prefill.email ?? '');
+    setCStatus(prefill.status ?? 'New');
+    setCSource('');
+    setCRelation('');
     setModal('contact');
   };
 
-  const openFollowupModal = (id) => {
+  const openFollowupModal = (id, name = '', phone = '') => {
     setTargetId(id);
+    setFollowupName(name);
+    setFollowupPhone(phone);
     setFType(''); setFMethod(''); setFOutcome(''); setFNotes('');
+    setFollowupStep('type');
+    setCallOutcomeVal(''); setSelectedScript(''); setSelectedPlatform(''); setMsgOutcomeVal('');
     setModal('followup');
+  };
+
+  // ── Call flow ─────────────────────────────────────────────────────
+  const initiateCall = async () => {
+    const ph = (followupPhone ?? '').replace(/\s/g, '');
+    if (!ph) { Alert.alert('No Phone', 'This contact has no phone number.'); return; }
+    try {
+      await Linking.openURL(`tel:${ph}`);
+      setFollowupStep('calling');
+    } catch { Alert.alert('Error', 'Could not open the phone dialer.'); }
+  };
+
+  const saveCallOutcome = async () => {
+    if (!callOutcomeVal) { Alert.alert('Required', 'Please select an outcome.'); return; }
+    setSaving(true);
+    try {
+      await createFollowup(targetId, { followup_type: 'Call', method: 'Phone', outcome: callOutcomeVal, notes: fNotes || undefined });
+      setModal(null); load(true);
+    } catch (e) { Alert.alert('Error', e?.message ?? 'Could not save.'); }
+    finally { setSaving(false); }
+  };
+
+  // ── Message flow ──────────────────────────────────────────────────
+  const sendMessage = async () => {
+    if (!selectedScript)   { Alert.alert('Required', 'Please select a script.'); return; }
+    if (!selectedPlatform) { Alert.alert('Required', 'Please select a platform.'); return; }
+    const ph = (followupPhone ?? '').replace(/\s/g, '');
+
+    // Telegram cannot pre-fill text via phone deep link — copy to clipboard instead
+    if (selectedPlatform === 'Telegram') {
+      try {
+        await Clipboard.setStringAsync(selectedScript);
+        const tgUrl = `tg://resolve?phone=${ph.replace(/\+/, '')}`;
+        const can = await Linking.canOpenURL(tgUrl);
+        if (!can) { Alert.alert('Telegram Not Found', 'Telegram does not appear to be installed on this device.'); return; }
+        await Linking.openURL(tgUrl);
+        // Give Telegram a moment to open, then prompt
+        setTimeout(() => {
+          Alert.alert(
+            '📋 Message Copied!',
+            'Your script has been copied to the clipboard.\n\nIn the Telegram chat, long-press the message input and tap Paste, then send.',
+            [{ text: 'Got it', onPress: () => setFollowupStep('messageOutcome') }]
+          );
+        }, 1200);
+      } catch { Alert.alert('Error', 'Could not open Telegram.'); }
+      return;
+    }
+
+    let url = '';
+    if (selectedPlatform === 'SMS')      url = `sms:${ph}?body=${encodeURIComponent(selectedScript)}`;
+    if (selectedPlatform === 'WhatsApp') url = `whatsapp://send?phone=${ph.replace(/\+/, '')}&text=${encodeURIComponent(selectedScript)}`;
+    try {
+      const can = await Linking.canOpenURL(url);
+      if (!can) { Alert.alert('App Not Found', `${selectedPlatform} is not installed on this device.`); return; }
+      await Linking.openURL(url);
+      setFollowupStep('messageOutcome');
+    } catch { Alert.alert('Error', `Could not open ${selectedPlatform}.`); }
+  };
+
+  const saveMsgOutcome = async () => {
+    if (!msgOutcomeVal) { Alert.alert('Required', 'Please select an outcome.'); return; }
+    setSaving(true);
+    try {
+      await createFollowup(targetId, { followup_type: 'Message', method: selectedPlatform, outcome: msgOutcomeVal, notes: fNotes || undefined });
+      setModal(null); load(true);
+    } catch (e) { Alert.alert('Error', e?.message ?? 'Could not save.'); }
+    finally { setSaving(false); }
   };
 
   const openClosingModal = (id) => {
@@ -194,6 +303,79 @@ const ContactsScreen = ({ C }) => {
     setClMethod(''); setClOutcome(''); setClNotes('');
     setModal('closing');
   };
+
+  // ── Phone contact picker ──────────────────────────────────────────
+  const openPhonePicker = async () => {
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'Please allow access to contacts in your device settings.',
+      );
+      return;
+    }
+    setPhoneLoading(true);
+    setPhoneSearch('');
+    setModal('phonePicker');
+    try {
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+        sort:   Contacts.SortTypes.FirstName,
+      });
+      setPhoneContacts(data ?? []);
+    } catch (e) {
+      Alert.alert('Error', 'Could not load phone contacts.');
+      setModal(null);
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const pickPhoneContact = (item) => {
+    const name  = item.name ?? '';
+    const phone = item.phoneNumbers?.[0]?.number ?? '';
+    const email = item.emails?.[0]?.email ?? '';
+    setQuickContact({ name, phone, email });
+    setQuickStatus('New');
+    setModal('quickImport');
+  };
+
+  // Save directly from quick-import dialog (no extra info)
+  const saveQuickContact = async () => {
+    if (!quickStatus) {
+      Alert.alert('Status Required', 'Please select a status before saving.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await createContact({
+        name:   quickContact.name,
+        phone:  quickContact.phone,
+        email:  quickContact.email || undefined,
+        status: quickStatus,
+      });
+      setModal(null);
+      setQuickContact(null);
+      load(true);
+    } catch (e) {
+      Alert.alert('Error', e?.message ?? 'Could not save contact.');
+    } finally { setSaving(false); }
+  };
+
+  // Open full form from quick-import dialog
+  const goToFullForm = () => {
+    const prefill = quickContact ?? {};
+    setQuickContact(null);
+    openContactModal({ ...prefill, status: quickStatus });
+  };
+
+  const filteredPhoneContacts = phoneContacts.filter(c => {
+    const q = phoneSearch.toLowerCase();
+    return (
+      c.name?.toLowerCase().includes(q) ||
+      c.phoneNumbers?.some(p => p.number?.includes(q))
+    );
+  });
 
   // ── Save handlers ─────────────────────────────────────────────────
   const saveContact = async () => {
@@ -261,8 +443,16 @@ const ContactsScreen = ({ C }) => {
         <BookUser color={C.accent} size={26} />
         <Text style={{ fontSize: 20, fontWeight: '800', color: C.text, marginLeft: 8 }}>Contacts</Text>
         <View style={{ flex: 1 }} />
+        {/* Import from phone button */}
         <TouchableOpacity
-          onPress={openContactModal}
+          onPress={openPhonePicker}
+          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(99,102,241,0.12)', borderWidth: 1, borderColor: C.accent, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 5, marginRight: 8 }}
+        >
+          <Smartphone color={C.accent} size={15} />
+          <Text style={{ color: C.accent, fontWeight: '700', fontSize: 12 }}>Import</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => openContactModal()}
           style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, gap: 6 }}
         >
           <Plus color="#fff" size={16} />
@@ -382,7 +572,7 @@ const ContactsScreen = ({ C }) => {
                         {contact.relationship ? <MetaChip label={contact.relationship} C={C} /> : null}
                         <View style={{ flex: 1 }} />
                         <TouchableOpacity
-                          onPress={() => openFollowupModal(contact.prospect_id)}
+                          onPress={() => openFollowupModal(contact.prospect_id, contact.name, contact.phone)}
                           style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(99,102,241,0.12)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, gap: 5 }}
                         >
                           <MessageSquare color={C.accent} size={14} />
@@ -488,17 +678,206 @@ const ContactsScreen = ({ C }) => {
         <SaveBtn onPress={saveContact} saving={saving} C={C} />
       </BottomModal>
 
-      {/* ══ MODAL: Add Followup ══ */}
-      <BottomModal visible={modal === 'followup'} onClose={() => setModal(null)} title="Log Follow-up" C={C}>
-        <Text style={{ fontSize: 12, fontWeight: '600', color: C.muted, marginBottom: 6 }}>Type</Text>
-        <Pill options={['Call', 'Message', 'Meeting', 'Email']} value={fType} onChange={setFType} C={C} />
-        <Text style={{ fontSize: 12, fontWeight: '600', color: C.muted, marginBottom: 6 }}>Method</Text>
-        <Pill options={['Phone', 'WhatsApp', 'Telegram', 'In-person']} value={fMethod} onChange={setFMethod} C={C} />
-        <Text style={{ fontSize: 12, fontWeight: '600', color: C.muted, marginBottom: 6 }}>Outcome</Text>
-        <Pill options={['Positive', 'Neutral', 'Negative', 'Scheduled']} value={fOutcome} onChange={setFOutcome} C={C} />
-        <Field label="Notes" value={fNotes} onChangeText={setFNotes} placeholder="How did it go?" C={C} multiline />
-        <SaveBtn onPress={saveFollowup} saving={saving} C={C} />
+      {/* ══ MODAL: Follow-up Wizard (Call / Message / After Event) ══ */}
+      <BottomModal
+        visible={modal === 'followup'}
+        onClose={() => setModal(null)}
+        title={
+          followupStep === 'type'           ? 'Log Follow-up' :
+          followupStep === 'calling'        ? '📞 Call in Progress…' :
+          followupStep === 'callOutcome'    ? '📋 Call Outcome' :
+          followupStep === 'scriptSelect'   ? '✍️  Choose a Script' :
+          followupStep === 'platformSelect' ? '📤 Send Via' :
+          followupStep === 'messageOutcome' ? '💬 Message Outcome' :
+          followupStep === 'staticFlow'     ? '📅 Follow Up After Event' : 'Log Follow-up'
+        }
+        C={C}
+      >
+        {/* ── Step 1: Choose type ── */}
+        {followupStep === 'type' && (
+          <View>
+            <Text style={{ fontSize: 13, color: C.muted, marginBottom: 14, textAlign: 'center' }}>
+              How are you following up with{' '}
+              <Text style={{ color: C.text, fontWeight: '700' }}>{followupName || 'this contact'}</Text>?
+            </Text>
+            {[
+              { key: 'Call',    icon: '📞', label: 'Call',    desc: 'Make a live phone call',                       color: '#3B82F6', onTap: initiateCall },
+              { key: 'Message', icon: '💬', label: 'Message', desc: 'Send a script via SMS / WhatsApp / Telegram',  color: '#10B981', onTap: () => setFollowupStep('scriptSelect') },
+              { key: 'pres',    icon: '🎯', label: 'Follow up after presentation', desc: 'AI-powered post-presentation planner', color: '#8B5CF6', onTap: () => { setModal('presentationFollowup'); } },
+              { key: 'event',   icon: '📅', label: 'Follow up after event',        desc: 'Log a post-event follow-up',            color: '#F59E0B', onTap: () => { setFType('Follow up after event'); setFollowupStep('staticFlow'); } },
+            ].map(t => (
+              <TouchableOpacity key={t.key} onPress={t.onTap}
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: t.color + '15', borderWidth: 1.5, borderColor: t.color + '44', borderRadius: 14, padding: 14, marginBottom: 10, gap: 12 }}
+              >
+                <Text style={{ fontSize: 26 }}>{t.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{t.label}</Text>
+                  <Text style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{t.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* ── Calling: waiting for user to return ── */}
+        {followupStep === 'calling' && (
+          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#3B82F622', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+              <Text style={{ fontSize: 38 }}>📞</Text>
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: C.text, marginBottom: 6 }}>Calling {followupName}…</Text>
+            <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
+              Return to the app once the call is finished to log the outcome.
+            </Text>
+            <TouchableOpacity onPress={() => setFollowupStep('callOutcome')}
+              style={{ backgroundColor: '#3B82F6', borderRadius: 14, paddingHorizontal: 28, paddingVertical: 13 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Call Ended — Log Outcome</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Call Outcome ── */}
+        {followupStep === 'callOutcome' && (
+          <View>
+            <Text style={{ fontSize: 13, color: C.muted, marginBottom: 12, textAlign: 'center' }}>
+              How did the call with{' '}
+              <Text style={{ color: C.text, fontWeight: '700' }}>{followupName}</Text> go?
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {[
+                { label: 'Saw the presentation', emoji: '🎥' },
+                { label: 'Has not seen it yet',  emoji: '⏳' },
+                { label: 'Interested',           emoji: '✅' },
+                { label: 'Not interested',       emoji: '❌' },
+                { label: 'Wants more info',      emoji: '🔍' },
+                { label: 'Asked to call later',  emoji: '📆' },
+                { label: 'No answer',            emoji: '🔇' },
+              ].map(o => {
+                const active = callOutcomeVal === o.label;
+                return (
+                  <TouchableOpacity key={o.label} onPress={() => setCallOutcomeVal(o.label)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: active ? '#3B82F6' : C.inputBg, borderWidth: 1.5, borderColor: active ? '#3B82F6' : C.border }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#fff' : C.muted }}>{o.emoji} {o.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Field label="Notes (optional)" value={fNotes} onChangeText={setFNotes} placeholder="Any additional details…" C={C} multiline />
+            <SaveBtn onPress={saveCallOutcome} saving={saving} C={C} />
+          </View>
+        )}
+
+        {/* ── Script Selection ── */}
+        {followupStep === 'scriptSelect' && (
+          <View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted, marginBottom: 12 }}>Choose a ready-made script:</Text>
+            {[
+              { text: 'Just checking if you watched the video 😊', emoji: '🎬' },
+              { text: 'Do you have any questions about what I shared? 🙋', emoji: '❓' },
+              { text: 'Are you joining the event today? 🎉', emoji: '📅' },
+            ].map(s => {
+              const active = selectedScript === s.text;
+              return (
+                <TouchableOpacity key={s.text} onPress={() => setSelectedScript(s.text)}
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', backgroundColor: active ? '#10B98111' : C.inputBg, borderWidth: 1.5, borderColor: active ? '#10B981' : C.border, borderRadius: 14, padding: 14, marginBottom: 10, gap: 10 }}
+                >
+                  <Text style={{ fontSize: 22 }}>{s.emoji}</Text>
+                  <Text style={{ flex: 1, fontSize: 13, color: active ? '#10B981' : C.text, fontWeight: active ? '700' : '500', lineHeight: 20 }}>{s.text}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              onPress={() => { if (!selectedScript) { Alert.alert('Required', 'Please select a script.'); return; } setFollowupStep('platformSelect'); }}
+              style={{ backgroundColor: '#10B981', borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center', marginTop: 6 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Next — Choose Platform →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Platform Selection ── */}
+        {followupStep === 'platformSelect' && (
+          <View>
+            <View style={{ backgroundColor: C.inputBg, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+              <Text style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Script to send:</Text>
+              <Text style={{ fontSize: 13, color: C.text, fontStyle: 'italic' }}>"{selectedScript}"</Text>
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted, marginBottom: 12 }}>Send via:</Text>
+            {[
+              { key: 'SMS',      icon: '📱', label: 'SMS',      desc: 'Default message app' },
+              { key: 'WhatsApp', icon: '🟢', label: 'WhatsApp', desc: 'Send via WhatsApp' },
+              { key: 'Telegram', icon: '✈️',  label: 'Telegram', desc: 'Send via Telegram' },
+            ].map(p => (
+              <TouchableOpacity key={p.key} onPress={() => setSelectedPlatform(p.key)}
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: selectedPlatform === p.key ? '#10B98111' : C.inputBg, borderWidth: 1.5, borderColor: selectedPlatform === p.key ? '#10B981' : C.border, borderRadius: 14, padding: 14, marginBottom: 10, gap: 12 }}
+              >
+                <Text style={{ fontSize: 24 }}>{p.icon}</Text>
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{p.label}</Text>
+                  <Text style={{ fontSize: 12, color: C.muted }}>{p.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={sendMessage}
+              style={{ backgroundColor: '#10B981', borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center', marginTop: 6 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Send Message 🚀</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Message Outcome ── */}
+        {followupStep === 'messageOutcome' && (
+          <View>
+            <Text style={{ fontSize: 13, color: C.muted, marginBottom: 12, textAlign: 'center' }}>
+              Message sent via <Text style={{ color: C.text, fontWeight: '700' }}>{selectedPlatform}</Text>. What was the response?
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {[
+                { label: 'Replied with interest',  emoji: '🔥' },
+                { label: 'Replied not interested', emoji: '❌' },
+                { label: 'Waiting for response',   emoji: '⏳' },
+                { label: 'Needs more info',         emoji: '🔍' },
+                { label: 'Wants product details',  emoji: '📦' },
+                { label: 'Wants pricing',           emoji: '💰' },
+              ].map(o => {
+                const active = msgOutcomeVal === o.label;
+                return (
+                  <TouchableOpacity key={o.label} onPress={() => setMsgOutcomeVal(o.label)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: active ? '#10B981' : C.inputBg, borderWidth: 1.5, borderColor: active ? '#10B981' : C.border }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#fff' : C.muted }}>{o.emoji} {o.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Field label="Notes (optional)" value={fNotes} onChangeText={setFNotes} placeholder="Any extra context…" C={C} multiline />
+            <SaveBtn onPress={saveMsgOutcome} saving={saving} C={C} />
+          </View>
+        )}
+
+        {/* ── Static flow: Follow up after event ── */}
+        {followupStep === 'staticFlow' && (
+          <View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted, marginBottom: 8 }}>Outcome</Text>
+            <Pill options={['Positive', 'Neutral', 'Negative', 'Scheduled']} value={fOutcome} onChange={setFOutcome} C={C} />
+            <Field label="Notes" value={fNotes} onChangeText={setFNotes} placeholder="How did it go?" C={C} multiline />
+            <SaveBtn onPress={saveFollowup} saving={saving} C={C} />
+          </View>
+        )}
       </BottomModal>
+
+      {/* ══ MODAL: Follow Up After Presentation (AI Planner) ══ */}
+      <FollowUpModal
+        visible={modal === 'presentationFollowup'}
+        onClose={() => setModal(null)}
+        contact={contacts.find(c => c.prospect_id === targetId)}
+        targetId={targetId}
+        C={C}
+        onSaved={() => load(true)}
+      />
 
       {/* ══ MODAL: Add Closing ══ */}
       <BottomModal visible={modal === 'closing'} onClose={() => setModal(null)} title="Closing Attempt" C={C}>
@@ -509,6 +888,177 @@ const ContactsScreen = ({ C }) => {
         <Field label="Notes" value={clNotes} onChangeText={setClNotes} placeholder="Details of the closing…" C={C} multiline />
         <SaveBtn onPress={saveClosing} saving={saving} C={C} />
       </BottomModal>
+
+      {/* ══ MODAL: Phone Contact Picker ══ */}
+      <Modal visible={modal === 'phonePicker'} animationType="slide" transparent onRequestClose={() => setModal(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 36, maxHeight: '85%' }}>
+              {/* Handle */}
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 14 }} />
+              {/* Title */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                <Smartphone color={C.accent} size={20} />
+                <Text style={{ fontSize: 17, fontWeight: '800', color: C.text, flex: 1, marginLeft: 8 }}>Phone Contacts</Text>
+                <TouchableOpacity onPress={() => setModal(null)}>
+                  <X color={C.muted} size={20} />
+                </TouchableOpacity>
+              </View>
+              {/* Search */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 12, height: 42, marginBottom: 12 }}>
+                <Search color={C.muted} size={15} />
+                <TextInput
+                  value={phoneSearch}
+                  onChangeText={setPhoneSearch}
+                  placeholder="Search contacts..."
+                  placeholderTextColor={C.muted}
+                  style={{ flex: 1, marginLeft: 8, color: C.text, fontSize: 14 }}
+                  autoFocus
+                />
+                {phoneSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setPhoneSearch('')}>
+                    <X color={C.muted} size={14} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {/* List */}
+              {phoneLoading ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator color={C.accent} size="large" />
+                  <Text style={{ color: C.muted, marginTop: 10, fontSize: 13 }}>Loading contacts…</Text>
+                </View>
+              ) : filteredPhoneContacts.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <User color={C.muted} size={36} />
+                  <Text style={{ color: C.muted, marginTop: 10, fontSize: 13 }}>No contacts found</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredPhoneContacts}
+                  keyExtractor={(item, i) => item.id ?? String(i)}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ maxHeight: 420 }}
+                  renderItem={({ item }) => {
+                    const phone = item.phoneNumbers?.[0]?.number ?? '';
+                    const initials = (item.name ?? '?').charAt(0).toUpperCase();
+                    return (
+                      <TouchableOpacity
+                        onPress={() => pickPhoneContact(item)}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderColor: C.border }}
+                      >
+                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.accent + '28', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                          <Text style={{ color: C.accent, fontWeight: '800', fontSize: 16 }}>{initials}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{item.name}</Text>
+                          {phone ? <Text style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{phone}</Text> : null}
+                        </View>
+                        <Phone color={C.accent} size={16} />
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ══ MODAL: Quick Import Dialog ══ */}
+      <Modal visible={modal === 'quickImport'} animationType="fade" transparent onRequestClose={() => setModal(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+          <View style={{ backgroundColor: C.surface, borderRadius: 24, width: '100%', paddingHorizontal: 22, paddingTop: 24, paddingBottom: 20, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, elevation: 12 }}>
+
+            {/* Icon + title */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.accent + '22', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Smartphone color={C.accent} size={26} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>Import Contact</Text>
+              <Text style={{ fontSize: 13, color: C.muted, marginTop: 4, textAlign: 'center' }}>
+                Review the contact and choose a status before saving.
+              </Text>
+            </View>
+
+            {/* Contact preview card */}
+            {quickContact && (
+              <View style={{ backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 14, marginBottom: 18 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent + '28', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                    <Text style={{ color: C.accent, fontWeight: '800', fontSize: 18 }}>
+                      {(quickContact.name ?? '?').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: C.text }}>{quickContact.name}</Text>
+                    <Text style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{quickContact.phone}</Text>
+                    {quickContact.email ? (
+                      <Text style={{ fontSize: 11, color: C.sub, marginTop: 1 }}>{quickContact.email}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Status picker — REQUIRED */}
+            <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted, marginBottom: 8 }}>
+              Select Status <Text style={{ color: '#EF4444' }}>*</Text>
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
+              {['New', 'Warm', 'Hot', 'Cold', 'Closed'].map(opt => {
+                const active = quickStatus === opt;
+                const meta   = STATUS_META[opt] ?? STATUS_META['New'];
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    onPress={() => setQuickStatus(opt)}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: active ? meta.color : C.inputBg,
+                      borderWidth: 1.5,
+                      borderColor: active ? meta.color : C.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : C.muted }}>
+                      {opt}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Action buttons */}
+            <TouchableOpacity
+              onPress={saveQuickContact}
+              disabled={saving}
+              style={{ backgroundColor: C.accent, borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>💾  Save Contact</Text>
+              }
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={goToFullForm}
+              style={{ backgroundColor: 'transparent', borderWidth: 1.5, borderColor: C.accent, borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}
+            >
+              <Text style={{ color: C.accent, fontWeight: '700', fontSize: 14 }}>✏️  Add More Info</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => { setModal(null); setQuickContact(null); }}
+              style={{ alignItems: 'center', paddingVertical: 8 }}
+            >
+              <Text style={{ color: C.muted, fontSize: 13 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
