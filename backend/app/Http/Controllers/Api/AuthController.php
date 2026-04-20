@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
-use App\Models\User;
+use App\Models\Distributor;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -16,19 +16,16 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'phone' => 'required|string|max:20|unique:users',
+            'email' => 'required|string|email|max:255|unique:distributors',
+            'phone' => 'nullable|string|max:20|unique:distributors',
             'password' => 'required|string|min:8',
         ]);
 
-        $user = User::create([
+        $user = Distributor::create([
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
             'password' => Hash::make($request->password),
-            'role' => 'user',
-            'status' => 'active',
-            'isPaid' => false,
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -47,7 +44,7 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = Distributor::where('email', $request->email)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json([
@@ -77,16 +74,16 @@ class AuthController extends Controller
 
     public function index()
     {
-        return response()->json(User::all());
+        return response()->json(Distributor::all());
     }
     public function update(Request $request, $id)
     {
-        $user = User::findOrFail($id);
+        $user = Distributor::findOrFail($id);
         
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|string|email|max:255|unique:users,email,'.$id.',userid',
-            'phone' => 'sometimes|required|string|max:20|unique:users,phone,'.$id.',userid',
+            'email' => 'sometimes|required|string|email|max:255|unique:distributors,email,'.$id.',distributor_id',
+            'phone' => 'sometimes|nullable|string|max:20|unique:distributors,phone,'.$id.',distributor_id',
             'password' => 'nullable|string|min:8',
         ]);
 
@@ -102,10 +99,10 @@ class AuthController extends Controller
 
     public function toggleStatus($id)
     {
-        $user = User::findOrFail($id);
-        $user->status = $user->status === 'active' ? 'inactive' : 'active';
+        $user = Distributor::findOrFail($id);
+        $user->is_paid = !$user->is_paid;
         $user->save();
 
-        return response()->json(['message' => 'User status updated', 'user' => $user]);
+        return response()->json(['message' => 'Distributor payment status updated', 'user' => $user]);
     }
 }

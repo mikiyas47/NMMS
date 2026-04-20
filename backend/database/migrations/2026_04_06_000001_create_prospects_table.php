@@ -13,16 +13,17 @@ return new class extends Migration
     {
         Schema::create('prospects', function (Blueprint $table) {
             $table->id('prospect_id');
-            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('distributor_id'); // FK → distributors.distributor_id
             $table->string('name', 255);
             $table->string('phone', 50);
             $table->string('email', 255)->nullable();
             $table->string('source', 50)->nullable();
             $table->string('status', 50)->default('New');
             $table->string('relationship', 50)->nullable();
-            $table->timestamps();
+            $table->dateTime('created_at')->useCurrent();           // Timestamp when the prospect was added
+            $table->dateTime('updated_at')->useCurrentOnUpdate()->nullable(); // Last update timestamp
 
-            $table->foreign('user_id')->references('userid')->on('users')->onDelete('cascade');
+            $table->foreign('distributor_id')->references('distributor_id')->on('distributors')->onDelete('cascade');
         });
     }
 

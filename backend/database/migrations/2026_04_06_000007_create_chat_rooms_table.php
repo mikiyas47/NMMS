@@ -17,7 +17,7 @@ return new class extends Migration
             $table->unsignedBigInteger('prospect_id');
             $table->timestamp('created_at')->useCurrent();
 
-            $table->foreign('distributor_id')->references('userid')->on('users')->onDelete('cascade');
+            $table->foreign('distributor_id')->references('distributor_id')->on('distributors')->onDelete('cascade');
             $table->foreign('prospect_id')->references('prospect_id')->on('prospects')->onDelete('cascade');
         });
     }

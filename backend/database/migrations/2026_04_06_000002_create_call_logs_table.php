@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('call_logs', function (Blueprint $table) {
             $table->id('call_id');
             $table->unsignedBigInteger('prospect_id');
-            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('distributor_id'); // FK → distributors.distributor_id
             $table->string('call_reason', 50)->nullable();
             $table->dateTime('call_start_time')->nullable();
             $table->dateTime('call_end_time')->nullable();
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
 
             $table->foreign('prospect_id')->references('prospect_id')->on('prospects')->onDelete('cascade');
-            $table->foreign('user_id')->references('userid')->on('users')->onDelete('cascade');
+            $table->foreign('distributor_id')->references('distributor_id')->on('distributors')->onDelete('cascade');
         });
     }
 

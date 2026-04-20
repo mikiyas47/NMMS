@@ -13,7 +13,7 @@ class Followup extends Model
 
     protected $fillable = [
         'prospect_id',
-        'user_id',
+        'distributor_id',
         'followup_type',
         'method',
         'script_used',
@@ -24,5 +24,10 @@ class Followup extends Model
     public function prospect()
     {
         return $this->belongsTo(Prospect::class, 'prospect_id', 'prospect_id');
+    }
+
+    public function distributor()
+    {
+        return $this->belongsTo(Distributor::class, 'distributor_id', 'distributor_id');
     }
 }

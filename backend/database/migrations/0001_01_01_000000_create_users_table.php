@@ -11,15 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // This table is ONLY for system-level accounts: 'owner' and 'admin' roles.
+        // Distributor accounts are managed in the 'distributors' table.
         Schema::create('users', function (Blueprint $table) {
             $table->id('userid');
             $table->string('name');
             $table->string('email')->unique();
-            $table->string('phone')->unique();
+            $table->string('phone')->nullable()->unique(); // Optional — not required for system accounts
             $table->string('password');
-            $table->string('role')->default('user');
+            $table->enum('role', ['owner', 'admin'])->default('admin'); // Restricted to owner & admin only
             $table->string('status')->default('active');
-            $table->boolean('isPaid')->default(false);
             $table->timestamp('email_verified_at')->nullable();
             $table->rememberToken();
             $table->timestamps();

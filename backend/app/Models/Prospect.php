@@ -9,7 +9,7 @@ class Prospect extends Model
     protected $primaryKey = 'prospect_id';
 
     protected $fillable = [
-        'user_id',
+        'distributor_id',
         'name',
         'phone',
         'email',
@@ -28,8 +28,8 @@ class Prospect extends Model
         return $this->hasMany(ClosingAttempt::class, 'prospect_id', 'prospect_id');
     }
 
-    public function user()
+    public function distributor()
     {
-        return $this->belongsTo(User::class, 'user_id', 'userid');
+        return $this->belongsTo(Distributor::class, 'distributor_id', 'distributor_id');
     }
 }

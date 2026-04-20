@@ -26,14 +26,17 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
+    /**
+     * Only 'owner' and 'admin' roles are stored in this table.
+     * Distributor accounts live in the Distributor model.
+     */
     protected $fillable = [
         'name',
         'email',
         'password',
-        'phone',
+        'phone',   // optional
         'role',
         'status',
-        'isPaid',
     ];
 
     /**
@@ -55,8 +58,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'isPaid' => 'boolean',
+            'password'         => 'hashed',
         ];
     }
 }

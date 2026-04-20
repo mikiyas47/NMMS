@@ -16,7 +16,7 @@ class ContactController extends Controller
     /** GET /api/contacts — list all prospects belonging to the authenticated user */
     public function index()
     {
-        $prospects = Prospect::where('user_id', Auth::id())
+        $prospects = Prospect::where('distributor_id', Auth::id())
             ->withCount(['followups', 'closingAttempts'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -36,7 +36,7 @@ class ContactController extends Controller
             'relationship' => 'nullable|string|max:50',
         ]);
 
-        $data['user_id'] = Auth::id();
+        $data['distributor_id'] = Auth::id();
         $data['status']  = $data['status'] ?? 'New';
 
         $prospect = Prospect::create($data);
@@ -48,7 +48,7 @@ class ContactController extends Controller
     public function show($id)
     {
         $prospect = Prospect::where('prospect_id', $id)
-            ->where('user_id', Auth::id())
+            ->where('distributor_id', Auth::id())
             ->with(['followups', 'closingAttempts'])
             ->firstOrFail();
 
@@ -59,7 +59,7 @@ class ContactController extends Controller
     public function update(Request $request, $id)
     {
         $prospect = Prospect::where('prospect_id', $id)
-            ->where('user_id', Auth::id())
+            ->where('distributor_id', Auth::id())
             ->firstOrFail();
 
         $data = $request->validate([
@@ -80,7 +80,7 @@ class ContactController extends Controller
     public function destroy($id)
     {
         $prospect = Prospect::where('prospect_id', $id)
-            ->where('user_id', Auth::id())
+            ->where('distributor_id', Auth::id())
             ->firstOrFail();
 
         $prospect->delete();
@@ -93,7 +93,7 @@ class ContactController extends Controller
     /** GET /api/contacts/followups — all followups for the authenticated user */
     public function followups()
     {
-        $followups = Followup::where('user_id', Auth::id())
+        $followups = Followup::where('distributor_id', Auth::id())
             ->with('prospect:prospect_id,name,phone')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -106,7 +106,7 @@ class ContactController extends Controller
     {
         // Ensure the prospect belongs to the user
         $prospect = Prospect::where('prospect_id', $id)
-            ->where('user_id', Auth::id())
+            ->where('distributor_id', Auth::id())
             ->firstOrFail();
 
         $data = $request->validate([
@@ -118,7 +118,7 @@ class ContactController extends Controller
         ]);
 
         $data['prospect_id'] = $prospect->prospect_id;
-        $data['user_id']     = Auth::id();
+        $data['distributor_id']     = Auth::id();
 
         $followup = Followup::create($data);
 
@@ -130,7 +130,7 @@ class ContactController extends Controller
     /** GET /api/contacts/closings — all closing attempts for the authenticated user */
     public function closings()
     {
-        $closings = ClosingAttempt::where('user_id', Auth::id())
+        $closings = ClosingAttempt::where('distributor_id', Auth::id())
             ->with('prospect:prospect_id,name,phone')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -142,7 +142,7 @@ class ContactController extends Controller
     public function storeClosing(Request $request, $id)
     {
         $prospect = Prospect::where('prospect_id', $id)
-            ->where('user_id', Auth::id())
+            ->where('distributor_id', Auth::id())
             ->firstOrFail();
 
         $data = $request->validate([
@@ -152,7 +152,7 @@ class ContactController extends Controller
         ]);
 
         $data['prospect_id'] = $prospect->prospect_id;
-        $data['user_id']     = Auth::id();
+        $data['distributor_id']     = Auth::id();
 
         $closing = ClosingAttempt::create($data);
 

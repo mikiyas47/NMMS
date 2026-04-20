@@ -20,7 +20,7 @@ return new class extends Migration
             $table->boolean('is_read')->default(false);
 
             $table->foreign('chat_room_id')->references('chat_room_id')->on('chat_rooms')->onDelete('cascade');
-            $table->foreign('sender_id')->references('userid')->on('users')->onDelete('cascade');
+            $table->foreign('sender_id')->references('distributor_id')->on('distributors')->onDelete('cascade');
         });
     }
 

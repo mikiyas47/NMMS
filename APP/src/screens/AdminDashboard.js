@@ -36,8 +36,8 @@ const SIDEBAR_WIDTH = 260;
 // ─── Sidebar menu items ───────────────────────────────────────────
 const MENU = [
   { id: 'overview', label: 'Overview', icon: Home, gradient: ['#6366F1', '#818CF8'] },
-  { id: 'admins', label: 'Admins', icon: ShieldCheck, gradient: ['#3B82F6', '#60A5FA'] },
-  { id: 'prospects', label: 'View Prospects', icon: Users, gradient: ['#10B981', '#34D399'] },
+  { id: 'admins', label: 'Owners', icon: ShieldCheck, gradient: ['#3B82F6', '#60A5FA'] },
+  { id: 'prospects', label: 'View Distributors', icon: Users, gradient: ['#10B981', '#34D399'] },
   { id: 'product', label: 'Add Product', icon: Package, gradient: ['#F59E0B', '#FCD34D'] },
   { id: 'report', label: 'Report', icon: BarChart2, gradient: ['#EC4899', '#F472B6'] },
 ];
