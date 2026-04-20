@@ -25,7 +25,17 @@ class DatabaseSeeder extends Seeder
                 'password' => \Hash::make('Mikiyas7'),
                 'role'     => 'admin',
                 'status'   => 'active',
-                'isPaid'   => true,
+            ]
+        );
+
+        \App\Models\Distributor::firstOrCreate(
+            ['email' => 'ab@gmail.com'],
+            [
+                'name'     => 'Abebe Distributor',
+                'phone'    => '0912345678',
+                'password' => \Hash::make('Abebe'),
+                'rank'     => 'CT',
+                'is_paid'  => true,
             ]
         );
     }

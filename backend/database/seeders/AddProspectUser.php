@@ -14,17 +14,17 @@ class AddProspectUser extends Seeder
     public function run(): void
     {
         // Check if user already exists
-        $existingUser = DB::table('users')->where('email', 'miki@gmail.com')->first();
+        $existingUser = DB::table('distributors')->where('email', 'miki@gmail.com')->first();
         
         if (!$existingUser) {
-            DB::table('users')->insert([
+            DB::table('distributors')->insert([
                 'name' => 'Miki Prospect',
                 'email' => 'miki@gmail.com',
                 'phone' => '0912345678',
                 'password' => Hash::make('mikiyas'),
-                'role' => 'user',
-                'status' => 'active',
-                'isPaid' => true,
+                'rank' => 'CT',
+                'is_paid' => true,
+                'join_date' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
