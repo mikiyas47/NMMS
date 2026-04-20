@@ -44,21 +44,34 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = Distributor::where('email', $request->email)->first();
-
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        // First, check if it's an Admin/Owner in the 'users' table
+        $user = \App\Models\User::where('email', $request->email)->first();
+        
+        if ($user && Hash::check($request->password, $user->password)) {
+            $token = $user->createToken('auth_token')->plainTextToken;
             return response()->json([
-                'message' => 'Invalid login details'
-            ], 401);
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => $user,
+            ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // If not found or password mismatch, check 'distributors' table
+        $distributor = \App\Models\Distributor::where('email', $request->email)->first();
+
+        if ($distributor && Hash::check($request->password, $distributor->password)) {
+            $token = $distributor->createToken('auth_token')->plainTextToken;
+            
+            return response()->json([
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => $distributor,
+            ]);
+        }
 
         return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user,
-        ]);
+            'message' => 'Invalid login details'
+        ], 401);
     }
 
     public function user(Request $request)
