@@ -45,9 +45,15 @@ class AuthController extends Controller
         ]);
 
         // First, check if it's an Admin/Owner in the 'users' table
+        // IMPORTANT: Only 'admin' and 'owner' roles are allowed here
         $user = \App\Models\User::where('email', $request->email)->first();
-        
+
         if ($user && Hash::check($request->password, $user->password)) {
+            // Reject if the role is not admin or owner — prevents old 'user' role records
+            // from slipping through to the distributor dashboard
+            if (!in_array($user->role, ['admin', 'owner'])) {
+                return response()->json(['message' => 'Invalid login details'], 401);
+            }
             $token = $user->createToken('auth_token')->plainTextToken;
             return response()->json([
                 'access_token' => $token,
