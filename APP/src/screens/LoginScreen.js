@@ -32,9 +32,11 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await loginApi(email, password);
       const role = data.user.role;
-      if (role === 'admin') {
+      if (role === 'owner') {
         navigation.replace('OwnerDashboard');
       } else {
+        // Admin and other roles go to UserDashboard (DistributorDashboard)
+        // Note: Mobile app doesn't have a separate AdminDashboard like the web frontend
         navigation.replace('UserDashboard');
       }
     } catch (error) {
