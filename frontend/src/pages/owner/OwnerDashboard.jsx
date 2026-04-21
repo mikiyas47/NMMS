@@ -6,14 +6,14 @@ import {
   LogOut, Menu, X, Bell, Sun, Moon, ChevronRight,
 } from 'lucide-react';
 import OverviewPage    from './OverviewPage';
-import AdminsPage      from './AdminsPage';
+import OwnersPage      from './OwnersPage';
 import ProspectsPage   from './ProspectsPage';
 import AddProductPage  from './AddProductPage';
 import ReportPage      from './ReportPage';
 
 const MENU = [
   { id: 'overview',   label: 'Overview',           icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
-  { id: 'admins',     label: 'Owners / Admins',     icon: ShieldCheck,     grad: ['#3B82F6','#60A5FA'] },
+  { id: 'admins',     label: 'Owners',     icon: ShieldCheck,     grad: ['#3B82F6','#60A5FA'] },
   { id: 'prospects',  label: 'View Distributors',   icon: Users,           grad: ['#10B981','#34D399'] },
   { id: 'product',    label: 'Add / Edit Products', icon: Package,         grad: ['#F59E0B','#FCD34D'] },
   { id: 'report',     label: 'Analytics Report',    icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
@@ -36,7 +36,7 @@ const OwnerDashboard = () => {
   const renderContent = () => {
     switch (active) {
       case 'overview':  return <OverviewPage   dark={darkMode} />;
-      case 'admins':    return <AdminsPage      dark={darkMode} />;
+      case 'admins':    return <OwnersPage      dark={darkMode} />;
       case 'prospects': return <ProspectsPage   dark={darkMode} />;
       case 'product':   return <AddProductPage  dark={darkMode} />;
       case 'report':    return <ReportPage      dark={darkMode} />;

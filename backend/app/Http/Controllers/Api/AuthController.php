@@ -93,16 +93,16 @@ class AuthController extends Controller
 
     public function index()
     {
-        return response()->json(Distributor::all());
+        return response()->json(\App\Models\User::all());
     }
     public function update(Request $request, $id)
     {
-        $user = Distributor::findOrFail($id);
+        $user = \App\Models\User::findOrFail($id);
         
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|string|email|max:255|unique:distributors,email,'.$id.',distributor_id',
-            'phone' => 'sometimes|nullable|string|max:20|unique:distributors,phone,'.$id.',distributor_id',
+            'email' => 'sometimes|required|string|email|max:255|unique:users,email,'.$id.',userid',
+            'phone' => 'sometimes|nullable|string|max:20|unique:users,phone,'.$id.',userid',
             'password' => 'nullable|string|min:8',
         ]);
 
@@ -118,10 +118,10 @@ class AuthController extends Controller
 
     public function toggleStatus($id)
     {
-        $user = Distributor::findOrFail($id);
-        $user->is_paid = !$user->is_paid;
+        $user = \App\Models\User::findOrFail($id);
+        $user->status = $user->status === 'active' ? 'inactive' : 'active';
         $user->save();
 
-        return response()->json(['message' => 'Distributor payment status updated', 'user' => $user]);
+        return response()->json(['message' => 'User status updated', 'user' => $user]);
     }
 }
