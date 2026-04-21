@@ -89,4 +89,18 @@ Route::get('/migrate', function() {
     }
 });
 
+// Temporary route to create the owner account on the production database
+Route::get('/create-owner', function() {
+    $user = \App\Models\User::updateOrCreate(
+        ['email' => 'miki@gmail.com'],
+        [
+            'name' => 'Mikiyas',
+            'password' => \Illuminate\Support\Facades\Hash::make('mikiyas'),
+            'role' => 'owner',
+            'status' => 'active'
+        ]
+    );
+    return response()->json(['message' => 'Owner created successfully on production database!', 'user' => $user]);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
