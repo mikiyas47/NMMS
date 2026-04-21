@@ -33,9 +33,9 @@ const ProspectsPage = () => {
       <div className="page-header">
         <div className="page-title-row">
           <Users size={26} color="#10B981" />
-          <h2 className="page-title">Distributors</h2>
+          <h2 className="page-title">System Distributors</h2>
         </div>
-        <p className="page-sub">Monitor and manage all registered prospects &amp; distributors</p>
+        <p className="page-sub">Monitor and manage all registered distributors</p>
       </div>
 
       {/* Toolbar */}

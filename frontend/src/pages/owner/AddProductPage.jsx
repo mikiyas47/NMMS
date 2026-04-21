@@ -134,8 +134,8 @@ const AddProductPage = () => {
             <Package size={20} color="#fff" />
           </div>
           <div>
-            <h2 className="page-title">{showList ? 'Product Catalog' : (editId ? 'Edit Product' : 'Add Product')}</h2>
-            <p className="page-sub">{showList ? 'Manage your catalog' : 'Fill in product details'}</p>
+            <h2 className="page-title">{showList ? 'System Product Catalog' : (editId ? 'Edit Product' : 'Add Product')}</h2>
+            <p className="page-sub">{showList ? 'Manage your system catalog' : 'Fill in product details'}</p>
           </div>
         </div>
         <button

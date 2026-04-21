@@ -60,9 +60,9 @@ const OwnersPage = ({ dark }) => {
       <div className="page-header">
         <div className="page-title-row">
           <ShieldCheck size={26} color="#6366F1" />
-          <h2 className="page-title">Owners</h2>
+          <h2 className="page-title">System Owners</h2>
         </div>
-        <p className="page-sub">Manage system owners and their permissions</p>
+        <p className="page-sub">Manage top-level system owners and their permissions</p>
       </div>
 
       {/* Search + Count */}
@@ -89,59 +89,57 @@ const OwnersPage = ({ dark }) => {
           <p>No owners found</p>
         </div>
       ) : (
-        <div className="cards-grid">
-          {filtered.map((u, i) => (
-            <div
-              key={u.userid || i}
-              className={`admin-card ${u.status === 'inactive' ? 'inactive' : ''}`}
-            >
-              <div className="admin-card-top">
-                <div
-                  className="user-avatar lg"
-                  style={{ background: u.status === 'inactive' ? '#6B7280' : '#6366F1' }}
-                >
-                  {u.name?.charAt(0).toUpperCase()}
-                </div>
-                <div className="admin-info">
-                  <p className="admin-name">{u.name}</p>
-                  <p className="admin-email">{u.email}</p>
-                </div>
-                <span className="role-badge owner">Owner</span>
-              </div>
-
-              <div className="admin-meta">
-                <div>
-                  <p className="meta-label">Status</p>
-                  <p className="meta-val" style={{ color: u.status === 'inactive' ? '#EF4444' : '#10B981' }}>
-                    {(u.status || 'active')}
-                  </p>
-                </div>
-                <div>
-                  <p className="meta-label">Phone</p>
-                  <p className="meta-val">{u.phone || '—'}</p>
-                </div>
-                <div>
-                  <p className="meta-label">#</p>
-                  <p className="meta-val">#{i + 1}</p>
-                </div>
-              </div>
-
-              <div className="admin-actions">
-                <button className="action-btn edit" onClick={() => openEdit(u)} id={`edit-owner-${u.userid}`}>
-                  <Edit2 size={13} /> Edit Info
-                </button>
-                <button
-                  className={`action-btn ${u.status === 'inactive' ? 'activate' : 'deactivate'}`}
-                  onClick={() => handleToggle(u)}
-                  disabled={toggling === u.userid}
-                  id={`toggle-owner-${u.userid}`}
-                >
-                  <Power size={13} />
-                  {toggling === u.userid ? '…' : u.status === 'inactive' ? 'Set Active' : 'Set Inactive'}
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="table-card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Owner</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((u, i) => (
+                <tr key={u.userid || i} style={{ opacity: u.status === 'inactive' ? 0.6 : 1 }}>
+                  <td>
+                    <div className="user-cell">
+                      <div
+                        className="user-avatar sm"
+                        style={{ background: u.status === 'inactive' ? '#6B7280' : '#6366F1' }}
+                      >
+                        {u.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <span style={{ fontWeight: 600 }}>{u.name}</span>
+                    </div>
+                  </td>
+                  <td className="muted">{u.email}</td>
+                  <td className="muted">{u.phone || '—'}</td>
+                  <td>
+                    <span className={`status-badge ${u.status === 'inactive' ? 'unpaid' : 'paid'}`}>
+                      {(u.status || 'active').toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <button className="action-btn edit" onClick={() => openEdit(u)} id={`edit-owner-${u.userid}`}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        className={`action-btn ${u.status === 'inactive' ? 'activate' : 'deactivate'}`}
+                        onClick={() => handleToggle(u)}
+                        disabled={toggling === u.userid}
+                        id={`toggle-owner-${u.userid}`}
+                      >
+                        <Power size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

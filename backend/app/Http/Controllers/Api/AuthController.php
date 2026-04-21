@@ -93,7 +93,16 @@ class AuthController extends Controller
 
     public function index()
     {
-        return response()->json(\App\Models\User::all());
+        $users = \App\Models\User::all();
+        $distributors = \App\Models\Distributor::all()->map(function ($d) {
+            // Distributors might not have a role column, so we assign it dynamically
+            $d->role = 'distributor';
+            $d->userid = $d->distributor_id; // Ensure consistent ID mapping for frontend
+            $d->isPaid = (bool) $d->is_paid; // Map snake_case to camelCase
+            return $d;
+        });
+
+        return response()->json($users->concat($distributors));
     }
     public function update(Request $request, $id)
     {

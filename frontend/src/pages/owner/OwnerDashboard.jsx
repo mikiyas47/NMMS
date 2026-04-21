@@ -12,11 +12,11 @@ import AddProductPage  from './AddProductPage';
 import ReportPage      from './ReportPage';
 
 const MENU = [
-  { id: 'overview',   label: 'Overview',           icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
-  { id: 'admins',     label: 'Owners',     icon: ShieldCheck,     grad: ['#3B82F6','#60A5FA'] },
-  { id: 'prospects',  label: 'View Distributors',   icon: Users,           grad: ['#10B981','#34D399'] },
-  { id: 'product',    label: 'Add / Edit Products', icon: Package,         grad: ['#F59E0B','#FCD34D'] },
-  { id: 'report',     label: 'Analytics Report',    icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
+  { id: 'overview',   label: 'System Overview',     icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
+  { id: 'owners',     label: 'Manage Owners',       icon: ShieldCheck,     grad: ['#8B5CF6','#A78BFA'] },
+  { id: 'prospects',  label: 'Distributors DB',     icon: Users,           grad: ['#10B981','#34D399'] },
+  { id: 'product',    label: 'Product Catalog',     icon: Package,         grad: ['#F59E0B','#FCD34D'] },
+  { id: 'report',     label: 'System Analytics',    icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
 ];
 
 const OwnerDashboard = () => {
@@ -36,10 +36,10 @@ const OwnerDashboard = () => {
   const renderContent = () => {
     switch (active) {
       case 'overview':  return <OverviewPage   dark={darkMode} />;
-      case 'admins':    return <OwnersPage      dark={darkMode} />;
-      case 'prospects': return <ProspectsPage   dark={darkMode} />;
-      case 'product':   return <AddProductPage  dark={darkMode} />;
-      case 'report':    return <ReportPage      dark={darkMode} />;
+      case 'owners':    return <OwnersPage     dark={darkMode} />;
+      case 'prospects': return <ProspectsPage  dark={darkMode} />;
+      case 'product':   return <AddProductPage dark={darkMode} />;
+      case 'report':    return <ReportPage     dark={darkMode} />;
       default:          return <OverviewPage   dark={darkMode} />;
     }
   };
@@ -53,7 +53,7 @@ const OwnerDashboard = () => {
           <div className="brand-icon"><ShieldCheck size={22} color="#fff" /></div>
           {sideOpen && (
             <div className="brand-text">
-              <span className="brand-name">NetGrow</span>
+              <span className="brand-name">NetGrow Sys</span>
               <span className="brand-role">Owner Console</span>
             </div>
           )}

@@ -38,12 +38,12 @@ const OverviewPage = ({ dark }) => {
       {/* Welcome Banner */}
       <div className="welcome-banner">
         <div>
-          <h2 className="welcome-title">Welcome back, Admin 👋</h2>
-          <p className="welcome-sub">Here's what's happening today</p>
+          <h2 className="welcome-title">Welcome back, Owner 👋</h2>
+          <p className="welcome-sub">Here's what's happening today in your system</p>
         </div>
         <div className="welcome-badge">
           <Star size={14} color="#FCD34D" />
-          <span>Super Admin</span>
+          <span>System Owner</span>
         </div>
         <button
           className="refresh-btn"

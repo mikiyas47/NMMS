@@ -47,7 +47,7 @@ const ReportPage = () => {
     <div className="page-container">
       <div className="page-title-row">
         <BarChart2 size={26} color="#EC4899" />
-        <h2 className="page-title">Analytics Report</h2>
+        <h2 className="page-title">System Analytics Report</h2>
       </div>
       <p className="page-sub" style={{ marginBottom: 24 }}>Overall system performance and key metrics</p>
 
