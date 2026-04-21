@@ -56,6 +56,7 @@ const AddProductScreen = ({ C }) => {
     price: '',
     description: '',
     stock: '',
+    point: '',
     image: null,
     mediaType: 'image',
   });
@@ -188,6 +189,7 @@ const AddProductScreen = ({ C }) => {
             price: String(parseFloat(form.price)),
             category: selCat,
             stock: form.stock ? String(parseInt(form.stock)) : '0',
+            point: form.point ? String(parseInt(form.point)) : '0',
             description: form.description || '',
           },
           headers: {
@@ -212,6 +214,7 @@ const AddProductScreen = ({ C }) => {
           price:       parseFloat(form.price),
           category:    selCat,
           stock:       form.stock ? parseInt(form.stock) : 0,
+          point:       form.point ? parseInt(form.point) : 0,
           description: form.description || '',
         };
 
@@ -234,7 +237,7 @@ const AddProductScreen = ({ C }) => {
         setSubmitted(true);
         setTimeout(() => {
           setSubmitted(false);
-          setForm({ name: '', price: '', description: '', stock: '', image: null, mediaType: 'image' });
+          setForm({ name: '', price: '', description: '', stock: '', point: '', image: null, mediaType: 'image' });
           setSelCat('');
           setEditProductId(null);
         }, 2500);
@@ -291,6 +294,7 @@ const AddProductScreen = ({ C }) => {
       price: String(product.price),
       description: product.description || '',
       stock: product.stock ? String(product.stock) : '',
+      point: product.point ? String(product.point) : '',
       image: product.image || null,
       mediaType: isVideoUrl(product.image) ? 'video' : 'image',
     });
@@ -300,7 +304,7 @@ const AddProductScreen = ({ C }) => {
 
   const handleCancelEdit = () => {
     setEditProductId(null);
-    setForm({ name: '', price: '', description: '', stock: '', image: null, mediaType: 'image' });
+    setForm({ name: '', price: '', description: '', stock: '', point: '', image: null, mediaType: 'image' });
     setSelCat('');
     setShowProducts(true);
   };
@@ -370,7 +374,7 @@ const AddProductScreen = ({ C }) => {
                setShowProducts(!showProducts);
                if (!showProducts) {
                   setEditProductId(null);
-                  setForm({ name: '', price: '', description: '', stock: '', image: null });
+                  setForm({ name: '', price: '', description: '', stock: '', point: '', image: null });
                   setSelCat('');
                   setFilterCat('All');
                   setSearchQuery('');
@@ -579,6 +583,21 @@ const AddProductScreen = ({ C }) => {
                 keyboardType="number-pad"
                 value={form.stock}
                 onChangeText={v => setForm(p => ({ ...p, stock: v }))}
+              />
+            </View>
+          </View>
+          <View className="flex-1">
+            <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Points</Text>
+            <View className="flex-row items-center rounded-xl px-4 h-14" style={{ backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border }}>
+              <Tag color={C.muted} size={18} />
+              <TextInput
+                className="flex-1 ml-3 text-sm font-medium"
+                style={{ color: C.text }}
+                placeholder="Pts"
+                placeholderTextColor={C.muted}
+                keyboardType="number-pad"
+                value={form.point}
+                onChangeText={v => setForm(p => ({ ...p, point: v }))}
               />
             </View>
           </View>

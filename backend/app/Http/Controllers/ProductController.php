@@ -34,11 +34,13 @@ class ProductController extends Controller
                 'category'     => 'required|string',
                 'stock'        => 'nullable|integer',
                 'description'  => 'nullable|string',
+                'point'        => 'nullable|integer',
                 // File upload approach (supports images and videos)
                 'image'        => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,mp4,mov,avi,mkv|max:102400',
             ]);
 
             $validatedData['stock'] = $validatedData['stock'] ?? 0;
+            $validatedData['point'] = $validatedData['point'] ?? 0;
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
@@ -78,12 +80,16 @@ class ProductController extends Controller
                 'category'     => 'sometimes|required|string',
                 'stock'        => 'nullable|integer',
                 'description'  => 'nullable|string',
+                'point'        => 'nullable|integer',
                 // File upload approach (supports images and videos)
                 'image'        => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,mp4,mov,avi,mkv|max:102400',
             ]);
 
             if (isset($validatedData['stock']) && $validatedData['stock'] === null) {
                 $validatedData['stock'] = 0;
+            }
+            if (isset($validatedData['point']) && $validatedData['point'] === null) {
+                $validatedData['point'] = 0;
             }
 
             // ── Handle file upload ────────────────────────────────────

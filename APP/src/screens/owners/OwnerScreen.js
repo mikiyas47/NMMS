@@ -15,7 +15,7 @@ import axios from 'axios';
 
 const API_BASE = 'https://nmms-backend.onrender.com/api';
 
-const AdminsScreen = ({ C }) => {
+const OwnerScreen = ({ C }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -271,4 +271,4 @@ const AdminsScreen = ({ C }) => {
   );
 };
 
-export default AdminsScreen;
+export default OwnerScreen;

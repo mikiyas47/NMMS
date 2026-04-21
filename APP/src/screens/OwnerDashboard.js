@@ -25,11 +25,11 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { logout as logoutApi } from '../api/authService';
-import OverviewScreen from './admin/OverviewScreen';
-import AdminsScreen from './admin/AdminsScreen';
-import ProspectsScreen from './admin/ProspectsScreen';
-import AddProductScreen from './admin/AddProductScreen';
-import ReportScreen from './admin/ReportScreen';
+import OverviewScreen from './owners/OverviewScreen';
+import OwnerScreen from './owners/OwnerScreen';
+import ProspectsScreen from './owners/ProspectsScreen';
+import AddProductScreen from './owners/AddProductScreen';
+import ReportScreen from './owners/ReportScreen';
 
 const SIDEBAR_WIDTH = 260;
 
@@ -43,9 +43,9 @@ const MENU = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════
-//  MAIN ADMIN DASHBOARD (Sidebar Shell)
+//  MAIN OWNER DASHBOARD (Sidebar Shell)
 // ═══════════════════════════════════════════════════════════════════
-const AdminDashboard = ({ navigation }) => {
+const OwnerDashboard = ({ navigation }) => {
   const { isDark, toggleTheme, colors: C } = useTheme();
   const [active, setActive] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -75,7 +75,7 @@ const AdminDashboard = ({ navigation }) => {
       case 'overview':
         return <OverviewScreen C={C} />;
       case 'admins':
-        return <AdminsScreen C={C} />;
+        return <OwnerScreen C={C} />;
       case 'prospects':
         return <ProspectsScreen C={C} />;
       case 'product':
@@ -243,4 +243,4 @@ const AdminDashboard = ({ navigation }) => {
   );
 };
 
-export default AdminDashboard;
+export default OwnerDashboard;

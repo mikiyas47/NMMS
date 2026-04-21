@@ -4,7 +4,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from './src/screens/LoginScreen';
-import AdminDashboard from './src/screens/AdminDashboard';
+import OwnerDashboard from './src/screens/OwnerDashboard';
 import DistributorDashboard from './src/screens/DistributorDashboard';
 import RegistrationScreen from './src/screens/RegistrationScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -22,7 +22,7 @@ function AppNavigator() {
         >
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegistrationScreen} />
-          <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
+          <Stack.Screen name="OwnerDashboard" component={OwnerDashboard} />
           <Stack.Screen name="UserDashboard" component={DistributorDashboard} />
         </Stack.Navigator>
       </NavigationContainer>

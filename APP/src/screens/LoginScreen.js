@@ -33,7 +33,7 @@ const LoginScreen = ({ navigation }) => {
       const data = await loginApi(email, password);
       const role = data.user.role;
       if (role === 'admin') {
-        navigation.replace('AdminDashboard');
+        navigation.replace('OwnerDashboard');
       } else {
         navigation.replace('UserDashboard');
       }

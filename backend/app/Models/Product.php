@@ -13,5 +13,6 @@ class Product extends Model
         'stock',
         'description',
         'image',
+        'point',
     ];
 }
