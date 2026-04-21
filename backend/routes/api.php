@@ -103,4 +103,23 @@ Route::get('/create-owner', function() {
     return response()->json(['message' => 'Owner created successfully on production database!', 'user' => $user]);
 });
 
+// Temporary route to remove duplicate distributor user from production database
+Route::get('/remove-duplicate-distributor', function() {
+    $deleted = \Illuminate\Support\Facades\DB::table('distributors')
+        ->where('email', 'miki@gmail.com')
+        ->delete();
+    
+    if ($deleted) {
+        return response()->json([
+            'message' => 'Successfully removed distributor user with email miki@gmail.com from production database!',
+            'deleted_count' => $deleted
+        ]);
+    } else {
+        return response()->json([
+            'message' => 'No distributor user found with email miki@gmail.com',
+            'deleted_count' => 0
+        ]);
+    }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
