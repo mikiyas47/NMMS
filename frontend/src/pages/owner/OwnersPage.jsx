@@ -102,7 +102,7 @@ const OwnersPage = ({ dark }) => {
             </thead>
             <tbody>
               {filtered.map((u, i) => (
-                <tr key={u.userid || i} style={{ opacity: u.status === 'inactive' ? 0.6 : 1 }}>
+                <tr key={u.userid ? `${u.role}-${u.userid}` : i} style={{ opacity: u.status === 'inactive' ? 0.6 : 1 }}>
                   <td>
                     <div className="user-cell">
                       <div

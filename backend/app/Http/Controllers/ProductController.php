@@ -44,8 +44,9 @@ class ProductController extends Controller
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
-                $path = $request->file('image')->store('products', 'public');
-                $validatedData['image'] = secure_url('storage/' . $path);
+                // Upload to Cloudinary instead of local disk
+                $result = $request->file('image')->storeOnCloudinary();
+                $validatedData['image'] = $result->getSecurePath();
             }
 
             $newProduct = \App\Models\Product::create($validatedData);
@@ -94,8 +95,9 @@ class ProductController extends Controller
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
-                $path = $request->file('image')->store('products', 'public');
-                $validatedData['image'] = secure_url('storage/' . $path);
+                // Upload to Cloudinary instead of local disk
+                $result = $request->file('image')->storeOnCloudinary();
+                $validatedData['image'] = $result->getSecurePath();
             }
 
             $product->update($validatedData);
@@ -124,15 +126,8 @@ class ProductController extends Controller
     public function destroy(\App\Models\Product $product)
     {
         try {
-            // Delete the associated file from storage if it exists
-            if ($product->image) {
-                // Extract the path after /storage/
-                $relativePath = ltrim(parse_url($product->image, PHP_URL_PATH), '/');
-                // Remove the leading 'storage/' to get the disk path
-                $diskPath = preg_replace('#^storage/#', '', $relativePath);
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($diskPath);
-            }
-
+            // Cloudinary manages the files, no need to delete from local storage.
+            // If you wish to delete from Cloudinary, you would use cloudinary()->destroy(public_id)
             $product->delete();
 
             return response()->json([

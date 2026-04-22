@@ -101,7 +101,7 @@ const ModalVideo = ({ uri }) => {
 };
 
 // ─── Single Product Card ──────────────────────────────────────────────────────
-const ProductCard = ({ item, onSell, C }) => {
+const ProductCard = ({ item, onSell, onViewMedia, C }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const catColor  = getCategoryColor(item.category);
   const imageUri  = toHttps(item.image);
@@ -118,11 +118,7 @@ const ProductCard = ({ item, onSell, C }) => {
 
   return (
     <Animated.View style={{ transform:[{ scale: scaleAnim }], width: CARD_WIDTH, marginBottom: 14 }}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={() => inStock && onSell(item)}
+      <View
         style={{
           borderRadius: 22, overflow: 'hidden',
           backgroundColor: C.surface,
@@ -133,7 +129,13 @@ const ProductCard = ({ item, onSell, C }) => {
         }}
       >
         {/* ── Image Frame 3:4 ── */}
-        <View style={{ width: '100%', aspectRatio: 3/4, backgroundColor: C.inputBg }}>
+        <TouchableOpacity 
+          activeOpacity={0.9}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => onViewMedia(item)}
+          style={{ width: '100%', aspectRatio: 3/4, backgroundColor: C.inputBg }}
+        >
           {imageUri && !isVideo ? (
             <Image source={{ uri: imageUri }} style={{ width:'100%', height:'100%' }} resizeMode="cover" />
           ) : imageUri && isVideo ? (
@@ -168,10 +170,14 @@ const ProductCard = ({ item, onSell, C }) => {
               <Text style={{ color:'#fff', fontWeight:'800', fontSize:12, letterSpacing:1 }}>OUT OF STOCK</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
         {/* ── Info ── */}
-        <View style={{ padding: 12 }}>
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={() => inStock && onSell(item)}
+          style={{ padding: 12 }}
+        >
           <Text numberOfLines={2} style={{ fontSize:12, fontWeight:'700', color:C.text, marginBottom:6, lineHeight:17 }}>
             {item.name}
           </Text>
@@ -195,8 +201,8 @@ const ProductCard = ({ item, onSell, C }) => {
               </Text>
             </LinearGradient>
           </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 };
@@ -346,6 +352,7 @@ const ProductsScreen = ({ C }) => {
   const [search, setSearch]           = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [sellTarget, setSellTarget]   = useState(null);
+  const [viewMedia, setViewMedia]     = useState(null);
   const appState = useRef(AppState.currentState);
 
   // ── Fetch from API ──────────────────────────────────────────────────────────
@@ -565,7 +572,7 @@ const ProductsScreen = ({ C }) => {
           />
         }
         renderItem={({ item }) => (
-          <ProductCard item={item} onSell={setSellTarget} C={C} />
+          <ProductCard item={item} onSell={setSellTarget} onViewMedia={setViewMedia} C={C} />
         )}
       />
 
@@ -577,6 +584,27 @@ const ProductsScreen = ({ C }) => {
           onConfirm={handleSellConfirm}
           C={C}
         />
+      )}
+
+      {/* Media Viewer Modal */}
+      {viewMedia && (
+        <Modal transparent animationType="fade" onRequestClose={() => setViewMedia(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }} onPress={() => setViewMedia(null)}>
+              <X color="#fff" size={32} />
+            </TouchableOpacity>
+            
+            <View style={{ width: width, height: width * 1.5, alignItems: 'center', justifyContent: 'center' }}>
+              {(() => {
+                const uri = toHttps(viewMedia.image);
+                if (!uri) return <Package color="rgba(255,255,255,0.2)" size={64} />;
+                const isVid = uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') || uri.endsWith('.mkv');
+                if (isVid) return <ModalVideo uri={uri} />;
+                return <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />;
+              })()}
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );

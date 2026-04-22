@@ -27,6 +27,7 @@ const AddProductPage = () => {
   const [searchQ,     setSearchQ]     = useState('');
   const [filterCat,   setFilterCat]   = useState('All');
   const [deleting,    setDeleting]    = useState(null);
+  const [viewMedia,   setViewMedia]   = useState(null);
   const fileRef = useRef();
 
   const fetchProducts = async () => {
@@ -175,7 +176,11 @@ const AddProductPage = () => {
                 const isVid = isVideoUrl(p.image);
                 return (
                   <div key={p.id} className="product-card">
-                    <div className="product-thumb">
+                    <div 
+                      className="product-thumb" 
+                      onClick={() => url && setViewMedia({ url, isVid })}
+                      style={{ cursor: url ? 'pointer' : 'default' }}
+                    >
                       {url ? (
                         isVid
                           ? <video src={url} muted autoPlay loop playsInline style={{ width:'100%',height:'100%',objectFit:'cover' }} />
@@ -304,6 +309,26 @@ const AddProductPage = () => {
             )}
           </button>
         </form>
+      )}
+
+      {/* Media Viewer Modal */}
+      {viewMedia && (
+        <div className="modal-overlay" onClick={() => setViewMedia(null)} style={{ zIndex: 9999 }}>
+          <div className="media-viewer-content" onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
+            <button 
+              className="icon-btn" 
+              onClick={() => setViewMedia(null)}
+              style={{ position: 'absolute', top: -40, right: -40, background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', padding: 8 }}
+            >
+              <X size={24} />
+            </button>
+            {viewMedia.isVid ? (
+              <video src={viewMedia.url} controls autoPlay style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12, boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }} />
+            ) : (
+              <img src={viewMedia.url} alt="Product Media" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 12, boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }} />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

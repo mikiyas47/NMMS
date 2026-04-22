@@ -86,7 +86,7 @@ const ProspectsPage = () => {
             </thead>
             <tbody>
               {filtered.map((u, i) => (
-                <tr key={u.userid || i}>
+                <tr key={u.userid ? `${u.role}-${u.userid}` : i}>
                   <td>
                     <div className="user-cell">
                       <div

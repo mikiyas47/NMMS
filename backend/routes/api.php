@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContactController;
+use App\Http\Controllers\Api\GoalController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -34,6 +35,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/contacts/{id}',                [ContactController::class, 'destroy']);
     Route::post('/contacts/{id}/followups',        [ContactController::class, 'storeFollowup']);
     Route::post('/contacts/{id}/closings',         [ContactController::class, 'storeClosing']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Goals ─────────────────────────────────────────────────────────────────────
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/goals',                           [GoalController::class, 'index']);
+    Route::post('/goals',                          [GoalController::class, 'store']);
+    Route::get('/goals/{id}',                      [GoalController::class, 'show']);
+    Route::put('/goals/{id}',                      [GoalController::class, 'update']);
+    Route::delete('/goals/{id}',                   [GoalController::class, 'destroy']);
+    Route::get('/goals/{id}/activities',           [GoalController::class, 'activities']);
+    Route::post('/goals/{id}/activities',          [GoalController::class, 'storeActivity']);
+    Route::post('/goals/{id}/milestones',          [GoalController::class, 'storeMilestone']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 

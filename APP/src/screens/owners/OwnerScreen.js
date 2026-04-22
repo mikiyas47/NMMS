@@ -131,7 +131,7 @@ const OwnerScreen = ({ C }) => {
         ) : (
           filtered.map((u, i) => (
             <View
-              key={u.userid || i}
+              key={u.userid ? `${u.role}-${u.userid}` : i}
               className="rounded-2xl overflow-hidden mb-3"
               style={{ borderWidth: 1, borderColor: C.border, opacity: u.status === 'inactive' ? 0.7 : 1 }}
             >

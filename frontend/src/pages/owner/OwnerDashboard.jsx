@@ -24,7 +24,7 @@ const OwnerDashboard = () => {
   const navigate = useNavigate();
   const [active,      setActive]      = useState('overview');
   const [sideOpen,    setSideOpen]    = useState(true);
-  const [darkMode,    setDarkMode]    = useState(true);
+  const [darkMode,    setDarkMode]    = useState(false);
 
   const handleLogout = async () => {
     await logout();

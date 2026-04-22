@@ -21,6 +21,10 @@ return new class extends Migration
             $table->string('email', 255)->unique();
             $table->string('password');
 
+            // Upline reference
+            $table->unsignedBigInteger('upline_id')->nullable();
+            $table->foreign('upline_id')->references('distributor_id')->on('distributors')->onDelete('set null');
+
             // Rank progression levels
             $table->enum('rank', [
                 'CT',   // Customer Trainee

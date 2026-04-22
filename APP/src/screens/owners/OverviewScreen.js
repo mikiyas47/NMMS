@@ -17,20 +17,27 @@ import {
   ArrowUp,
   Star,
 } from 'lucide-react-native';
-import axios from 'axios';
+import apiClient from '../../api/authService';
 
 const { width } = Dimensions.get('window');
-const API_BASE = 'https://nmms-backend.onrender.com/api';
 
 const OverviewScreen = ({ C }) => {
   const [users, setUsers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchUsers = async () => {
+  const fetchData = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/all-users`);
-      setUsers(res.data);
+      const [userRes, prodRes] = await Promise.all([
+        apiClient.get('/all-users'),
+        apiClient.get('/products')
+      ]);
+      const nonAdmins = userRes.data.filter(u => u.role !== 'admin');
+      setUsers(nonAdmins);
+      if (prodRes.data && prodRes.data.data) {
+        setProducts(prodRes.data.data);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -40,11 +47,10 @@ const OverviewScreen = ({ C }) => {
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchData();
   }, []);
 
   const paid = users.filter(u => u.isPaid).length;
-  const admins = users.filter(u => u.role === 'admin').length;
   const revenue = paid * 50;
 
   const stats = [
@@ -73,8 +79,8 @@ const OverviewScreen = ({ C }) => {
       trend: '+23%',
     },
     {
-      label: 'Admins',
-      value: admins.toString(),
+      label: 'Products',
+      value: products.length.toString(),
       icon: Activity,
       color: C.purple,
       bg: 'rgba(139,92,246,0.15)',
@@ -90,7 +96,7 @@ const OverviewScreen = ({ C }) => {
           refreshing={refreshing}
           onRefresh={() => {
             setRefreshing(true);
-            fetchUsers();
+            fetchData();
           }}
           tintColor={C.accent}
         />
@@ -168,79 +174,6 @@ const OverviewScreen = ({ C }) => {
         ))}
       </View>
 
-      {/* Recent Users */}
-      <Text
-        className="text-base font-bold mb-3"
-        style={{ color: C.text }}
-      >
-        Recent Users
-      </Text>
-      <View
-        className="rounded-2xl overflow-hidden mb-4"
-        style={{
-          backgroundColor: C.surface,
-          borderWidth: 1,
-          borderColor: C.border,
-        }}
-      >
-        {loading ? (
-          <ActivityIndicator
-            color={C.accent}
-            style={{ marginVertical: 24 }}
-          />
-        ) : (
-          users.slice(0, 5).map((u, i) => (
-            <View
-              key={u.userid || i}
-              className="flex-row items-center px-4 py-3"
-              style={{
-                borderBottomWidth: i < 4 ? 1 : 0,
-                borderBottomColor: C.border,
-              }}
-            >
-              <View
-                className="w-9 h-9 rounded-full items-center justify-center"
-                style={{
-                  backgroundColor:
-                    u.role === 'admin' ? C.red : C.accent,
-                }}
-              >
-                <Text className="text-white text-sm font-bold">
-                  {u.name?.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <View className="flex-1 ml-3">
-                <Text
-                  className="text-sm font-semibold"
-                  style={{ color: C.text }}
-                >
-                  {u.name}
-                </Text>
-                <Text className="text-xs" style={{ color: C.muted }}>
-                  {u.email}
-                </Text>
-              </View>
-              <View
-                className="px-2 py-0.5 rounded-full"
-                style={{
-                  backgroundColor: u.isPaid
-                    ? 'rgba(16,185,129,0.15)'
-                    : 'rgba(245,158,11,0.15)',
-                }}
-              >
-                <Text
-                  className="text-xs font-bold"
-                  style={{
-                    color: u.isPaid ? C.green : C.amber,
-                  }}
-                >
-                  {u.isPaid ? 'PAID' : 'UNPAID'}
-                </Text>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
     </ScrollView>
   );
 };

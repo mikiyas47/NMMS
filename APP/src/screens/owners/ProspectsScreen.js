@@ -122,7 +122,7 @@ const ProspectsScreen = ({ C }) => {
       ) : (
         filtered.map((u, i) => (
           <View
-            key={u.userid || i}
+            key={u.userid ? `${u.role}-${u.userid}` : i}
             className="flex-row items-center rounded-2xl px-4 py-3 mb-3"
             style={{
               backgroundColor: C.surface,

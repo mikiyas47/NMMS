@@ -15,7 +15,11 @@
 /* Light Theme Variables */
 .light {
   --bg: #F8FAFC;
-  --bg-sidebar: #FFFFFF;
+  --bg-sidebar: #0F172A; /* Professional dark slate */
+  --sidebar-text: #F8FAFC;
+  --sidebar-text-muted: #94A3B8;
+  --sidebar-border: #1E293B;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
   --bg-card: #FFFFFF;
   --bg-input: #F1F5F9;
   --bg-hover: #F1F5F9;
@@ -29,6 +33,10 @@
 .dark {
   --bg: #0B1120;
   --bg-sidebar: #0F172A;
+  --sidebar-text: #F8FAFC;
+  --sidebar-text-muted: #94A3B8;
+  --sidebar-border: #1E293B;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
   --bg-card: #162032;
   --bg-input: #1E293B;
   --bg-hover: #1E293B;
@@ -285,7 +293,8 @@ button {
 .sidebar {
   width: 260px;
   background-color: var(--bg-sidebar);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--sidebar-border);
+  color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -299,7 +308,7 @@ button {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--sidebar-border);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -312,8 +321,8 @@ button {
   align-items: center;
   justify-content: center;
 }
-.brand-name { display: block; font-weight: 800; font-size: 1.125rem; color: var(--text); line-height: 1.2; }
-.brand-role { display: block; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+.brand-name { display: block; font-weight: 800; font-size: 1.125rem; color: var(--sidebar-text); line-height: 1.2; }
+.brand-role { display: block; font-size: 0.75rem; color: var(--sidebar-text-muted); font-weight: 500; }
 
 .sidebar-nav {
   flex: 1;
@@ -324,7 +333,7 @@ button {
 .nav-section-label {
   font-size: 0.7rem;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
   letter-spacing: 0.05em;
   padding: 0 0.75rem;
   margin-bottom: 0.5rem;
@@ -338,16 +347,16 @@ button {
   padding: 0.5rem;
   border-radius: var(--radius-md);
   margin-bottom: 0.25rem;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
   transition: var(--transition);
   white-space: nowrap;
 }
-.nav-item:hover { background-color: var(--bg-hover); color: var(--text); }
-.nav-item-active { background-color: rgba(99, 102, 241, 0.1); color: var(--text); }
+.nav-item:hover { background-color: var(--sidebar-hover); color: var(--sidebar-text); }
+.nav-item-active { background-color: rgba(99, 102, 241, 0.15); color: var(--sidebar-text); }
 .nav-icon {
   min-width: 36px;
   height: 36px;
-  background-color: var(--bg-input);
+  background-color: var(--sidebar-hover);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -360,7 +369,7 @@ button {
 
 .sidebar-footer {
   padding: 1rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--sidebar-border);
   overflow: hidden;
 }
 .user-info {
@@ -383,7 +392,7 @@ button {
 }
 .user-avatar.sm { min-width: 32px; height: 32px; border-radius: 8px; font-size: 0.875rem; }
 .user-avatar.lg { min-width: 44px; height: 44px; border-radius: 12px; font-size: 1.125rem; }
-.user-name { font-size: 0.875rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.user-name { font-size: 0.875rem; font-weight: 600; color: var(--sidebar-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
 .user-role-badge { font-size: 0.7rem; font-weight: 700; color: #10B981; }
 
 .logout-btn {
@@ -413,7 +422,7 @@ button {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border);
-  background-color: var(--bg-sidebar);
+  background-color: var(--bg-card);
 }
 .header-left { display: flex; align-items: center; gap: 1.25rem; }
 .header-title { display: flex; align-items: center; gap: 0.75rem; }

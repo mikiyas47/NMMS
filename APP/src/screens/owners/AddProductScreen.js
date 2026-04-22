@@ -14,9 +14,10 @@ import {
   Alert,
   Image,
   AppState,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Package, Plus, Check, Image as ImageIcon, Video as VideoIcon, Search, Tag, DollarSign, Archive, FileText, Edit2, Trash2 } from 'lucide-react-native';
+import { Package, Plus, Check, Image as ImageIcon, Video as VideoIcon, Search, Tag, DollarSign, Archive, FileText, Edit2, Trash2, X } from 'lucide-react-native';
 import apiClient from '../../api/authService';
 import { deleteProduct } from '../../api/authService';
 
@@ -68,6 +69,7 @@ const AddProductScreen = ({ C }) => {
   const [addedProducts, setAddedProducts] = useState([]);
   const [showProducts, setShowProducts] = useState(false);
   const [editProductId, setEditProductId] = useState(null);
+  const [viewMedia, setViewMedia] = useState(null);
 
   // Filtering stuff
   const [searchQuery, setSearchQuery] = useState('');
@@ -448,7 +450,11 @@ const AddProductScreen = ({ C }) => {
                   style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }}
                 >
                   {/* Thumbnail area */}
-                  <View className="w-20 h-20 rounded-xl overflow-hidden mr-3 items-center justify-center relative" style={{ backgroundColor: C.inputBg }}>
+                  <TouchableOpacity 
+                    onPress={() => url && setViewMedia({ url, isVid })}
+                    className="w-20 h-20 rounded-xl overflow-hidden mr-3 items-center justify-center relative" 
+                    style={{ backgroundColor: C.inputBg }}
+                  >
                     {url ? (
                       isVid ? (
                         <ProductVideo uri={url} isPreview={false} />
@@ -464,7 +470,7 @@ const AddProductScreen = ({ C }) => {
                         <Text style={{ color: '#fff', fontSize: 8, fontWeight: 'bold' }}>{product.category.toUpperCase()}</Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
 
                   {/* Body area */}
                   <View className="flex-1 justify-center">
@@ -670,6 +676,25 @@ const AddProductScreen = ({ C }) => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+      )}
+
+      {/* Media Viewer Modal */}
+      {viewMedia && (
+        <Modal transparent animationType="fade" onRequestClose={() => setViewMedia(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }} onPress={() => setViewMedia(null)}>
+              <X color="#fff" size={32} />
+            </TouchableOpacity>
+            
+            <View style={{ width: '100%', aspectRatio: 3/4, alignItems: 'center', justifyContent: 'center' }}>
+              {viewMedia.isVid ? (
+                <ProductVideo uri={viewMedia.url} isPreview={true} />
+              ) : (
+                <Image source={{ uri: viewMedia.url }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+              )}
+            </View>
+          </View>
+        </Modal>
       )}
     </ScrollView>
   );
