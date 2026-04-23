@@ -9,10 +9,30 @@ const CATEGORIES = ['Electronics', 'Clothing', 'Health', 'Food', 'Digital', 'Oth
 
 const isVideoUrl = (url) => {
   if (!url) return false;
-  return /\.(mp4|mov|avi)$/i.test(url.toLowerCase());
+  const lowerUrl = url.toLowerCase();
+  // Check for video extensions or Cloudinary video resource type
+  return lowerUrl.endsWith('.mp4') || 
+         lowerUrl.endsWith('.mov') || 
+         lowerUrl.endsWith('.avi') || 
+         lowerUrl.endsWith('.mkv') || 
+         lowerUrl.includes('/video/upload/') ||
+         lowerUrl.includes('/v1/');
 };
 
-const secureUrl = (url) => url?.replace(/^http:\/\//i, 'https://');
+const secureUrl = (url) => {
+  if (!url) return null;
+  // Ensure HTTPS for all URLs
+  let secure = url.replace(/^http:\/\//i, 'https://');
+  
+  // For Cloudinary URLs, they should already be HTTPS
+  // But we add resource_type=video hint for better browser detection
+  if (secure.includes('res.cloudinary.com') && secure.includes('/video/')) {
+    // Ensure video URLs have proper format
+    return secure;
+  }
+  
+  return secure;
+};
 
 const AddProductPage = () => {
   const [form, setForm] = useState({

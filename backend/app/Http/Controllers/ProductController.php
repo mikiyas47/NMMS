@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class ProductController extends Controller
 {
@@ -44,8 +45,12 @@ class ProductController extends Controller
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
-                // Upload to Cloudinary instead of local disk
-                $result = $request->file('image')->storeOnCloudinary();
+                // Upload to Cloudinary using the correct method
+                $uploadedFile = $request->file('image');
+                $result = Cloudinary::upload($uploadedFile->getRealPath(), [
+                    'folder' => 'products',
+                    'resource_type' => 'auto', // Auto-detect image or video
+                ]);
                 $validatedData['image'] = $result->getSecurePath();
             }
 
@@ -95,8 +100,12 @@ class ProductController extends Controller
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
-                // Upload to Cloudinary instead of local disk
-                $result = $request->file('image')->storeOnCloudinary();
+                // Upload to Cloudinary using the correct method
+                $uploadedFile = $request->file('image');
+                $result = Cloudinary::upload($uploadedFile->getRealPath(), [
+                    'folder' => 'products',
+                    'resource_type' => 'auto', // Auto-detect image or video
+                ]);
                 $validatedData['image'] = $result->getSecurePath();
             }
 

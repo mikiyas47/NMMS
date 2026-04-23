@@ -146,6 +146,36 @@ export const createClosing = async (contactId, data) => {
   const response = await apiClient.post(`/contacts/${contactId}/closings`, data);
   return response.data;
 };
+// ── Goals ─────────────────────────────────────────────────────────────────────
+export const getGoals = async () => {
+  const response = await apiClient.get('/goals');
+  return response.data;
+};
+
+export const createGoal = async (data) => {
+  const response = await apiClient.post('/goals', data);
+  return response.data;
+};
+
+export const updateGoal = async (id, data) => {
+  const response = await apiClient.put(`/goals/${id}`, data);
+  return response.data;
+};
+
+export const deleteGoal = async (id) => {
+  const response = await apiClient.delete(`/goals/${id}`);
+  return response.data;
+};
+
+export const logGoalActivity = async (goalId, data) => {
+  const response = await apiClient.post(`/goals/${goalId}/activities`, data);
+  return response.data;
+};
+
+export const addGoalMilestone = async (goalId, targetValue) => {
+  const response = await apiClient.post(`/goals/${goalId}/milestones`, { target_value: targetValue });
+  return response.data;
+};
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default apiClient;

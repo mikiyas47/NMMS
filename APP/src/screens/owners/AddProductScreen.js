@@ -22,6 +22,8 @@ import apiClient from '../../api/authService';
 import { deleteProduct } from '../../api/authService';
 
 const ProductVideo = ({ uri, isPreview }) => {
+  const [error, setError] = useState(null);
+  
   const player = useVideoPlayer(uri, p => {
     p.loop = true;
     p.muted = !isPreview;
@@ -39,6 +41,14 @@ const ProductVideo = ({ uri, isPreview }) => {
     return () => subscription.remove();
   }, [player]);
 
+  if (error) {
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: '#1a1a1a' }}>
+        <Text style={{ color: '#EF4444', fontSize: 12 }}>Video unavailable</Text>
+      </View>
+    );
+  }
+
   return (
     <VideoView
       player={player}
@@ -47,6 +57,10 @@ const ProductVideo = ({ uri, isPreview }) => {
       nativeControls={isPreview}
       allowsFullscreen={false}
       allowsPictureInPicture={false}
+      onError={(e) => {
+        console.error('Product video error:', e);
+        setError(e);
+      }}
     />
   );
 };

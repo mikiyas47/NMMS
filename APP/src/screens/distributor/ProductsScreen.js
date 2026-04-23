@@ -24,7 +24,19 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2; // 2 columns with 16px side padding & 16px gap
 
 // Force https so Android doesn't block http:// image URLs
-const toHttps = (url) => url ? url.replace(/^http:\/\//, 'https://') : url;
+const toHttps = (url) => {
+  if (!url) return null;
+  let secure = url.replace(/^http:\/\//, 'https://');
+  
+  // Validate that it's a proper URL
+  try {
+    new URL(secure);
+    return secure;
+  } catch {
+    console.error('Invalid URL:', secure);
+    return null;
+  }
+};
 
 // ─── Category pill colours ────────────────────────────────────────────────────
 const CATEGORY_COLORS = {
@@ -43,6 +55,8 @@ const getCategoryColor = (category = '') => {
 
 // ─── Video Player Components ──────────────────────────────────────────────────
 const ProductVideo = ({ uri }) => {
+  const [error, setError] = useState(null);
+  
   const player = useVideoPlayer(uri, p => {
     p.loop = true;
     p.muted = true;
@@ -60,6 +74,14 @@ const ProductVideo = ({ uri }) => {
     return () => subscription.remove();
   }, [player]);
 
+  if (error) {
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: '#000' }}>
+        <Text style={{ color: '#EF4444', fontSize: 12 }}>Video unavailable</Text>
+      </View>
+    );
+  }
+
   return (
     <VideoView
       player={player}
@@ -68,11 +90,17 @@ const ProductVideo = ({ uri }) => {
       nativeControls={false}
       allowsFullscreen={false}
       allowsPictureInPicture={false}
+      onError={(e) => {
+        console.error('Video error:', e);
+        setError(e);
+      }}
     />
   );
 };
 
 const ModalVideo = ({ uri }) => {
+  const [error, setError] = useState(null);
+  
   const player = useVideoPlayer(uri, p => {
     p.loop = true;
     p.muted = false;
@@ -90,12 +118,24 @@ const ModalVideo = ({ uri }) => {
     return () => subscription.remove();
   }, [player]);
 
+  if (error) {
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: '#000' }}>
+        <Text style={{ color: '#EF4444', fontSize: 14 }}>Video failed to load</Text>
+      </View>
+    );
+  }
+
   return (
     <VideoView
       player={player}
       style={{ width: '100%', height: '100%' }}
       contentFit="cover"
       nativeControls={true}
+      onError={(e) => {
+        console.error('Modal video error:', e);
+        setError(e);
+      }}
     />
   );
 };
