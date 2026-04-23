@@ -45,13 +45,24 @@ class ProductController extends Controller
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
-                // Upload to Cloudinary using the correct method
-                $uploadedFile = $request->file('image');
-                $result = Cloudinary::upload($uploadedFile->getRealPath(), [
-                    'folder' => 'products',
-                    'resource_type' => 'auto', // Auto-detect image or video
-                ]);
-                $validatedData['image'] = $result->getSecurePath();
+                try {
+                    // Upload to Cloudinary
+                    $uploadedFile = $request->file('image');
+                    $cloudinaryResult = Cloudinary::upload($uploadedFile->getRealPath(), [
+                        'folder' => 'products',
+                        'resource_type' => 'auto',
+                    ]);
+                    
+                    // Extract secure URL from result
+                    if ($cloudinaryResult && isset($cloudinaryResult['secure_url'])) {
+                        $validatedData['image'] = $cloudinaryResult['secure_url'];
+                    } else {
+                        throw new \Exception('Cloudinary upload failed: No URL returned');
+                    }
+                } catch (\Exception $uploadError) {
+                    Log::error('Cloudinary upload error: ' . $uploadError->getMessage());
+                    throw new \Exception('File upload failed: ' . $uploadError->getMessage());
+                }
             }
 
             $newProduct = \App\Models\Product::create($validatedData);
@@ -100,13 +111,24 @@ class ProductController extends Controller
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
-                // Upload to Cloudinary using the correct method
-                $uploadedFile = $request->file('image');
-                $result = Cloudinary::upload($uploadedFile->getRealPath(), [
-                    'folder' => 'products',
-                    'resource_type' => 'auto', // Auto-detect image or video
-                ]);
-                $validatedData['image'] = $result->getSecurePath();
+                try {
+                    // Upload to Cloudinary
+                    $uploadedFile = $request->file('image');
+                    $cloudinaryResult = Cloudinary::upload($uploadedFile->getRealPath(), [
+                        'folder' => 'products',
+                        'resource_type' => 'auto',
+                    ]);
+                    
+                    // Extract secure URL from result
+                    if ($cloudinaryResult && isset($cloudinaryResult['secure_url'])) {
+                        $validatedData['image'] = $cloudinaryResult['secure_url'];
+                    } else {
+                        throw new \Exception('Cloudinary upload failed: No URL returned');
+                    }
+                } catch (\Exception $uploadError) {
+                    Log::error('Cloudinary upload error: ' . $uploadError->getMessage());
+                    throw new \Exception('File update failed: ' . $uploadError->getMessage());
+                }
             }
 
             $product->update($validatedData);
