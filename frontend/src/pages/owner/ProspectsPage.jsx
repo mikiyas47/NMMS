@@ -81,6 +81,7 @@ const ProspectsPage = () => {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
+                <th>Rank</th>
                 <th>Payment</th>
               </tr>
             </thead>
@@ -104,6 +105,7 @@ const ProspectsPage = () => {
                   </td>
                   <td className="muted">{u.email}</td>
                   <td className="muted">{u.phone || '—'}</td>
+                  <td className="font-bold" style={{ color: '#10B981', fontWeight: 600 }}>{u.rank || 'CT'}</td>
                   <td>
                     <span className={`status-badge ${u.isPaid ? 'paid' : 'unpaid'}`}>
                       {u.isPaid ? '✓ PAID' : 'UNPAID'}

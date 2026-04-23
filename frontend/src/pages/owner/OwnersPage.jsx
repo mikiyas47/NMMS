@@ -11,6 +11,10 @@ const OwnersPage = ({ dark }) => {
   const [saving,       setSaving]       = useState(false);
   const [toggling,     setToggling]     = useState(null);
 
+  const [addingOwner, setAddingOwner] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', password: '', role: 'owner' });
+  const [adding, setAdding] = useState(false);
+
   const fetchOwners = async () => {
     setLoading(true);
     try {
@@ -49,6 +53,19 @@ const OwnersPage = ({ dark }) => {
     } finally { setSaving(false); }
   };
 
+  const saveAdd = async () => {
+    if (!addForm.name || !addForm.email || !addForm.password) { alert('Name, Email and Password are required.'); return; }
+    setAdding(true);
+    try {
+      await client.post('/users', addForm);
+      setAddingOwner(false);
+      setAddForm({ name: '', email: '', phone: '', password: '', role: 'owner' });
+      fetchOwners();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Failed to add owner.');
+    } finally { setAdding(false); }
+  };
+
   const filtered = users.filter(
     (u) =>
       u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -57,12 +74,17 @@ const OwnersPage = ({ dark }) => {
 
   return (
     <div className="page-container">
-      <div className="page-header">
-        <div className="page-title-row">
-          <ShieldCheck size={26} color="#6366F1" />
-          <h2 className="page-title">System Owners</h2>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div className="page-title-row">
+            <ShieldCheck size={26} color="#6366F1" />
+            <h2 className="page-title">System Owners</h2>
+          </div>
+          <p className="page-sub">Manage top-level system owners and their permissions</p>
         </div>
-        <p className="page-sub">Manage top-level system owners and their permissions</p>
+        <button className="btn-primary" onClick={() => setAddingOwner(true)}>
+          + Add Owner
+        </button>
       </div>
 
       {/* Search + Count */}
@@ -172,6 +194,53 @@ const OwnersPage = ({ dark }) => {
               <button className="btn-secondary" onClick={() => setEditingOwner(null)}>Cancel</button>
               <button className="btn-primary" onClick={saveEdit} disabled={saving} id="save-edit-btn">
                 {saving ? <span className="btn-spinner" /> : <><Check size={15} /> Save Changes</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal */}
+      {addingOwner && (
+        <div className="modal-overlay" onClick={() => setAddingOwner(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Add New Owner</h3>
+              <button className="icon-btn" onClick={() => setAddingOwner(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {[['Name', 'name', 'text', 'Full name'],
+                ['Email', 'email', 'email', 'owner@example.com'],
+                ['Phone', 'phone', 'tel', '+1 234 567 8900'],
+                ['Password', 'password', 'password', 'Min 8 chars']].map(([label, key, type, ph]) => (
+                <div className="field-group" key={key}>
+                  <label className="field-label">{label}</label>
+                  <input
+                    id={`add-${key}`}
+                    type={type}
+                    className="field-input"
+                    placeholder={ph}
+                    value={addForm[key]}
+                    onChange={(e) => setAddForm((p) => ({ ...p, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <div className="field-group">
+                <label className="field-label">Role</label>
+                <select 
+                  className="field-input" 
+                  value={addForm.role}
+                  onChange={(e) => setAddForm((p) => ({ ...p, role: e.target.value }))}
+                >
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setAddingOwner(false)}>Cancel</button>
+              <button className="btn-primary" onClick={saveAdd} disabled={adding} id="save-add-btn">
+                {adding ? <span className="btn-spinner" /> : <><Check size={15} /> Add Owner</>}
               </button>
             </div>
           </div>
