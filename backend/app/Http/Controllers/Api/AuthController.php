@@ -104,6 +104,28 @@ class AuthController extends Controller
 
         return response()->json($users->concat($distributors));
     }
+    public function storeUser(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'phone' => 'nullable|string|max:20|unique:users',
+            'password' => 'required|string|min:8',
+            'role' => 'required|in:admin,owner',
+        ]);
+
+        $user = \App\Models\User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'status' => 'active',
+        ]);
+
+        return response()->json(['message' => 'User created successfully', 'user' => $user]);
+    }
+
     public function update(Request $request, $id)
     {
         $user = \App\Models\User::findOrFail($id);

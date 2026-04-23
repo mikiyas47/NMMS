@@ -161,6 +161,12 @@ const ProspectsScreen = ({ C }) => {
               >
                 Phone: {u.phone || '—'}
               </Text>
+              <Text
+                className="text-xs mt-0.5 font-bold"
+                style={{ color: C.accent }}
+              >
+                Rank: {u.rank || 'CT'}
+              </Text>
             </View>
             <View className="items-end">
               <View

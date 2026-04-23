@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\GoalController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/all-users', [AuthController::class, 'index']);
+Route::post('/users', [AuthController::class, 'storeUser']);
 Route::put('/users/{id}', [AuthController::class, 'update']);
 Route::patch('/users/{id}/status', [AuthController::class, 'toggleStatus']);
 Route::middleware('auth:sanctum')->group(function () {

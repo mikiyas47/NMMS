@@ -23,6 +23,9 @@ const OwnerScreen = ({ C }) => {
   const [editingAdmin, setEditingAdmin] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
 
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', password: '', role: 'admin' });
+
   const fetchAdmins = () => {
     setLoading(true);
     axios
@@ -67,6 +70,22 @@ const OwnerScreen = ({ C }) => {
       });
   };
 
+  const handleAddAdmin = () => {
+    if (!addForm.name || !addForm.email || !addForm.password) {
+      Alert.alert('Validation Error', 'Name, Email, and Password are required.');
+      return;
+    }
+    axios.post(`${API_BASE}/users`, addForm)
+      .then(() => {
+        setAddingAdmin(false);
+        setAddForm({ name: '', email: '', phone: '', password: '', role: 'admin' });
+        fetchAdmins();
+      })
+      .catch(err => {
+        Alert.alert('Error', err.response?.data?.message || 'Failed to add admin');
+      });
+  };
+
   const filtered = users.filter(
     u =>
       u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -76,11 +95,20 @@ const OwnerScreen = ({ C }) => {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="flex-row items-center mb-1 mt-2">
-          <ShieldCheck color={C.blue} size={26} />
-          <Text className="text-xl font-bold ml-2" style={{ color: C.text }}>
-            Administrators
-          </Text>
+        <View className="flex-row items-center justify-between mb-1 mt-2">
+          <View className="flex-row items-center">
+            <ShieldCheck color={C.blue} size={26} />
+            <Text className="text-xl font-bold ml-2" style={{ color: C.text }}>
+              Administrators
+            </Text>
+          </View>
+          <TouchableOpacity 
+            onPress={() => setAddingAdmin(true)}
+            className="px-3 py-1.5 rounded-lg"
+            style={{ backgroundColor: C.blue }}
+          >
+            <Text className="text-xs font-bold text-white">+ Add Admin</Text>
+          </TouchableOpacity>
         </View>
         <Text className="text-sm mb-4" style={{ color: C.muted }}>
           Manage system administrators and their permissions
@@ -262,6 +290,71 @@ const OwnerScreen = ({ C }) => {
                 style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: C.blue, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold' }}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Modal */}
+      <Modal visible={addingAdmin} animationType="fade" transparent={true}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: C.surface, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: C.text, marginBottom: 16 }}>
+              Add New Admin/Owner
+            </Text>
+            
+            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Name</Text>
+            <TextInput
+              value={addForm.name}
+              onChangeText={val => setAddForm(prev => ({...prev, name: val}))}
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 16, borderWidth: 1, borderColor: C.border }}
+            />
+            
+            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Email</Text>
+            <TextInput
+              value={addForm.email}
+              onChangeText={val => setAddForm(prev => ({...prev, email: val}))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 16, borderWidth: 1, borderColor: C.border }}
+            />
+            
+            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Phone</Text>
+            <TextInput
+              value={addForm.phone}
+              onChangeText={val => setAddForm(prev => ({...prev, phone: val}))}
+              keyboardType="phone-pad"
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 16, borderWidth: 1, borderColor: C.border }}
+            />
+
+            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Password</Text>
+            <TextInput
+              value={addForm.password}
+              onChangeText={val => setAddForm(prev => ({...prev, password: val}))}
+              secureTextEntry
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 16, borderWidth: 1, borderColor: C.border }}
+            />
+
+            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Role (admin or owner)</Text>
+            <TextInput
+              value={addForm.role}
+              onChangeText={val => setAddForm(prev => ({...prev, role: val.toLowerCase()}))}
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 24, borderWidth: 1, borderColor: C.border }}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setAddingAdmin(false)}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: C.inputBg, alignItems: 'center' }}
+              >
+                <Text style={{ color: C.muted, fontWeight: 'bold' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAddAdmin}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: C.blue, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Add</Text>
               </TouchableOpacity>
             </View>
           </View>
