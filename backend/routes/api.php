@@ -15,6 +15,7 @@ Route::put('/users/{id}', [AuthController::class, 'update']);
 Route::patch('/users/{id}/status', [AuthController::class, 'toggleStatus']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
+    Route::put('/profile/password', [AuthController::class, 'updatePassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 

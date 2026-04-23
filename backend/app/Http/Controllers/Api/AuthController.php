@@ -91,6 +91,25 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out']);
     }
 
+    public function updatePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'new_password' => 'required|min:8',
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Current password does not match!'], 400);
+        }
+
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json(['message' => 'Password updated successfully']);
+    }
+
     public function index()
     {
         $users = \App\Models\User::all();

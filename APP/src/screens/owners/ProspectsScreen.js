@@ -15,7 +15,6 @@ const API_BASE = 'https://nmms-backend.onrender.com/api';
 const ProspectsScreen = ({ C }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -26,16 +25,7 @@ const ProspectsScreen = ({ C }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  const tabs = [
-    { key: 'all', label: 'All' },
-    { key: 'paid', label: 'Paid' },
-    { key: 'unpaid', label: 'Unpaid' },
-  ];
-
   const filtered = users
-    .filter(u =>
-      filter === 'all' ? true : filter === 'paid' ? u.isPaid : !u.isPaid
-    )
     .filter(
       u =>
         u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,11 +37,11 @@ const ProspectsScreen = ({ C }) => {
       <View className="flex-row items-center mb-1">
         <Users color={C.green} size={26} />
         <Text className="text-xl font-bold ml-2" style={{ color: C.text }}>
-          Prospects
+          Distributors
         </Text>
       </View>
       <Text className="text-sm mb-4" style={{ color: C.muted }}>
-        Monitor and manage all registered prospects
+        Monitor and manage all registered distributors
       </Text>
 
       {/* Search */}
@@ -66,35 +56,12 @@ const ProspectsScreen = ({ C }) => {
         <Search color={C.muted} size={18} />
         <TextInput
           className="flex-1 ml-2 text-sm"
-          placeholder="Search prospects..."
+          placeholder="Search distributors..."
           placeholderTextColor={C.muted}
           style={{ color: C.text }}
           value={search}
           onChangeText={setSearch}
         />
-      </View>
-
-      {/* Filter Tabs */}
-      <View className="flex-row mb-4" style={{ gap: 8 }}>
-        {tabs.map(t => (
-          <TouchableOpacity
-            key={t.key}
-            onPress={() => setFilter(t.key)}
-            className="px-4 py-1.5 rounded-full"
-            style={{
-              backgroundColor: filter === t.key ? C.accent : C.card,
-              borderWidth: 1,
-              borderColor: filter === t.key ? C.accent : C.border,
-            }}
-          >
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: filter === t.key ? '#fff' : C.muted }}
-            >
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {/* Count */}
@@ -106,7 +73,7 @@ const ProspectsScreen = ({ C }) => {
           className="text-xs font-semibold"
           style={{ color: C.accent }}
         >
-          {filtered.length} prospect{filtered.length !== 1 ? 's' : ''}
+          {filtered.length} distributor{filtered.length !== 1 ? 's' : ''}
         </Text>
       </View>
 
@@ -116,7 +83,7 @@ const ProspectsScreen = ({ C }) => {
         <View className="items-center py-12">
           <Users color={C.muted} size={48} />
           <Text className="mt-3 text-sm" style={{ color: C.muted }}>
-            No prospects found
+            No distributors found
           </Text>
         </View>
       ) : (
@@ -133,14 +100,12 @@ const ProspectsScreen = ({ C }) => {
             <View
               className="w-11 h-11 rounded-full items-center justify-center"
               style={{
-                backgroundColor: u.isPaid
-                  ? 'rgba(16,185,129,0.2)'
-                  : 'rgba(245,158,11,0.2)',
+                backgroundColor: 'rgba(16,185,129,0.2)'
               }}
             >
               <Text
                 className="text-base font-bold"
-                style={{ color: u.isPaid ? C.green : C.amber }}
+                style={{ color: C.green }}
               >
                 {u.name?.charAt(0).toUpperCase()}
               </Text>
@@ -169,23 +134,6 @@ const ProspectsScreen = ({ C }) => {
               </Text>
             </View>
             <View className="items-end">
-              <View
-                className="px-2 py-0.5 rounded-full mb-1"
-                style={{
-                  backgroundColor: u.isPaid
-                    ? 'rgba(16,185,129,0.15)'
-                    : 'rgba(245,158,11,0.15)',
-                }}
-              >
-                <Text
-                  className="text-xs font-bold"
-                  style={{
-                    color: u.isPaid ? C.green : C.amber,
-                  }}
-                >
-                  {u.isPaid ? '✓ PAID' : 'UNPAID'}
-                </Text>
-              </View>
               <ChevronRight color={C.muted} size={16} />
             </View>
           </View>

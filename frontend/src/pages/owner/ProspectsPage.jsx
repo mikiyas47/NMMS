@@ -5,7 +5,6 @@ import client from '../../api/client';
 const ProspectsPage = () => {
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter,  setFilter]  = useState('all');
   const [search,  setSearch]  = useState('');
 
   useEffect(() => {
@@ -15,14 +14,7 @@ const ProspectsPage = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const tabs = [
-    { key: 'all',    label: 'All'    },
-    { key: 'paid',   label: 'Paid'   },
-    { key: 'unpaid', label: 'Unpaid' },
-  ];
-
   const filtered = users
-    .filter((u) => filter === 'all' ? true : filter === 'paid' ? u.isPaid : !u.isPaid)
     .filter((u) =>
       u.name?.toLowerCase().includes(search.toLowerCase()) ||
       u.email?.toLowerCase().includes(search.toLowerCase()),
@@ -50,19 +42,7 @@ const ProspectsPage = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="tab-group">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              id={`filter-${t.key}`}
-              className={`tab-btn ${filter === t.key ? 'active' : ''}`}
-              onClick={() => setFilter(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <span className="count-badge">{filtered.length} prospect{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="count-badge">{filtered.length} distributor{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Table */}
@@ -71,7 +51,7 @@ const ProspectsPage = () => {
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <Users size={48} />
-          <p>No prospects found</p>
+          <p>No distributors found</p>
         </div>
       ) : (
         <div className="table-card">
@@ -82,7 +62,6 @@ const ProspectsPage = () => {
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Rank</th>
-                <th>Payment</th>
               </tr>
             </thead>
             <tbody>
@@ -93,9 +72,7 @@ const ProspectsPage = () => {
                       <div
                         className="user-avatar sm"
                         style={{
-                          background: u.isPaid
-                            ? 'rgba(16,185,129,0.8)'
-                            : 'rgba(245,158,11,0.8)',
+                          background: 'rgba(16,185,129,0.8)',
                         }}
                       >
                         {u.name?.charAt(0).toUpperCase()}
@@ -106,11 +83,6 @@ const ProspectsPage = () => {
                   <td className="muted">{u.email}</td>
                   <td className="muted">{u.phone || '—'}</td>
                   <td className="font-bold" style={{ color: '#10B981', fontWeight: 600 }}>{u.rank || 'CT'}</td>
-                  <td>
-                    <span className={`status-badge ${u.isPaid ? 'paid' : 'unpaid'}`}>
-                      {u.isPaid ? '✓ PAID' : 'UNPAID'}
-                    </span>
-                  </td>
                 </tr>
               ))}
             </tbody>

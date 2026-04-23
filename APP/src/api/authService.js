@@ -104,6 +104,15 @@ export const getUser = async () => {
   }
 };
 
+export const updatePassword = async (data) => {
+  try {
+    const response = await apiClient.put('/profile/password', data);
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};
+
 // ── Contacts (Prospects) ──────────────────────────────────────────────────────
 export const getContacts = async () => {
   const response = await apiClient.get('/contacts');

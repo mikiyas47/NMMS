@@ -1,13 +1,15 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Animated,
+  View, Text, ScrollView, TouchableOpacity, Animated, Modal, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   User, Mail, Phone, MapPin, Calendar,
   Edit, ChevronRight, Shield, Star, Award,
   Bell, Lock, HelpCircle, LogOut,
+  Bell, Lock, HelpCircle, LogOut, X,
 } from 'lucide-react-native';
+import { getUser, updatePassword } from '../../api/authService';
 
 const FadeIn = ({ delay = 0, children }) => {
   const anim = useRef(new Animated.Value(0)).current;
@@ -22,19 +24,45 @@ const FadeIn = ({ delay = 0, children }) => {
 };
 
 const ProfileScreen = ({ C }) => {
+  const [user, setUser] = React.useState(null);
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [changing, setChanging] = React.useState(false);
+  const [passData, setPassData] = React.useState({ current_password: '', new_password: '' });
+
+  useEffect(() => {
+    getUser().then(u => setUser(u));
+  }, []);
+
+  const handleChangePassword = async () => {
+    if (!passData.current_password || !passData.new_password) {
+      Alert.alert('Error', 'Please fill all fields');
+      return;
+    }
+    setChanging(true);
+    try {
+      await updatePassword(passData);
+      Alert.alert('Success', 'Password updated successfully!');
+      setModalVisible(false);
+      setPassData({ current_password: '', new_password: '' });
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to update password');
+    } finally {
+      setChanging(false);
+    }
+  };
+
   const info = [
-    { icon:User,     label:'Full Name',     value:'Miki Prospect' },
-    { icon:Mail,     label:'Email',         value:'miki@gmail.com' },
-    { icon:Phone,    label:'Phone',         value:'0912345678' },
-    { icon:Calendar, label:'Member Since',  value:'December 2024' },
-    { icon:MapPin,   label:'Location',      value:'Addis Ababa, Ethiopia' },
+    { icon:User,     label:'Full Name',     value: user?.name || '—' },
+    { icon:Mail,     label:'Email',         value: user?.email || '—' },
+    { icon:Phone,    label:'Phone',         value: user?.phone || '—' },
+    { icon:Calendar, label:'Member Since',  value: user?.join_date ? new Date(user.join_date).toLocaleDateString() : '—' },
   ];
 
   const settingsGroups = [
     {
       title:'Account',
       items:[
-        { label:'Change Password', icon:Lock,      color:'#6366F1' },
+        { label:'Change Password', icon:Lock,      color:'#6366F1', onPress: () => setModalVisible(true) },
         { label:'Notifications',   icon:Bell,      color:'#F59E0B' },
         { label:'Privacy Settings',icon:Shield,    color:'#10B981' },
       ],
@@ -66,12 +94,12 @@ const ProfileScreen = ({ C }) => {
             <User color="#fff" size={40} />
           </View>
 
-          <Text style={{ color:'#fff', fontSize:22, fontWeight:'800' }}>Miki Prospect</Text>
-          <Text style={{ color:'rgba(255,255,255,0.6)', fontSize:13, marginTop:4 }}>Distributor · Addis Ababa</Text>
+          <Text style={{ color:'#fff', fontSize:22, fontWeight:'800' }}>{user?.name || 'Distributor'}</Text>
+          <Text style={{ color:'rgba(255,255,255,0.6)', fontSize:13, marginTop:4 }}>Distributor Portal</Text>
 
           <View style={{ flexDirection:'row', gap:8, marginTop:14 }}>
             <View style={{ backgroundColor:'rgba(245,158,11,0.25)', borderRadius:20, paddingHorizontal:14, paddingVertical:6, borderWidth:1, borderColor:'rgba(245,158,11,0.4)' }}>
-              <Text style={{ color:'#FCD34D', fontSize:12, fontWeight:'800' }}>⭐ SILVER</Text>
+              <Text style={{ color:'#FCD34D', fontSize:12, fontWeight:'800' }}>⭐ {user?.rank || 'MEMBER'}</Text>
             </View>
             <View style={{ backgroundColor:'rgba(16,185,129,0.25)', borderRadius:20, paddingHorizontal:14, paddingVertical:6, borderWidth:1, borderColor:'rgba(16,185,129,0.4)' }}>
               <Text style={{ color:'#6EE7B7', fontSize:12, fontWeight:'800' }}>✦ ACTIVE</Text>
@@ -151,6 +179,7 @@ const ProfileScreen = ({ C }) => {
                 <TouchableOpacity
                   key={ii}
                   activeOpacity={0.75}
+                  onPress={item.onPress}
                   style={{
                     flexDirection:'row', alignItems:'center',
                     paddingHorizontal:16, paddingVertical:14,
@@ -169,6 +198,49 @@ const ProfileScreen = ({ C }) => {
           </View>
         ))}
       </FadeIn>
+
+      {/* Change Password Modal */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: C.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: C.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: C.text }}>Change Password</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <X color={C.muted} size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: C.muted, fontSize: 13, marginBottom: 6, fontWeight: '600' }}>Current Password</Text>
+            <TextInput
+              secureTextEntry
+              value={passData.current_password}
+              onChangeText={val => setPassData(p => ({ ...p, current_password: val }))}
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 16, borderWidth: 1, borderColor: C.border }}
+              placeholder="Enter current password"
+              placeholderTextColor={C.muted}
+            />
+
+            <Text style={{ color: C.muted, fontSize: 13, marginBottom: 6, fontWeight: '600' }}>New Password</Text>
+            <TextInput
+              secureTextEntry
+              value={passData.new_password}
+              onChangeText={val => setPassData(p => ({ ...p, new_password: val }))}
+              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 24, borderWidth: 1, borderColor: C.border }}
+              placeholder="Min 8 characters"
+              placeholderTextColor={C.muted}
+            />
+
+            <TouchableOpacity
+              onPress={handleChangePassword}
+              disabled={changing}
+              style={{ backgroundColor: C.blue, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+            >
+              {changing ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Update Password</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 };
