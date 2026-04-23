@@ -53,9 +53,10 @@ class ProductController extends Controller
                         'resource_type' => 'auto',
                     ]);
                     
-                    // Extract secure URL from result
-                    if ($cloudinaryResult && isset($cloudinaryResult['secure_url'])) {
-                        $validatedData['image'] = $cloudinaryResult['secure_url'];
+                    // Extract secure URL from result object
+                    $secureUrl = $cloudinaryResult->getSecurePath();
+                    if ($secureUrl) {
+                        $validatedData['image'] = $secureUrl;
                     } else {
                         throw new \Exception('Cloudinary upload failed: No URL returned');
                     }
@@ -119,9 +120,10 @@ class ProductController extends Controller
                         'resource_type' => 'auto',
                     ]);
                     
-                    // Extract secure URL from result
-                    if ($cloudinaryResult && isset($cloudinaryResult['secure_url'])) {
-                        $validatedData['image'] = $cloudinaryResult['secure_url'];
+                    // Extract secure URL from result object
+                    $secureUrl = $cloudinaryResult->getSecurePath();
+                    if ($secureUrl) {
+                        $validatedData['image'] = $secureUrl;
                     } else {
                         throw new \Exception('Cloudinary upload failed: No URL returned');
                     }
