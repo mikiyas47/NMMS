@@ -61,7 +61,14 @@ const AddProductPage = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) setForm((p) => ({ ...p, image: file, imagePreview: URL.createObjectURL(file) }));
+    if (file) {
+      setForm((p) => ({ 
+        ...p, 
+        image: file, 
+        imagePreview: URL.createObjectURL(file),
+        isVideo: file.type.startsWith('video/')
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -115,7 +122,9 @@ const AddProductPage = () => {
     setForm({
       name: p.name, price: String(p.price),
       description: p.description || '', stock: p.stock ? String(p.stock) : '',
-      point: p.point ? String(p.point) : '', image: null, imagePreview: secureUrl(p.image),
+      point: p.point ? String(p.point) : '', image: null, 
+      imagePreview: secureUrl(p.image),
+      isVideo: isVideoUrl(p.image),
     });
     setSelCat(p.category); setShowList(false);
   };
@@ -248,7 +257,7 @@ const AddProductPage = () => {
               style={{ cursor: 'pointer' }}
             >
               {form.imagePreview ? (
-                isVideoUrl(form.imagePreview)
+                form.isVideo || isVideoUrl(form.imagePreview)
                   ? <video src={form.imagePreview} muted autoPlay loop style={{ width:'100%',height:'100%',objectFit:'cover',borderRadius:12 }} />
                   : <img src={form.imagePreview} alt="preview" style={{ width:'100%',height:'100%',objectFit:'cover',borderRadius:12 }} />
               ) : (
