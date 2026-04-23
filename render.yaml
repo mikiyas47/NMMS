@@ -17,3 +17,5 @@ services:
         value: pgsql
       - key: DB_URL
         value: postgresql://neondb_owner:npg_7ZLWexJBQ3uN@ep-little-frost-ad8et1v2.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: CLOUDINARY_URL
+        value: cloudinary://712859382482377:7EJGyEUWIL6O-I4ABv11tiJ4N6s@docvdlgiv

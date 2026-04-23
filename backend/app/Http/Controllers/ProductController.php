@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Cloudinary\Cloudinary;
+use Cloudinary\Api\Upload\UploadApi;
 
 class ProductController extends Controller
 {
@@ -46,19 +46,19 @@ class ProductController extends Controller
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
                 try {
-                    // Upload to Cloudinary via uploadApi()
                     $uploadedFile = $request->file('image');
-                    $cloudinaryResult = Cloudinary::uploadApi()->upload($uploadedFile->getRealPath(), [
+                    // Use SDK directly with CLOUDINARY_URL env var — avoids facade config issues
+                    $cloudinary = new Cloudinary(env('CLOUDINARY_URL'));
+                    $cloudinaryResult = $cloudinary->uploadApi()->upload($uploadedFile->getRealPath(), [
                         'folder'        => 'products',
                         'resource_type' => 'auto',
                     ]);
 
-                    // ApiResponse extends ArrayObject — access like array, not with isset()
                     $secureUrl = $cloudinaryResult['secure_url'] ?? null;
                     if ($secureUrl) {
                         $validatedData['image'] = $secureUrl;
                     } else {
-                        throw new \Exception('Cloudinary upload failed: No URL in response');
+                        throw new \Exception('Cloudinary upload failed: No URL in response. Response: ' . json_encode((array)$cloudinaryResult));
                     }
                 } catch (\Exception $uploadError) {
                     Log::error('Cloudinary upload error: ' . $uploadError->getMessage());
@@ -113,19 +113,19 @@ class ProductController extends Controller
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
                 try {
-                    // Upload to Cloudinary via uploadApi()
                     $uploadedFile = $request->file('image');
-                    $cloudinaryResult = Cloudinary::uploadApi()->upload($uploadedFile->getRealPath(), [
+                    // Use SDK directly with CLOUDINARY_URL env var — avoids facade config issues
+                    $cloudinary = new Cloudinary(env('CLOUDINARY_URL'));
+                    $cloudinaryResult = $cloudinary->uploadApi()->upload($uploadedFile->getRealPath(), [
                         'folder'        => 'products',
                         'resource_type' => 'auto',
                     ]);
 
-                    // ApiResponse extends ArrayObject — access like array, not with isset()
                     $secureUrl = $cloudinaryResult['secure_url'] ?? null;
                     if ($secureUrl) {
                         $validatedData['image'] = $secureUrl;
                     } else {
-                        throw new \Exception('Cloudinary upload failed: No URL in response');
+                        throw new \Exception('Cloudinary upload failed: No URL in response. Response: ' . json_encode((array)$cloudinaryResult));
                     }
                 } catch (\Exception $uploadError) {
                     Log::error('Cloudinary upload error: ' . $uploadError->getMessage());
