@@ -46,19 +46,19 @@ class ProductController extends Controller
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
                 try {
-                    // Upload to Cloudinary
+                    // Upload to Cloudinary via uploadApi()
                     $uploadedFile = $request->file('image');
-                    $cloudinaryResult = Cloudinary::upload($uploadedFile->getRealPath(), [
-                        'folder' => 'products',
+                    $cloudinaryResult = Cloudinary::uploadApi()->upload($uploadedFile->getRealPath(), [
+                        'folder'        => 'products',
                         'resource_type' => 'auto',
                     ]);
-                    
-                    // Extract secure URL from result object
-                    $secureUrl = $cloudinaryResult->getSecurePath();
+
+                    // ApiResponse extends ArrayObject — access like array, not with isset()
+                    $secureUrl = $cloudinaryResult['secure_url'] ?? null;
                     if ($secureUrl) {
                         $validatedData['image'] = $secureUrl;
                     } else {
-                        throw new \Exception('Cloudinary upload failed: No URL returned');
+                        throw new \Exception('Cloudinary upload failed: No URL in response');
                     }
                 } catch (\Exception $uploadError) {
                     Log::error('Cloudinary upload error: ' . $uploadError->getMessage());
@@ -113,19 +113,19 @@ class ProductController extends Controller
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
                 try {
-                    // Upload to Cloudinary
+                    // Upload to Cloudinary via uploadApi()
                     $uploadedFile = $request->file('image');
-                    $cloudinaryResult = Cloudinary::upload($uploadedFile->getRealPath(), [
-                        'folder' => 'products',
+                    $cloudinaryResult = Cloudinary::uploadApi()->upload($uploadedFile->getRealPath(), [
+                        'folder'        => 'products',
                         'resource_type' => 'auto',
                     ]);
-                    
-                    // Extract secure URL from result object
-                    $secureUrl = $cloudinaryResult->getSecurePath();
+
+                    // ApiResponse extends ArrayObject — access like array, not with isset()
+                    $secureUrl = $cloudinaryResult['secure_url'] ?? null;
                     if ($secureUrl) {
                         $validatedData['image'] = $secureUrl;
                     } else {
-                        throw new \Exception('Cloudinary upload failed: No URL returned');
+                        throw new \Exception('Cloudinary upload failed: No URL in response');
                     }
                 } catch (\Exception $uploadError) {
                     Log::error('Cloudinary upload error: ' . $uploadError->getMessage());
