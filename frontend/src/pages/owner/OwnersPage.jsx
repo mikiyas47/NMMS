@@ -227,14 +227,13 @@ const OwnersPage = ({ dark }) => {
               ))}
               <div className="field-group">
                 <label className="field-label">Role</label>
-                <select 
-                  className="field-input" 
-                  value={addForm.role}
-                  onChange={(e) => setAddForm((p) => ({ ...p, role: e.target.value }))}
-                >
-                  <option value="owner">Owner</option>
-                  <option value="admin">Admin</option>
-                </select>
+                <input
+                  type="text"
+                  className="field-input"
+                  value="Owner"
+                  disabled
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                />
               </div>
             </div>
             <div className="modal-footer">

@@ -24,13 +24,13 @@ const OwnerScreen = ({ C }) => {
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
 
   const [addingAdmin, setAddingAdmin] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', password: '', role: 'admin' });
+  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', password: '', role: 'owner' });
 
   const fetchAdmins = () => {
     setLoading(true);
     axios
       .get(`${API_BASE}/all-users`)
-      .then(r => setUsers(r.data.filter(u => u.role === 'admin')))
+      .then(r => setUsers(r.data.filter(u => u.role === 'owner' || u.role === 'admin')))
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -78,7 +78,7 @@ const OwnerScreen = ({ C }) => {
     axios.post(`${API_BASE}/users`, addForm)
       .then(() => {
         setAddingAdmin(false);
-        setAddForm({ name: '', email: '', phone: '', password: '', role: 'admin' });
+        setAddForm({ name: '', email: '', phone: '', password: '', role: 'owner' });
         fetchAdmins();
       })
       .catch(err => {
@@ -99,7 +99,7 @@ const OwnerScreen = ({ C }) => {
           <View className="flex-row items-center">
             <ShieldCheck color={C.blue} size={26} />
             <Text className="text-xl font-bold ml-2" style={{ color: C.text }}>
-              Administrators
+              System Owners / Admins
             </Text>
           </View>
           <TouchableOpacity 
@@ -107,11 +107,11 @@ const OwnerScreen = ({ C }) => {
             className="px-3 py-1.5 rounded-lg"
             style={{ backgroundColor: C.blue }}
           >
-            <Text className="text-xs font-bold text-white">+ Add Admin</Text>
+            <Text className="text-xs font-bold text-white">+ Add Owner</Text>
           </TouchableOpacity>
         </View>
         <Text className="text-sm mb-4" style={{ color: C.muted }}>
-          Manage system administrators and their permissions
+          Manage system owners and administrators
         </Text>
 
         {/* Search */}
@@ -301,7 +301,7 @@ const OwnerScreen = ({ C }) => {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
           <View style={{ backgroundColor: C.surface, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: C.border }}>
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: C.text, marginBottom: 16 }}>
-              Add New Admin/Owner
+              Add New Owner
             </Text>
             
             <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Name</Text>
@@ -336,11 +336,11 @@ const OwnerScreen = ({ C }) => {
               style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 16, borderWidth: 1, borderColor: C.border }}
             />
 
-            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Role (admin or owner)</Text>
+            <Text style={{ color: C.muted, fontSize: 12, marginBottom: 4, fontWeight: '600' }}>Role</Text>
             <TextInput
-              value={addForm.role}
-              onChangeText={val => setAddForm(prev => ({...prev, role: val.toLowerCase()}))}
-              style={{ backgroundColor: C.inputBg, color: C.text, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 24, borderWidth: 1, borderColor: C.border }}
+              value="Owner"
+              editable={false}
+              style={{ backgroundColor: C.inputBg, color: C.muted, borderRadius: 12, paddingHorizontal: 16, height: 48, marginBottom: 24, borderWidth: 1, borderColor: C.border, opacity: 0.7 }}
             />
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
