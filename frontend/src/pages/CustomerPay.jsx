@@ -25,7 +25,6 @@ const CustomerPay = () => {
   const [paymentResult, setPaymentResult] = useState(null); // 'success' | 'failed'
 
   useEffect(() => {
-    // If returning from Chapa, verify the payment status
     if (returnTxRef) {
       verifyPayment(returnTxRef);
     } else {
@@ -95,11 +94,18 @@ const CustomerPay = () => {
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.message || 'Payment initiation failed.');
+        let errorMsg = data.message || 'Payment initiation failed.';
+        if (data.errors && typeof data.errors === 'object') {
+          const firstError = Object.values(data.errors)[0];
+          if (Array.isArray(firstError)) errorMsg = firstError[0];
+          else if (typeof firstError === 'string') errorMsg = firstError;
+        } else if (typeof errorMsg === 'object') {
+          errorMsg = JSON.stringify(errorMsg);
+        }
+        throw new Error(errorMsg);
       }
 
       if (data.payment_url) {
-        // Redirect browser to Chapa checkout
         window.location.href = data.payment_url;
       }
     } catch (err) {
@@ -108,34 +114,33 @@ const CustomerPay = () => {
     }
   };
 
+  const total = selectedProduct ? (parseFloat(selectedProduct.price) * quantity).toFixed(2) : '0.00';
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      <div style={{ minHeight: '100vh', backgroundColor: '#0A0F1E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#fff', fontSize: '1.2rem' }}>Loading secure checkout...</p>
       </div>
     );
   }
 
-  // ── RESULT SCREEN (Returned from Chapa) ──
   if (paymentResult) {
     const isSuccess = paymentResult === 'success';
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${isSuccess ? 'bg-emerald-950' : 'bg-red-950'}`}>
-        <div className="max-w-md w-full bg-gray-900 rounded-3xl p-8 border border-white/10 text-center shadow-2xl">
-          <div className={`mx-auto w-24 h-24 rounded-full flex items-center justify-center mb-6 shadow-lg ${isSuccess ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-red-500 shadow-red-500/20'}`}>
-            {isSuccess ? <CheckCircle className="text-white" size={48} /> : <XCircle className="text-white" size={48} />}
+      <div style={{ minHeight: '100vh', backgroundColor: isSuccess ? '#064E3B' : '#450A0A', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+        <div style={{ backgroundColor: '#111827', borderRadius: '24px', padding: '2rem', textAlign: 'center', width: '100%', maxWidth: '400px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: isSuccess ? '#10B981' : '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
+            {isSuccess ? <CheckCircle color="#fff" size={40} /> : <XCircle color="#fff" size={40} />}
           </div>
-          <h2 className="text-3xl font-black text-white mb-2">
+          <h2 style={{ color: '#fff', fontSize: '1.8rem', fontWeight: '800', marginBottom: '0.5rem' }}>
             {isSuccess ? 'Payment Successful!' : 'Payment Failed'}
           </h2>
-          <p className="text-gray-400 mb-8">
-            {isSuccess 
-              ? 'Your order has been confirmed. A receipt has been sent to your email.'
-              : 'Your payment could not be processed. Please try again.'}
+          <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '2rem' }}>
+            {isSuccess ? 'Your order has been confirmed. A receipt has been sent to your email.' : 'Your payment could not be processed. Please try again.'}
           </p>
           <button 
             onClick={() => window.location.href = window.location.pathname + `?distributor_id=${distributorId}`}
-            className={`w-full py-4 rounded-xl font-bold text-white transition-all ${isSuccess ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}
+            style={{ width: '100%', padding: '1rem', borderRadius: '12px', fontWeight: 'bold', border: 'none', cursor: 'pointer', backgroundColor: isSuccess ? '#059669' : '#DC2626', color: '#fff' }}
           >
             {isSuccess ? 'Done' : 'Try Again'}
           </button>
@@ -144,91 +149,86 @@ const CustomerPay = () => {
     );
   }
 
-  const total = selectedProduct ? (parseFloat(selectedProduct.price) * quantity).toFixed(2) : '0.00';
-
   return (
-    <div className="min-h-screen bg-[#0A0F1E] flex flex-col font-sans">
+    <div style={{ minHeight: '100vh', backgroundColor: '#0A0F1E', display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif' }}>
       {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-900 to-indigo-600 p-8 sm:p-12 relative overflow-hidden">
-        <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/5 blur-xl"></div>
-        <div className="max-w-2xl mx-auto flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-              <ShoppingBag className="text-white" size={28} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-black text-white tracking-tight">Secure Checkout</h1>
-              <p className="text-indigo-200 font-medium mt-1">Official Product Portal</p>
-            </div>
+      <div style={{ background: 'linear-gradient(135deg, #312E81, #4338CA)', padding: '3rem 2rem', position: 'relative' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '16px' }}>
+            <ShoppingBag color="#fff" size={32} />
+          </div>
+          <div>
+            <h1 style={{ color: '#fff', fontSize: '2rem', fontWeight: '900', margin: 0 }}>Secure Checkout</h1>
+            <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>Official Product Portal</p>
           </div>
         </div>
       </div>
 
       {/* Main Form */}
-      <div className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-8 -mt-6 sm:-mt-8 relative z-20">
-        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
+      <div style={{ flex: 1, maxWidth: '600px', width: '100%', margin: '-2rem auto 2rem auto', padding: '0 1rem', position: 'relative', zIndex: 10 }}>
+        <div style={{ backgroundColor: '#111827', borderRadius: '24px', padding: '2rem', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
           
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm font-medium">
+            <div style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', fontWeight: '500' }}>
               {error}
             </div>
           )}
 
-          <form onSubmit={handlePay} className="space-y-6">
+          <form onSubmit={handlePay}>
             {/* Product Selection */}
-            <div>
-              <label className="block text-xs font-bold text-gray-400 tracking-wider mb-2 uppercase">Selected Product</label>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Selected Product</label>
               <select 
                 value={selectedProduct?.id || ''}
                 onChange={(e) => {
                   const p = products.find(p => String(p.id) === e.target.value);
                   setSelected(p);
                 }}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none cursor-pointer"
+                style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1rem', color: '#fff', fontSize: '1rem', appearance: 'none', cursor: 'pointer' }}
                 required
               >
                 <option value="" disabled>Choose a product...</option>
                 {products.filter(p => p.stock > 0).map(p => (
-                  <option key={p.id} value={p.id}>{p.name} - ETB {parseFloat(p.price).toFixed(2)}</option>
+                  <option key={p.id} value={p.id} style={{ color: '#000' }}>{p.name} - ETB {parseFloat(p.price).toFixed(2)}</option>
                 ))}
               </select>
             </div>
 
             {selectedProduct && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 tracking-wider mb-2 uppercase">Quantity</label>
-                  <div className="flex items-center bg-gray-800/50 border border-gray-700 rounded-xl p-2">
-                    <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-10 h-10 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition">-</button>
-                    <span className="flex-1 text-center font-bold text-white text-lg">{quantity}</span>
-                    <button type="button" onClick={() => setQuantity(q => Math.min(selectedProduct.stock, q + 1))} className="w-10 h-10 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition">+</button>
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Quantity</label>
+                  <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '0.5rem' }}>
+                    <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))} style={{ width: '40px', height: '40px', borderRadius: '8px', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>-</button>
+                    <span style={{ flex: 1, textAlign: 'center', color: '#fff', fontWeight: 'bold', fontSize: '1.2rem' }}>{quantity}</span>
+                    <button type="button" onClick={() => setQuantity(q => Math.min(selectedProduct.stock, q + 1))} style={{ width: '40px', height: '40px', borderRadius: '8px', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>+</button>
                   </div>
                 </div>
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex flex-col justify-center">
-                  <span className="text-xs font-bold text-indigo-400 tracking-wider uppercase mb-1">Total Due</span>
-                  <span className="text-2xl font-black text-indigo-400">ETB {total}</span>
+                <div style={{ flex: 1, backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <span style={{ color: '#818CF8', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total Due</span>
+                  <span style={{ color: '#818CF8', fontSize: '1.5rem', fontWeight: '900' }}>ETB {total}</span>
                 </div>
               </div>
             )}
 
-            <hr className="border-gray-800 my-6" />
+            <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '2rem 0' }} />
 
             {/* Customer Info */}
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label className="block text-xs font-bold text-gray-400 tracking-wider mb-2 uppercase">Full Name *</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} required
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="John Doe" />
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Full Name *</label>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="John Doe"
+                  style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1rem', color: '#fff', fontSize: '1rem', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 tracking-wider mb-2 uppercase">Email Address *</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="john@example.com" />
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Email Address *</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="john@example.com"
+                  style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1rem', color: '#fff', fontSize: '1rem', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 tracking-wider mb-2 uppercase">Phone Number</label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="+251 911 234 567" />
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Phone Number</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+251 911 234 567"
+                  style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '1rem', color: '#fff', fontSize: '1rem', boxSizing: 'border-box' }} />
               </div>
             </div>
 
@@ -236,22 +236,16 @@ const CustomerPay = () => {
             <button 
               type="submit" 
               disabled={submitting || !selectedProduct}
-              className="w-full mt-8 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-black text-lg p-5 rounded-2xl shadow-xl shadow-indigo-900/50 transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ width: '100%', marginTop: '2rem', background: 'linear-gradient(135deg, #4F46E5, #6366F1)', color: '#fff', fontWeight: '900', fontSize: '1.1rem', padding: '1.2rem', borderRadius: '16px', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', cursor: (submitting || !selectedProduct) ? 'not-allowed' : 'pointer', opacity: (submitting || !selectedProduct) ? 0.5 : 1 }}
             >
-              {submitting ? (
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  <CreditCard size={24} />
-                  PAY ETB {total} SECURELY
-                </>
-              )}
+              <CreditCard size={24} />
+              {submitting ? 'PROCESSING...' : `PAY ETB ${total} SECURELY`}
             </button>
             
-            <div className="flex items-center justify-center gap-4 mt-6 text-xs font-medium text-gray-500">
-              <span className="flex items-center gap-1"><Shield size={14} /> System Verified</span>
-              <span className="w-1 h-1 bg-gray-700 rounded-full"></span>
-              <span className="flex items-center gap-1"><Lock size={14} /> Chapa Secured</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginTop: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', fontWeight: 'bold' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Shield size={14} /> System Verified</span>
+              <span style={{ width: '4px', height: '4px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '50%' }}></span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Lock size={14} /> Chapa Secured</span>
             </div>
           </form>
         </div>

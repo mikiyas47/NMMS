@@ -270,10 +270,10 @@ const ShareModal = ({ product, distributorId, navigation, onClose, C }) => {
     ]).start(onClose);
   };
 
-  // Deep-link URL the customer will open
-  const payLink = `nmmsapp://pay?distributor_id=${distributorId}&product_id=${product?.id}`;
-  // Also provide a web fallback
-  const webLink = `${API_BASE}/pay?distributor_id=${distributorId}&product_id=${product?.id}`;
+  // Deep-link URL the customer will open (Mobile App)
+  const payLink = `nmms-app://pay?distributor_id=${distributorId}&product_id=${product?.id}`;
+  // Web fallback URL (React Frontend)
+  const webLink = `https://nmms-ochre.vercel.app/pay?distributor_id=${distributorId}&product_id=${product?.id}`;
 
   const handleShareLink = async () => {
     try {
@@ -282,8 +282,8 @@ const ShareModal = ({ product, distributorId, navigation, onClose, C }) => {
         message:
           `🛒 *${product?.name}*\n` +
           `💰 Price: ETB ${parseFloat(product?.price ?? 0).toFixed(2)}\n\n` +
-          `Pay securely via the NMMS app:\n${payLink}\n\n` +
-          `Or open in browser:\n${webLink}`,
+          `📱 Pay securely via the NMMS app:\n${payLink}\n\n` +
+          `🌐 Or open in browser:\n${webLink}`,
       });
     } catch (e) {
       Alert.alert('Share failed', e.message);
