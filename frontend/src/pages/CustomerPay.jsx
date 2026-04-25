@@ -35,7 +35,8 @@ const CustomerPay = () => {
   const loadProducts = async () => {
     try {
       const res = await fetch(`${API_BASE}/products`);
-      const data = await res.json();
+      const responseData = await res.json();
+      const data = responseData.data || responseData || []; // Handle wrapped or unwrapped
       setProducts(data);
       if (preSelectedProductId) {
         const found = data.find(p => String(p.id) === String(preSelectedProductId));
