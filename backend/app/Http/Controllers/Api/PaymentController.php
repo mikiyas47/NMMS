@@ -79,8 +79,8 @@ class PaymentController extends Controller
             'callback_url'  => env('APP_URL') . '/api/payments/webhook',
             'return_url'    => env('APP_URL') . '/api/payments/return?tx_ref=' . $txRef,
             'customization' => [
-                'title'       => 'NMMS Product Purchase',
-                'description' => $data['quantity'] . 'x ' . $product->name,
+                'title'       => 'NMMS Purchase',
+                'description' => $data['quantity'] . 'x ' . Str::limit($product->name, 20),
             ],
         ];
 
