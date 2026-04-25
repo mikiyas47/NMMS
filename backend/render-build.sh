@@ -4,5 +4,5 @@ set -o errexit
 
 composer install --no-dev --optimize-autoloader
 
-# Run migrations if database is ready
-# php artisan migrate --force
+# Run migrations
+php artisan migrate --force

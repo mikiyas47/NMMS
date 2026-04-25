@@ -7,6 +7,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import OwnerDashboard from './src/screens/OwnerDashboard';
 import DistributorDashboard from './src/screens/DistributorDashboard';
 import RegistrationScreen from './src/screens/RegistrationScreen';
+import CustomerPayScreen from './src/screens/CustomerPayScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
 const Stack = createStackNavigator();
@@ -24,6 +25,8 @@ function AppNavigator() {
           <Stack.Screen name="Register" component={RegistrationScreen} />
           <Stack.Screen name="OwnerDashboard" component={OwnerDashboard} />
           <Stack.Screen name="UserDashboard" component={DistributorDashboard} />
+          {/* ── Independent customer payment page ── */}
+          <Stack.Screen name="CustomerPay" component={CustomerPayScreen} />
         </Stack.Navigator>
       </NavigationContainer>
       <StatusBar style={isDark ? 'light' : 'dark'} />

@@ -187,4 +187,48 @@ export const addGoalMilestone = async (goalId, targetValue) => {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Payments ──────────────────────────────────────────────────────────────────
+
+/**
+ * Initiate a Chapa payment.
+ * Backend locks price, creates tx_ref, calls Chapa and returns checkout URL.
+ */
+export const initiatePayment = async (data) => {
+  try {
+    const response = await apiClient.post('/payments/initiate', data);
+    return response.data;
+  } catch (error) {
+    const errData = error.response?.data;
+    throw new Error(errData?.message ?? errData?.detail ?? 'Payment initiation failed');
+  }
+};
+
+/**
+ * Poll backend to check if a payment has been confirmed via Chapa webhook.
+ */
+export const verifyPayment = async (txRef) => {
+  try {
+    const response = await apiClient.get(`/payments/verify/${txRef}`);
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};
+
+/**
+ * Fetch the distributor's sales / commission history.
+ * Pass distributor_id to filter by distributor.
+ */
+export const getSalesHistory = async (distributorId) => {
+  try {
+    const response = await apiClient.get('/payments', {
+      params: distributorId ? { distributor_id: distributorId } : {},
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default apiClient;

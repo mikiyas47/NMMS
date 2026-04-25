@@ -6,7 +6,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   User, Mail, Phone, MapPin, Calendar,
   Edit, ChevronRight, Shield, Star, Award,
-  Bell, Lock, HelpCircle, LogOut,
   Bell, Lock, HelpCircle, LogOut, X,
 } from 'lucide-react-native';
 import { getUser, updatePassword } from '../../api/authService';

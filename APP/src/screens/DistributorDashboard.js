@@ -98,7 +98,7 @@ const DistributorDashboard = ({ navigation }) => {
       case 'overview':  return <DistributorOverview C={C} />;
       case 'network':   return <MyNetwork C={C} />;
       case 'contacts':  return <ContactsScreen C={C} />;
-      case 'products':  return <ProductsScreen C={C} />;
+      case 'products':  return <ProductsScreen C={C} navigation={navigation} />;
       case 'earnings':  return <EarningsScreen C={C} />;
       case 'goals':     return <GoalsScreen C={C} />;
       case 'profile':   return <ProfileScreen C={C} />;

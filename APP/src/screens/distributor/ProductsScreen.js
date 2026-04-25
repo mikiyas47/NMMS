@@ -15,10 +15,14 @@ import {
   Animated,
   Dimensions,
   AppState,
+  Share,
 } from 'react-native';
-import { ShoppingCart, Search, X, Package, Tag, Star, RefreshCw, AlertCircle, CheckCircle, Filter } from 'lucide-react-native';
+import { ShoppingCart, Search, X, Package, RefreshCw, AlertCircle,
+  CheckCircle, Share2, ExternalLink, CreditCard } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getProducts } from '../../api/authService';
+import { getProducts, getUser } from '../../api/authService';
+
+const API_BASE = 'https://nmms-backend.onrender.com';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2; // 2 columns with 16px side padding & 16px gap
@@ -228,16 +232,16 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
             <Text style={{ fontSize:10, color:C.muted }}>{inStock ? `${item.stock} in stock` : 'No stock'}</Text>
           </View>
 
-          {/* Sell button */}
+          {/* Share Payment Link button */}
           <TouchableOpacity onPress={() => inStock && onSell(item)} disabled={!inStock} style={{ borderRadius:12, overflow:'hidden' }}>
             <LinearGradient
-              colors={inStock ? [catColor.bg, catColor.bg+'BB'] : ['#9CA3AF','#9CA3AF']}
+              colors={inStock ? ['#4338CA', '#6366F1'] : ['#9CA3AF','#9CA3AF']}
               start={[0,0]} end={[1,0]}
               style={{ paddingVertical:9, flexDirection:'row', justifyContent:'center', alignItems:'center' }}
             >
-              <ShoppingCart color="#fff" size={12} />
+              <Share2 color="#fff" size={12} />
               <Text style={{ color:'#fff', fontWeight:'700', fontSize:11, marginLeft:5, letterSpacing:0.5 }}>
-                {inStock ? 'SELL NOW' : 'UNAVAILABLE'}
+                {inStock ? 'SHARE LINK' : 'UNAVAILABLE'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -247,11 +251,10 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
   );
 };
 
-// ─── Sell Confirmation Modal ──────────────────────────────────────────────────
-const SellModal = ({ product, onClose, onConfirm, C }) => {
+// ─── Share Payment Modal ───────────────────────────────────────────────────────
+const ShareModal = ({ product, distributorId, navigation, onClose, C }) => {
   const slideAnim = useRef(new Animated.Value(400)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const [qty, setQty] = useState(1);
 
   useEffect(() => {
     Animated.parallel([
@@ -267,115 +270,118 @@ const SellModal = ({ product, onClose, onConfirm, C }) => {
     ]).start(onClose);
   };
 
-  const maxQty = product?.stock ?? 1;
-  const total  = (parseFloat(product?.price ?? 0) * qty).toFixed(2);
+  // Deep-link URL the customer will open
+  const payLink = `nmmsapp://pay?distributor_id=${distributorId}&product_id=${product?.id}`;
+  // Also provide a web fallback
+  const webLink = `${API_BASE}/pay?distributor_id=${distributorId}&product_id=${product?.id}`;
+
+  const handleShareLink = async () => {
+    try {
+      await Share.share({
+        title: `Buy ${product?.name}`,
+        message:
+          `🛒 *${product?.name}*\n` +
+          `💰 Price: ETB ${parseFloat(product?.price ?? 0).toFixed(2)}\n\n` +
+          `Pay securely via the NMMS app:\n${payLink}\n\n` +
+          `Or open in browser:\n${webLink}`,
+      });
+    } catch (e) {
+      Alert.alert('Share failed', e.message);
+    }
+  };
+
+  const handleOpenDirect = () => {
+    close();
+    // Open CustomerPayScreen directly (face-to-face with customer)
+    setTimeout(() => {
+      navigation.navigate('CustomerPay', {
+        distributor_id: distributorId,
+        product_id: product?.id,
+      });
+    }, 300);
+  };
+
   const catColor = getCategoryColor(product?.category);
 
   return (
     <Modal transparent animationType="none" onRequestClose={close}>
-      {/* Backdrop */}
-      <Animated.View
-        style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.65)',
-          justifyContent: 'flex-end',
-          opacity: fadeAnim,
-        }}
-      >
+      <Animated.View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.65)', justifyContent:'flex-end', opacity: fadeAnim }}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={close} />
-
-        {/* Sheet */}
-        <Animated.View
-          style={{
-            transform: [{ translateY: slideAnim }],
-            backgroundColor: C.card,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 20,
-            paddingBottom: 36,
-            paddingTop: 8,
-            borderTopWidth: 1,
-            borderColor: C.border,
-          }}
-        >
-          {/* Handle */}
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
+        <Animated.View style={{
+          transform: [{ translateY: slideAnim }],
+          backgroundColor: C.card,
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8,
+          borderTopWidth: 1, borderColor: C.border,
+        }}>
+          <View style={{ width:40, height:4, borderRadius:2, backgroundColor:C.border, alignSelf:'center', marginBottom:20 }} />
 
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
-            <LinearGradient colors={['#6366F1', '#8B5CF6']} style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <ShoppingCart color="#fff" size={20} />
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:20 }}>
+            <LinearGradient colors={['#4338CA','#6366F1']} style={{ width:44, height:44, borderRadius:14, alignItems:'center', justifyContent:'center', marginRight:12 }}>
+              <Share2 color="#fff" size={20} />
             </LinearGradient>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>Confirm Sale</Text>
-              <Text style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>Review details before confirming</Text>
+            <View style={{ flex:1 }}>
+              <Text style={{ fontSize:18, fontWeight:'800', color:C.text }}>Send Payment Link</Text>
+              <Text style={{ fontSize:12, color:C.muted, marginTop:1 }}>Customer pays directly — you earn commission</Text>
             </View>
-            <TouchableOpacity onPress={close} style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: C.inputBg, alignItems: 'center', justifyContent: 'center' }}>
+            <TouchableOpacity onPress={close} style={{ width:34, height:34, borderRadius:10, backgroundColor:C.inputBg, alignItems:'center', justifyContent:'center' }}>
               <X color={C.muted} size={18} />
             </TouchableOpacity>
           </View>
 
-          {/* Product summary */}
-          <View style={{ flexDirection: 'row', backgroundColor: C.inputBg, borderRadius: 16, padding: 14, marginBottom: 18, alignItems: 'center' }}>
-            <View style={{ width: 62, height: 80, borderRadius: 12, overflow: 'hidden', backgroundColor: C.border, marginRight: 14 }}>
-              {product?.image ? (
-                (() => {
-                  const uri = toHttps(product.image);
-                  const isVid = uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') || uri.endsWith('.mkv');
-                  return isVid ? (
-                    <ModalVideo uri={uri} />
-                  ) : (
-                    <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                  );
-                })()
-              ) : (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                  <Package color={C.muted} size={24} />
-                </View>
-              )}
+          {/* Product card */}
+          <View style={{ flexDirection:'row', backgroundColor:C.inputBg, borderRadius:16, padding:14, marginBottom:20, alignItems:'center' }}>
+            <View style={{ width:54, height:68, borderRadius:12, overflow:'hidden', backgroundColor:C.border, marginRight:14 }}>
+              {product?.image
+                ? <Image source={{ uri: toHttps(product.image) }} style={{ width:'100%', height:'100%' }} resizeMode="cover" />
+                : <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}><Package color={C.muted} size={22} /></View>}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 5 }} numberOfLines={2}>{product?.name}</Text>
-              {product?.category ? (
-                <View style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20, backgroundColor: catColor.light, marginBottom: 6 }}>
-                  <Text style={{ color: catColor.bg, fontSize: 10, fontWeight: '700' }}>{product.category}</Text>
-                </View>
-              ) : null}
-              <Text style={{ fontSize: 12, color: C.muted }}>Unit price: <Text style={{ color: C.accent, fontWeight: '700' }}>${parseFloat(product?.price ?? 0).toFixed(2)}</Text></Text>
+            <View style={{ flex:1 }}>
+              <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:4 }} numberOfLines={2}>{product?.name}</Text>
+              <View style={{ alignSelf:'flex-start', paddingHorizontal:8, paddingVertical:2, borderRadius:20, backgroundColor:catColor.light, marginBottom:6 }}>
+                <Text style={{ color:catColor.bg, fontSize:10, fontWeight:'700' }}>{product?.category}</Text>
+              </View>
+              <Text style={{ fontSize:13, color:'#6366F1', fontWeight:'800' }}>ETB {parseFloat(product?.price ?? 0).toFixed(2)}</Text>
             </View>
           </View>
 
-          {/* Quantity selector */}
-          <Text style={{ fontSize: 13, fontWeight: '700', color: C.text, marginBottom: 10 }}>Quantity</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-            <TouchableOpacity
-              onPress={() => setQty(q => Math.max(1, q - 1))}
-              style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: C.inputBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border }}
-            >
-              <Text style={{ fontSize: 22, color: C.text, fontWeight: '300' }}>−</Text>
-            </TouchableOpacity>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, width: 70, textAlign: 'center' }}>{qty}</Text>
-            <TouchableOpacity
-              onPress={() => setQty(q => Math.min(maxQty, q + 1))}
-              style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: C.inputBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border }}
-            >
-              <Text style={{ fontSize: 22, color: C.text, fontWeight: '300' }}>+</Text>
-            </TouchableOpacity>
+          {/* Commission preview */}
+          <View style={{ backgroundColor:'rgba(16,185,129,0.08)', borderRadius:14, padding:14, marginBottom:20,
+            borderWidth:1, borderColor:'rgba(16,185,129,0.2)', flexDirection:'row', alignItems:'center' }}>
+            <View style={{ width:36, height:36, borderRadius:10, backgroundColor:'rgba(16,185,129,0.15)',
+              alignItems:'center', justifyContent:'center', marginRight:12 }}>
+              <CreditCard color="#10B981" size={18} />
+            </View>
+            <View>
+              <Text style={{ color:C.muted, fontSize:11 }}>Your commission (10%)</Text>
+              <Text style={{ color:'#10B981', fontWeight:'900', fontSize:17 }}>
+                ETB {(parseFloat(product?.price ?? 0) * 0.10).toFixed(2)}
+              </Text>
+            </View>
+            <View style={{ flex:1 }} />
+            <Text style={{ color:C.muted, fontSize:10, textAlign:'right' }}>Credited{`\n`}automatically</Text>
           </View>
 
-          {/* Total */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)' }}>
-            <Text style={{ fontSize: 14, color: C.muted, fontWeight: '600' }}>Total Amount</Text>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: '#6366F1' }}>${total}</Text>
-          </View>
-
-          {/* Confirm button */}
-          <TouchableOpacity onPress={() => onConfirm(product, qty)} style={{ borderRadius: 16, overflow: 'hidden' }}>
-            <LinearGradient colors={['#6366F1', '#8B5CF6']} start={[0, 0]} end={[1, 0]} style={{ paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
-              <CheckCircle color="#fff" size={18} />
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 8, letterSpacing: 0.5 }}>Confirm Sale</Text>
+          {/* Action buttons */}
+          <TouchableOpacity onPress={handleShareLink} style={{ borderRadius:16, overflow:'hidden', marginBottom:12 }}>
+            <LinearGradient colors={['#4338CA','#6366F1']} start={[0,0]} end={[1,0]}
+              style={{ paddingVertical:16, flexDirection:'row', alignItems:'center', justifyContent:'center' }}>
+              <Share2 color="#fff" size={18} />
+              <Text style={{ color:'#fff', fontWeight:'800', fontSize:15, marginLeft:10 }}>Share Payment Link</Text>
             </LinearGradient>
           </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleOpenDirect}
+            style={{ borderRadius:16, paddingVertical:15, flexDirection:'row', alignItems:'center',
+              justifyContent:'center', backgroundColor:C.inputBg, borderWidth:1, borderColor:C.border }}>
+            <ExternalLink color={C.accent} size={18} />
+            <Text style={{ color:C.text, fontWeight:'700', fontSize:15, marginLeft:10 }}>Open Checkout Now</Text>
+          </TouchableOpacity>
+
+          <Text style={{ color:C.muted, fontSize:11, textAlign:'center', marginTop:14, lineHeight:16 }}>
+            🔒 Price is locked by the system.{`\n`}You cannot modify it.
+          </Text>
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -383,7 +389,7 @@ const SellModal = ({ product, onClose, onConfirm, C }) => {
 };
 
 // ─── Main ProductsScreen ──────────────────────────────────────────────────────
-const ProductsScreen = ({ C }) => {
+const ProductsScreen = ({ C, navigation }) => {
   const [products, setProducts]       = useState([]);
   const [filtered, setFiltered]       = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -392,6 +398,14 @@ const ProductsScreen = ({ C }) => {
   const [search, setSearch]           = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [sellTarget, setSellTarget]   = useState(null);
+  const [distributorId, setDistributorId] = useState(null);
+
+  // Load current distributor id
+  useEffect(() => {
+    getUser().then(u => {
+      if (u?.distributor_id) setDistributorId(u.distributor_id);
+    });
+  }, []);
   const [viewMedia, setViewMedia]     = useState(null);
   const appState = useRef(AppState.currentState);
 
@@ -443,15 +457,7 @@ const ProductsScreen = ({ C }) => {
     setFiltered(result);
   }, [search, activeCategory, products]);
 
-  // ── Sell handler ────────────────────────────────────────────────────────────
-  const handleSellConfirm = (product, qty) => {
-    setSellTarget(null);
-    Alert.alert(
-      '✅ Sale Confirmed!',
-      `${qty}x ${product.name}\nTotal: $${(parseFloat(product.price) * qty).toFixed(2)}`,
-      [{ text: 'Great!', style: 'default' }]
-    );
-  };
+  // ── Sell handler — now opens ShareModal instead of fake alert ───────────────
 
   // ── Render helpers ──────────────────────────────────────────────────────────
   const renderHeader = () => (
@@ -616,12 +622,13 @@ const ProductsScreen = ({ C }) => {
         )}
       />
 
-      {/* Sell Modal */}
+      {/* Share Payment Modal */}
       {sellTarget && (
-        <SellModal
+        <ShareModal
           product={sellTarget}
+          distributorId={distributorId}
+          navigation={navigation}
           onClose={() => setSellTarget(null)}
-          onConfirm={handleSellConfirm}
           C={C}
         />
       )}

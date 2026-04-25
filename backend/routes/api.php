@@ -28,35 +28,35 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ── Contacts (Prospects / Followups / Closings) ───────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/contacts',                        [ContactController::class, 'index']);
-    Route::post('/contacts',                       [ContactController::class, 'store']);
-    Route::get('/contacts/followups',              [ContactController::class, 'followups']);
-    Route::get('/contacts/closings',               [ContactController::class, 'closings']);
-    Route::get('/contacts/{id}',                   [ContactController::class, 'show']);
-    Route::put('/contacts/{id}',                   [ContactController::class, 'update']);
-    Route::delete('/contacts/{id}',                [ContactController::class, 'destroy']);
-    Route::post('/contacts/{id}/followups',        [ContactController::class, 'storeFollowup']);
-    Route::post('/contacts/{id}/closings',         [ContactController::class, 'storeClosing']);
+    Route::get('/contacts', [ContactController::class, 'index']);
+    Route::post('/contacts', [ContactController::class, 'store']);
+    Route::get('/contacts/followups', [ContactController::class, 'followups']);
+    Route::get('/contacts/closings', [ContactController::class, 'closings']);
+    Route::get('/contacts/{id}', [ContactController::class, 'show']);
+    Route::put('/contacts/{id}', [ContactController::class, 'update']);
+    Route::delete('/contacts/{id}', [ContactController::class, 'destroy']);
+    Route::post('/contacts/{id}/followups', [ContactController::class, 'storeFollowup']);
+    Route::post('/contacts/{id}/closings', [ContactController::class, 'storeClosing']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/goals',                           [GoalController::class, 'index']);
-    Route::post('/goals',                          [GoalController::class, 'store']);
-    Route::get('/goals/{id}',                      [GoalController::class, 'show']);
-    Route::put('/goals/{id}',                      [GoalController::class, 'update']);
-    Route::delete('/goals/{id}',                   [GoalController::class, 'destroy']);
-    Route::get('/goals/{id}/activities',           [GoalController::class, 'activities']);
-    Route::post('/goals/{id}/activities',          [GoalController::class, 'storeActivity']);
-    Route::post('/goals/{id}/milestones',          [GoalController::class, 'storeMilestone']);
+    Route::get('/goals', [GoalController::class, 'index']);
+    Route::post('/goals', [GoalController::class, 'store']);
+    Route::get('/goals/{id}', [GoalController::class, 'show']);
+    Route::put('/goals/{id}', [GoalController::class, 'update']);
+    Route::delete('/goals/{id}', [GoalController::class, 'destroy']);
+    Route::get('/goals/{id}/activities', [GoalController::class, 'activities']);
+    Route::post('/goals/{id}/activities', [GoalController::class, 'storeActivity']);
+    Route::post('/goals/{id}/milestones', [GoalController::class, 'storeMilestone']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 
 // Shows all tables + previously-run migrations
-Route::get('/db-status', function() {
+Route::get('/db-status', function () {
     try {
         $tables = \Illuminate\Support\Facades\DB::select(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
@@ -68,8 +68,8 @@ Route::get('/db-status', function() {
             $migrations = ['error' => $e->getMessage()];
         }
         return response()->json([
-            'status'     => 'ok',
-            'tables'     => array_column($tables, 'table_name'),
+            'status' => 'ok',
+            'tables' => array_column($tables, 'table_name'),
             'migrations' => $migrations,
         ]);
     } catch (\Exception $e) {
@@ -78,13 +78,13 @@ Route::get('/db-status', function() {
 });
 
 // Drops all tables and re-runs all migrations (USE ONLY ONCE TO FIX BROKEN STATE)
-Route::get('/migrate-fresh', function() {
+Route::get('/migrate-fresh', function () {
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true, '--seed' => true]);
         return response()->json([
-            'status'  => 'success',
+            'status' => 'success',
             'message' => 'Fresh migration completed',
-            'output'  => \Illuminate\Support\Facades\Artisan::output(),
+            'output' => \Illuminate\Support\Facades\Artisan::output(),
         ]);
     } catch (\Exception $e) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
@@ -92,13 +92,13 @@ Route::get('/migrate-fresh', function() {
 });
 
 // Runs pending migrations only
-Route::get('/migrate', function() {
+Route::get('/migrate', function () {
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
         return response()->json([
-            'status'  => 'success',
+            'status' => 'success',
             'message' => 'Migrations completed',
-            'output'  => \Illuminate\Support\Facades\Artisan::output(),
+            'output' => \Illuminate\Support\Facades\Artisan::output(),
         ]);
     } catch (\Exception $e) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
@@ -106,7 +106,7 @@ Route::get('/migrate', function() {
 });
 
 // Temporary route to create the owner account on the production database
-Route::get('/create-owner', function() {
+Route::get('/create-owner', function () {
     $user = \App\Models\User::updateOrCreate(
         ['email' => 'miki@gmail.com'],
         [
@@ -120,11 +120,11 @@ Route::get('/create-owner', function() {
 });
 
 // Temporary route to remove duplicate distributor user from production database
-Route::get('/remove-duplicate-distributor', function() {
+Route::get('/remove-duplicate-distributor', function () {
     $deleted = \Illuminate\Support\Facades\DB::table('distributors')
         ->where('email', 'miki@gmail.com')
         ->delete();
-    
+
     if ($deleted) {
         return response()->json([
             'message' => 'Successfully removed distributor user with email miki@gmail.com from production database!',
