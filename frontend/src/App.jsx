@@ -4,6 +4,7 @@ import PrivateRoute    from './components/PrivateRoute';
 import Login           from './pages/Login';
 import OwnerDashboard  from './pages/owner/OwnerDashboard';
 import AdminDashboard  from './pages/admin/AdminDashboard';
+import CustomerPay     from './pages/CustomerPay';
 
 const RoleRedirect = () => {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/pay" element={<CustomerPay />} />
           <Route path="/login" element={<Login />} />
           <Route
             path="/owner/*"
