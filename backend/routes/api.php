@@ -53,6 +53,22 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Payments (Chapa) ──────────────────────────────────────────────────────────
+use App\Http\Controllers\Api\PaymentController;
+
+// Public payment routes (used by independent CustomerPayScreen and Chapa webhooks)
+Route::post('/payments/initiate', [PaymentController::class, 'initiate']);
+Route::post('/payments/webhook', [PaymentController::class, 'webhook']);
+Route::get('/payments/verify/{txRef}', [PaymentController::class, 'verify']);
+Route::get('/payments/return', [PaymentController::class, 'returnUrl']);
+
+// Protected routes (for distributors to view their sales/commissions)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/payments', [PaymentController::class, 'index']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 
 // Shows all tables + previously-run migrations
