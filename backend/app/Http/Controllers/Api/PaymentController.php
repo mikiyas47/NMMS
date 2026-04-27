@@ -35,13 +35,6 @@ class PaymentController extends Controller
         // Lock price from backend — distributor cannot override
         $product = Product::findOrFail($data['product_id']);
 
-        if ($product->stock < $data['quantity']) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => "Insufficient stock. Only {$product->stock} unit(s) available.",
-            ], 422);
-        }
-
         $unitPrice        = (float) $product->price;
         $totalAmount      = round($unitPrice * $data['quantity'], 2);
         $commissionAmount = round($totalAmount * self::COMMISSION_RATE, 2);
@@ -175,9 +168,6 @@ class PaymentController extends Controller
                 ]);
 
                 if ($verified) {
-                    // Deduct stock
-                    Product::where('id', $payment->product_id)->decrement('stock', $payment->quantity);
-
                     // Credit commission to distributor
                     Distributor::where('distributor_id', $payment->distributor_id)
                         ->increment('income_monthly', $payment->commission_amount);
@@ -371,9 +361,6 @@ class PaymentController extends Controller
 
         if ($verified) {
             DB::transaction(function () use ($payment) {
-                // Deduct stock
-                Product::where('id', $payment->product_id)->decrement('stock', $payment->quantity);
-
                 // Credit commission to distributor
                 Distributor::where('distributor_id', $payment->distributor_id)
                     ->increment('income_monthly', $payment->commission_amount);

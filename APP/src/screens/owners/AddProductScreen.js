@@ -17,9 +17,19 @@ import {
   Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Package, Plus, Check, Image as ImageIcon, Video as VideoIcon, Search, Tag, DollarSign, Archive, FileText, Edit2, Trash2, X } from 'lucide-react-native';
+import { Package, Plus, Check, Image as ImageIcon, Video as VideoIcon, Search, Tag, DollarSign, FileText, Edit2, Trash2, X, Star } from 'lucide-react-native';
 import apiClient from '../../api/authService';
 import { deleteProduct } from '../../api/authService';
+
+// Fixed product tiers with category, price, and points
+const PRODUCT_TIERS = [
+  { category: 'Yellow',   price: 7690,   point: 100 },
+  { category: 'Orange',   price: 14115,  point: 200 },
+  { category: 'Green',    price: 26965,  point: 400 },
+  { category: 'Golden',   price: 52665,  point: 800 },
+];
+
+const CATEGORIES = PRODUCT_TIERS.map(t => t.category);
 
 const ProductVideo = ({ uri, isPreview }) => {
   const [error, setError] = useState(null);
@@ -68,10 +78,7 @@ const ProductVideo = ({ uri, isPreview }) => {
 const AddProductScreen = ({ C }) => {
   const [form, setForm] = useState({
     name: '',
-    price: '',
     description: '',
-    stock: '',
-    point: '',
     image: null,
     mediaType: 'image',
   });
@@ -91,14 +98,10 @@ const AddProductScreen = ({ C }) => {
 
   const appState = useRef(AppState.currentState);
 
-  const categories = [
-    'Electronics',
-    'Clothing',
-    'Health',
-    'Food',
-    'Digital',
-    'Other',
-  ];
+  // Auto-fill price and point when category is selected
+  const selectedTier = PRODUCT_TIERS.find(t => t.category === selCat);
+  const currentPrice = selectedTier ? selectedTier.price : '';
+  const currentPoint = selectedTier ? selectedTier.point : '';
 
   const fetchProducts = async () => {
     try {
@@ -153,8 +156,8 @@ const AddProductScreen = ({ C }) => {
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.price || !selCat) {
-      Alert.alert('Missing Fields', 'Please fill in Name, Price, and Category.');
+    if (!form.name || !selCat) {
+      Alert.alert('Missing Fields', 'Please fill in Name and Category.');
       return;
     }
     setLoading(true);
@@ -202,10 +205,9 @@ const AddProductScreen = ({ C }) => {
           mimeType: mime,
           parameters: {
             name: form.name,
-            price: String(parseFloat(form.price)),
+            price: String(currentPrice),
             category: selCat,
-            stock: form.stock ? String(parseInt(form.stock)) : '0',
-            point: form.point ? String(parseInt(form.point)) : '0',
+            point: String(currentPoint),
             description: form.description || '',
           },
           headers: {
@@ -227,10 +229,9 @@ const AddProductScreen = ({ C }) => {
       } else {
         const payload = {
           name:        form.name,
-          price:       parseFloat(form.price),
+          price:       currentPrice,
           category:    selCat,
-          stock:       form.stock ? parseInt(form.stock) : 0,
-          point:       form.point ? parseInt(form.point) : 0,
+          point:       currentPoint,
           description: form.description || '',
         };
 
@@ -574,59 +575,10 @@ const AddProductScreen = ({ C }) => {
           />
         </View>
 
-        {/* Layout Row for Price & Stock */}
-        <View className="flex-row w-full gap-4 mb-5">
-          <View className="flex-1">
-            <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Price (USD) *</Text>
-            <View className="flex-row items-center rounded-xl px-4 h-14" style={{ backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border }}>
-              <DollarSign color={C.green} size={18} />
-              <TextInput
-                className="flex-1 ml-2 text-sm font-bold"
-                style={{ color: C.text }}
-                placeholder="0.00"
-                placeholderTextColor={C.muted}
-                keyboardType="decimal-pad"
-                value={form.price}
-                onChangeText={v => setForm(p => ({ ...p, price: v }))}
-              />
-            </View>
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Stock</Text>
-            <View className="flex-row items-center rounded-xl px-4 h-14" style={{ backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border }}>
-              <Archive color={C.muted} size={18} />
-              <TextInput
-                className="flex-1 ml-3 text-sm font-medium"
-                style={{ color: C.text }}
-                placeholder="Qty"
-                placeholderTextColor={C.muted}
-                keyboardType="number-pad"
-                value={form.stock}
-                onChangeText={v => setForm(p => ({ ...p, stock: v }))}
-              />
-            </View>
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Points</Text>
-            <View className="flex-row items-center rounded-xl px-4 h-14" style={{ backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border }}>
-              <Tag color={C.muted} size={18} />
-              <TextInput
-                className="flex-1 ml-3 text-sm font-medium"
-                style={{ color: C.text }}
-                placeholder="Pts"
-                placeholderTextColor={C.muted}
-                keyboardType="number-pad"
-                value={form.point}
-                onChangeText={v => setForm(p => ({ ...p, point: v }))}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Category */}
-        <Text className="text-sm font-bold mb-3 ml-1" style={{ color: C.text }}>Category *</Text>
+        {/* Category - Must be selected first */}
+        <Text className="text-sm font-bold mb-3 ml-1" style={{ color: C.text }}>Category * (Price & Points auto-filled)</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6 flex-row" contentContainerStyle={{ paddingBottom: 4 }}>
-          {categories.map(c => (
+          {CATEGORIES.map(c => (
             <TouchableOpacity
               key={c}
               onPress={() => setSelCat(c)}
@@ -647,6 +599,30 @@ const AddProductScreen = ({ C }) => {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        {/* Auto-filled Price & Points Display */}
+        {selCat && (
+          <View className="flex-row w-full gap-4 mb-5">
+            <View className="flex-1">
+              <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Price (Auto-filled)</Text>
+              <View className="flex-row items-center rounded-xl px-4 h-14" style={{ backgroundColor: 'rgba(16,185,129,0.1)', borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
+                <DollarSign color={C.green} size={18} />
+                <Text className="flex-1 ml-2 text-base font-bold" style={{ color: C.green }}>
+                  {currentPrice.toLocaleString()} ETB
+                </Text>
+              </View>
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Points (Auto-filled)</Text>
+              <View className="flex-row items-center rounded-xl px-4 h-14" style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' }}>
+                <Star color="#F59E0B" size={18} />
+                <Text className="flex-1 ml-2 text-base font-bold" style={{ color: '#F59E0B' }}>
+                  {currentPoint} Points
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Description */}
         <Text className="text-sm font-bold mb-2 ml-1" style={{ color: C.text }}>Description</Text>

@@ -1,11 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Package, Tag, DollarSign, Archive, FileText, Search,
+  Package, Tag, DollarSign, FileText, Search,
   Edit2, Trash2, Plus, Check, X, Image as ImageIcon,
+  Star,
 } from 'lucide-react';
 import client from '../../api/client';
 
-const CATEGORIES = ['Electronics', 'Clothing', 'Health', 'Food', 'Digital', 'Other'];
+// Fixed product tiers with category, price, and points
+const PRODUCT_TIERS = [
+  { category: 'Yellow',   price: 7690,   point: 100 },
+  { category: 'Orange',   price: 14115,  point: 200 },
+  { category: 'Green',    price: 26965,  point: 400 },
+  { category: 'Golden',   price: 52665,  point: 800 },
+];
+
+const CATEGORIES = PRODUCT_TIERS.map(t => t.category);
 
 const isVideoUrl = (url) => {
   if (!url) return false;
@@ -36,7 +45,7 @@ const secureUrl = (url) => {
 
 const AddProductPage = () => {
   const [form, setForm] = useState({
-    name: '', price: '', description: '', stock: '', point: '', image: null,
+    name: '', description: '', image: null,
   });
   const [selCat,      setSelCat]      = useState('');
   const [loading,     setLoading]     = useState(false);
@@ -49,6 +58,11 @@ const AddProductPage = () => {
   const [deleting,    setDeleting]    = useState(null);
   const [viewMedia,   setViewMedia]   = useState(null);
   const fileRef = useRef();
+
+  // Auto-fill price and point when category is selected
+  const selectedTier = PRODUCT_TIERS.find(t => t.category === selCat);
+  const currentPrice = selectedTier ? selectedTier.price : '';
+  const currentPoint = selectedTier ? selectedTier.point : '';
 
   const fetchProducts = async () => {
     try {
@@ -73,8 +87,8 @@ const AddProductPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.price || !selCat) {
-      alert('Please fill in Name, Price, and Category.'); return;
+    if (!form.name || !selCat) {
+      alert('Please fill in Name and Category.'); return;
     }
     setLoading(true);
     try {
@@ -82,10 +96,9 @@ const AddProductPage = () => {
       if (form.image && form.image instanceof File) {
         const fd = new FormData();
         fd.append('name',        form.name);
-        fd.append('price',       parseFloat(form.price));
+        fd.append('price',       currentPrice);
         fd.append('category',    selCat);
-        fd.append('stock',       form.stock ? parseInt(form.stock) : 0);
-        fd.append('point',       form.point ? parseInt(form.point) : 0);
+        fd.append('point',       currentPoint);
         fd.append('description', form.description || '');
         fd.append('image',       form.image);
         if (editId) fd.append('_method', 'PUT');
@@ -93,9 +106,8 @@ const AddProductPage = () => {
         res = await client.post(url, fd);
       } else {
         const payload = {
-          name: form.name, price: parseFloat(form.price), category: selCat,
-          stock: form.stock ? parseInt(form.stock) : 0,
-          point: form.point ? parseInt(form.point) : 0,
+          name: form.name, price: currentPrice, category: selCat,
+          point: currentPoint,
           description: form.description || '',
         };
         res = editId
@@ -108,7 +120,7 @@ const AddProductPage = () => {
         setSuccess(true);
         setTimeout(() => {
           setSuccess(false);
-          setForm({ name: '', price: '', description: '', stock: '', point: '', image: null, imagePreview: null });
+          setForm({ name: '', description: '', image: null, imagePreview: null });
           setSelCat(''); setEditId(null);
         }, 2200);
       }
@@ -120,9 +132,9 @@ const AddProductPage = () => {
   const handleEdit = (p) => {
     setEditId(p.id);
     setForm({
-      name: p.name, price: String(p.price),
-      description: p.description || '', stock: p.stock ? String(p.stock) : '',
-      point: p.point ? String(p.point) : '', image: null, 
+      name: p.name,
+      description: p.description || '', 
+      image: null, 
       imagePreview: secureUrl(p.image),
       isVideo: isVideoUrl(p.image),
     });
@@ -172,7 +184,7 @@ const AddProductPage = () => {
           id="toggle-product-view"
           className="btn-secondary"
           onClick={() => {
-            if (editId && !showList) { setEditId(null); setForm({ name:'',price:'',description:'',stock:'',point:'',image:null,imagePreview:null }); setSelCat(''); setShowList(true); }
+            if (editId && !showList) { setEditId(null); setForm({ name:'',description:'',image:null,imagePreview:null }); setSelCat(''); setShowList(true); }
             else { setShowList((p) => !p); }
           }}
         >
@@ -222,8 +234,10 @@ const AddProductPage = () => {
                     <div className="product-body">
                       <p className="product-name">{p.name}</p>
                       <div className="product-meta">
-                        <span className="product-price">${parseFloat(p.price).toFixed(2)}</span>
-                        <span className="muted">Stock: {p.stock || 0}</span>
+                        <span className="product-price">{parseFloat(p.price).toLocaleString()} ETB</span>
+                        <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Star size={12} fill="#F59E0B" color="#F59E0B" /> {p.point || 0} pts
+                        </span>
                       </div>
                       <div className="product-actions">
                         <button className="action-btn edit" onClick={() => handleEdit(p)} id={`edit-product-${p.id}`}>
@@ -276,51 +290,51 @@ const AddProductPage = () => {
             <label className="field-label" htmlFor="prod-name">Product Name *</label>
             <div className="input-wrapper">
               <Tag size={16} className="input-icon" />
-              <input id="prod-name" type="text" className="field-input has-icon" placeholder="e.g. Premium Health Kit"
+              <input id="prod-name" type="text" className="field-input has-icon" placeholder="e.g. Yellow Package"
                 value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
             </div>
           </div>
 
-          {/* Price / Stock / Point row */}
-          <div className="form-row">
-            <div className="field-group">
-              <label className="field-label" htmlFor="prod-price">Price (USD) *</label>
-              <div className="input-wrapper">
-                <DollarSign size={16} className="input-icon" color="#10B981" />
-                <input id="prod-price" type="number" step="0.01" className="field-input has-icon" placeholder="0.00"
-                  value={form.price} onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))} required />
-              </div>
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="prod-stock">Stock</label>
-              <div className="input-wrapper">
-                <Archive size={16} className="input-icon" />
-                <input id="prod-stock" type="number" className="field-input has-icon" placeholder="Qty"
-                  value={form.stock} onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))} />
-              </div>
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="prod-points">Points</label>
-              <div className="input-wrapper">
-                <Tag size={16} className="input-icon" />
-                <input id="prod-points" type="number" className="field-input has-icon" placeholder="Pts"
-                  value={form.point} onChange={(e) => setForm((p) => ({ ...p, point: e.target.value }))} />
-              </div>
+          {/* Category - Must be selected first */}
+          <div className="field-group">
+            <label className="field-label">Category * (Price & Points auto-filled)</label>
+            <div className="category-tabs">
+              {CATEGORIES.map((c) => {
+                const tier = PRODUCT_TIERS.find(t => t.category === c);
+                return (
+                  <button key={c} type="button" id={`cat-${c}`}
+                    className={`tab-btn ${selCat === c ? 'active' : ''}`}
+                    onClick={() => setSelCat(c)}>
+                    {c}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Category */}
-          <div className="field-group">
-            <label className="field-label">Category *</label>
-            <div className="category-tabs">
-              {CATEGORIES.map((c) => (
-                <button key={c} type="button" id={`cat-${c}`}
-                  className={`tab-btn ${selCat === c ? 'active' : ''}`}
-                  onClick={() => setSelCat(c)}>{c}
-                </button>
-              ))}
+          {/* Auto-filled Price & Points Display */}
+          {selCat && (
+            <div className="form-row">
+              <div className="field-group">
+                <label className="field-label">Price (Auto-filled)</label>
+                <div className="input-wrapper" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', padding: '12px 16px' }}>
+                  <DollarSign size={16} color="#10B981" style={{ marginRight: '8px' }} />
+                  <span style={{ fontSize: '18px', fontWeight: '700', color: '#10B981' }}>
+                    {currentPrice.toLocaleString()} ETB
+                  </span>
+                </div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">Points (Auto-filled)</label>
+                <div className="input-wrapper" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px', padding: '12px 16px' }}>
+                  <Star size={16} fill="#F59E0B" color="#F59E0B" style={{ marginRight: '8px' }} />
+                  <span style={{ fontSize: '18px', fontWeight: '700', color: '#F59E0B' }}>
+                    {currentPoint} Points
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Description */}
           <div className="field-group">

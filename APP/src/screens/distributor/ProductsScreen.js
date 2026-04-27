@@ -158,7 +158,6 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
 
   const handlePressIn  = () => Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
   const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1,    useNativeDriver: true, speed: 30 }).start();
-  const inStock = (item.stock ?? 0) > 0;
 
   return (
     <Animated.View style={{ transform:[{ scale: scaleAnim }], width: CARD_WIDTH, marginBottom: 14 }}>
@@ -205,43 +204,38 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
 
           {/* Price on image */}
           <View style={{ position:'absolute', bottom:8, left:10 }}>
-            <Text style={{ color:'#fff', fontSize:15, fontWeight:'900' }}>${parseFloat(item.price).toFixed(2)}</Text>
+            <Text style={{ color:'#fff', fontSize:15, fontWeight:'900' }}>{parseFloat(item.price).toLocaleString()} ETB</Text>
           </View>
 
-          {/* Out-of-stock overlay */}
-          {!inStock && (
-            <View style={{ position:'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.6)', alignItems:'center', justifyContent:'center' }}>
-              <Text style={{ color:'#fff', fontWeight:'800', fontSize:12, letterSpacing:1 }}>OUT OF STOCK</Text>
+          {/* Points badge */}
+          {item.point ? (
+            <View style={{ position:'absolute', bottom:8, right:10, backgroundColor:'rgba(0,0,0,0.6)', paddingHorizontal:8, paddingVertical:4, borderRadius:12, flexDirection:'row', alignItems:'center' }}>
+              <Text style={{ color:'#F59E0B', fontSize:10, fontWeight:'700', marginRight:4 }}>★</Text>
+              <Text style={{ color:'#fff', fontSize:10, fontWeight:'700' }}>{item.point} pts</Text>
             </View>
-          )}
+          ) : null}
         </TouchableOpacity>
 
         {/* ── Info ── */}
         <TouchableOpacity 
           activeOpacity={1} 
-          onPress={() => inStock && onSell(item)}
+          onPress={() => onSell(item)}
           style={{ padding: 12 }}
         >
           <Text numberOfLines={2} style={{ fontSize:12, fontWeight:'700', color:C.text, marginBottom:6, lineHeight:17 }}>
             {item.name}
           </Text>
 
-          {/* Stock indicator */}
-          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
-            <View style={{ width:6, height:6, borderRadius:3, backgroundColor: inStock ? '#10B981' : '#EF4444', marginRight:5 }} />
-            <Text style={{ fontSize:10, color:C.muted }}>{inStock ? `${item.stock} in stock` : 'No stock'}</Text>
-          </View>
-
           {/* Share Payment Link button */}
-          <TouchableOpacity onPress={() => inStock && onSell(item)} disabled={!inStock} style={{ borderRadius:12, overflow:'hidden' }}>
+          <TouchableOpacity onPress={() => onSell(item)} style={{ borderRadius:12, overflow:'hidden' }}>
             <LinearGradient
-              colors={inStock ? ['#4338CA', '#6366F1'] : ['#9CA3AF','#9CA3AF']}
+              colors={['#4338CA', '#6366F1']}
               start={[0,0]} end={[1,0]}
               style={{ paddingVertical:9, flexDirection:'row', justifyContent:'center', alignItems:'center' }}
             >
               <Share2 color="#fff" size={12} />
               <Text style={{ color:'#fff', fontWeight:'700', fontSize:11, marginLeft:5, letterSpacing:0.5 }}>
-                {inStock ? 'SHARE LINK' : 'UNAVAILABLE'}
+                SHARE LINK
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -476,8 +470,8 @@ const ProductsScreen = ({ C, navigation }) => {
         </Text>
         <View style={{ flexDirection:'row', gap:10 }}>
           {[
-            { label:'In Stock', value: products.filter(p=>(p.stock??0)>0).length },
             { label:'Categories', value: categories.length - 1 },
+            { label:'Total Points', value: products.reduce((sum, p) => sum + (p.point || 0), 0) },
           ].map((s,i) => (
             <View key={i} style={{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:12, padding:10, alignItems:'center' }}>
               <Text style={{ color:'#fff', fontWeight:'900', fontSize:18 }}>{s.value}</Text>
