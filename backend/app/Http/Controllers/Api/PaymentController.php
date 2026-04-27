@@ -254,30 +254,96 @@ class PaymentController extends Controller
 
         // If the user is a distributor, force the query to only their own sales
         if ($user && $user->role === 'distributor') {
-            // Use the distributor_id from their user model
-            $distributorId = $user->distributor_id ?? $user->id; // depending on your user model setup, maybe $user->distributor->distributor_id
+            $distributorId = $user->distributor_id ?? $user->id;
         }
 
         $query = Payment::with(['product', 'distributor']);
+        
+        // Filter by distributor_id
         if ($distributorId) {
-            $query->where('distributor_id', $distributorId);
+            $query->where('payments.distributor_id', $distributorId);
         }
 
-        $payments = $query->orderByDesc('created_at')->get()->map(fn($p) => [
-            'id'            => $p->id,
-            'tx_ref'        => $p->tx_ref,
-            'product'       => $p->product?->name,
-            'quantity'      => $p->quantity,
-            'amount'        => $p->amount,
-            'commission'    => $p->commission_amount,
-            'customer_name' => $p->customer_name,
-            'customer_email'=> $p->customer_email,
-            'distributor_name' => $p->distributor?->name ?? 'Unknown',
-            'status'        => $p->status,
-            'created_at'    => $p->created_at,
-        ]);
+        // Advanced search filters
+        $search = $request->query('search');
+        $distributorName = $request->query('distributor_name');
+        $productId = $request->query('product_id');
+        $status = $request->query('status');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
 
-        return response()->json(['status' => 'success', 'data' => $payments]);
+        // General search (checks multiple fields)
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('payments.product_id', 'like', "%{$search}%")
+                  ->orWhere('payments.distributor_id', 'like', "%{$search}%")
+                  ->orWhere('payments.customer_name', 'like', "%{$search}%")
+                  ->orWhere('payments.tx_ref', 'like', "%{$search}%")
+                  ->orWhereHas('distributor', function($q2) use ($search) {
+                      $q2->where('name', 'like', "%{$search}%")
+                         ->orWhere('distributor_id', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('product', function($q3) use ($search) {
+                      $q3->where('name', 'like', "%{$search}%")
+                         ->orWhere('id', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Specific distributor name filter
+        if ($distributorName) {
+            $query->whereHas('distributor', function($q) use ($distributorName) {
+                $q->where('name', 'like', "%{$distributorName}%");
+            });
+        }
+
+        // Specific product ID filter
+        if ($productId) {
+            $query->where('payments.product_id', $productId);
+        }
+
+        // Status filter
+        if ($status) {
+            $query->where('payments.status', $status);
+        }
+
+        // Date range filters
+        if ($dateFrom) {
+            $query->whereDate('payments.created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('payments.created_at', '<=', $dateTo);
+        }
+
+        $perPage = $request->query('per_page', 15);
+        $paginator = $query->orderByDesc('payments.created_at')->paginate($perPage);
+
+        $paginator->getCollection()->transform(function($p) {
+            return [
+                'id'            => $p->id,
+                'tx_ref'        => $p->tx_ref,
+                'product'       => $p->product?->name,
+                'quantity'      => $p->quantity,
+                'amount'        => $p->amount,
+                'commission'    => $p->commission_amount,
+                'customer_name' => $p->customer_name,
+                'customer_email'=> $p->customer_email,
+                'distributor_name' => $p->distributor?->name ?? 'Unknown',
+                'status'        => $p->status,
+                'created_at'    => $p->created_at,
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success', 
+            'data'   => $paginator->items(),
+            'meta'   => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+            ]
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
