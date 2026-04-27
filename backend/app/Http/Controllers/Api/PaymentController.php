@@ -205,6 +205,11 @@ class PaymentController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Not found'], 404);
         }
 
+        if ($payment->status === 'pending') {
+            $this->checkAndFinalizePayment($payment);
+            $payment->refresh();
+        }
+
         return response()->json([
             'status'           => $payment->status,
             'tx_ref'           => $payment->tx_ref,
@@ -222,6 +227,12 @@ class PaymentController extends Controller
     {
         $txRef   = $request->query('tx_ref');
         $payment = Payment::where('tx_ref', $txRef)->first();
+        
+        if ($payment && $payment->status === 'pending') {
+            $this->checkAndFinalizePayment($payment);
+            $payment->refresh();
+        }
+
         $status  = $payment?->status ?? 'pending';
 
         return response()->json([
@@ -238,9 +249,16 @@ class PaymentController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
+        $user = $request->user();
         $distributorId = $request->query('distributor_id');
 
-        $query = Payment::with('product')->where('status', 'success');
+        // If the user is a distributor, force the query to only their own sales
+        if ($user && $user->role === 'distributor') {
+            // Use the distributor_id from their user model
+            $distributorId = $user->distributor_id ?? $user->id; // depending on your user model setup, maybe $user->distributor->distributor_id
+        }
+
+        $query = Payment::with(['product', 'distributor']);
         if ($distributorId) {
             $query->where('distributor_id', $distributorId);
         }
@@ -254,6 +272,8 @@ class PaymentController extends Controller
             'commission'    => $p->commission_amount,
             'customer_name' => $p->customer_name,
             'customer_email'=> $p->customer_email,
+            'distributor_name' => $p->distributor?->name ?? 'Unknown',
+            'status'        => $p->status,
             'created_at'    => $p->created_at,
         ]);
 
@@ -276,6 +296,30 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             Log::error('Chapa verify failed: ' . $e->getMessage());
             return false;
+        }
+    }
+
+    private function checkAndFinalizePayment(Payment $payment)
+    {
+        $verified = $this->verifyChapaTransaction($payment->tx_ref);
+
+        if ($verified) {
+            DB::transaction(function () use ($payment) {
+                // Deduct stock
+                Product::where('id', $payment->product_id)->decrement('stock', $payment->quantity);
+
+                // Credit commission to distributor
+                Distributor::where('distributor_id', $payment->distributor_id)
+                    ->increment('income_monthly', $payment->commission_amount);
+                Distributor::where('distributor_id', $payment->distributor_id)
+                    ->increment('income_yearly', $payment->commission_amount);
+
+                $payment->update([
+                    'status'           => 'success',
+                    'webhook_verified' => true,
+                    'commission_paid'  => true,
+                ]);
+            });
         }
     }
 }

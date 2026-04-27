@@ -199,7 +199,21 @@ export const initiatePayment = async (data) => {
     return response.data;
   } catch (error) {
     const errData = error.response?.data;
-    throw new Error(errData?.message ?? errData?.detail ?? 'Payment initiation failed');
+    let errorMsg = errData?.message ?? 'Payment initiation failed';
+    
+    // If it's a Laravel validation error, it might have an 'errors' object
+    if (errData?.errors && typeof errData.errors === 'object') {
+      const firstError = Object.values(errData.errors)[0];
+      if (Array.isArray(firstError)) errorMsg = firstError[0];
+      else if (typeof firstError === 'string') errorMsg = firstError;
+    }
+    
+    // If Chapa or another service returns an object in 'message'
+    if (typeof errorMsg === 'object') {
+      errorMsg = JSON.stringify(errorMsg);
+    }
+
+    throw new Error(errorMsg);
   }
 };
 

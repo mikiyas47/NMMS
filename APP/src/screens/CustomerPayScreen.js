@@ -179,7 +179,7 @@ const ProductPicker = ({ products, selected, onSelect }) => {
 };
 
 // ─── Result Screen ────────────────────────────────────────────────────────────
-const ResultScreen = ({ status, txRef, amount, product, onDone }) => {
+const ResultScreen = ({ status, txRef, amount, product, customerName, customerEmail, onDone }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
@@ -191,7 +191,7 @@ const ResultScreen = ({ status, txRef, amount, product, onDone }) => {
       colors={isSuccess ? ['#064E3B', '#065F46', DARK_BG] : ['#450A0A', '#7F1D1D', DARK_BG]}
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}
     >
-      <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
+      <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center', width: '100%' }}>
         <LinearGradient
           colors={isSuccess ? [SUCCESS, '#34D399'] : [ERROR, '#F87171']}
           style={{ width: 100, height: 100, borderRadius: 50,
@@ -214,6 +214,9 @@ const ResultScreen = ({ status, txRef, amount, product, onDone }) => {
         {isSuccess && (
           <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 20,
             width: '100%', marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+            <Row label="Customer Name" value={customerName} />
+            <Row label="Customer Email" value={customerEmail} />
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 10 }} />
             <Row label="Amount Paid" value={`ETB ${parseFloat(amount).toFixed(2)}`} accent={SUCCESS} />
             <Row label="Transaction Ref" value={txRef} />
             <Row label="Status" value="Verified ✓" accent={SUCCESS} last />
@@ -227,7 +230,7 @@ const ResultScreen = ({ status, txRef, amount, product, onDone }) => {
             style={{ paddingVertical: 16, alignItems: 'center' }}
           >
             <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-              {isSuccess ? 'Done' : 'Try Again'}
+              {isSuccess ? 'New Checkout' : 'Try Again'}
             </Text>
           </LinearGradient>
         </TouchableOpacity>
@@ -238,8 +241,8 @@ const ResultScreen = ({ status, txRef, amount, product, onDone }) => {
 
 const Row = ({ label, value, accent, last }) => (
   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 8, borderBottomWidth: last ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
-    <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>{label}</Text>
+    paddingVertical: 6, borderBottomWidth: last ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{label}</Text>
     <Text style={{ color: accent ?? TEXT, fontWeight: '700', fontSize: 13, maxWidth: '60%', textAlign: 'right' }}
       numberOfLines={1}>{value}</Text>
   </View>
@@ -364,16 +367,15 @@ const CustomerPayScreen = ({ route, navigation }) => {
         txRef={txRef}
         amount={paymentAmount}
         product={selectedProduct?.name ?? ''}
+        customerName={name}
+        customerEmail={email}
         onDone={() => {
-          if (paymentStatus === 'success') {
-            setPaymentStatus(null);
-            setTxRef(null);
-            setPaymentUrl(null);
-            setName(''); setEmail(''); setPhone('');
-            setSelected(null); setQuantity(1);
-          } else {
-            setPaymentStatus(null);
-          }
+          // Reset the form so they can do another checkout immediately
+          setPaymentStatus(null);
+          setTxRef(null);
+          setPaymentUrl(null);
+          setName(''); setEmail(''); setPhone('');
+          setSelected(null); setQuantity(1);
         }}
       />
     );
@@ -409,7 +411,11 @@ const CustomerPayScreen = ({ route, navigation }) => {
           onNavigationStateChange={(state) => {
             // Detect return URL pattern
             if (state.url && state.url.includes('/api/payments/return')) {
-              // Let polling handle the final status
+              // Immediately show the receipt! No loading screens.
+              setPaymentUrl(null);
+              setPaymentStatus('success');
+              setPolling(false);
+              clearInterval(pollRef.current);
             }
           }}
         />

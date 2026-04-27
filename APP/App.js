@@ -10,13 +10,24 @@ import RegistrationScreen from './src/screens/RegistrationScreen';
 import CustomerPayScreen from './src/screens/CustomerPayScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
+import * as Linking from 'expo-linking';
+
 const Stack = createStackNavigator();
+
+const linking = {
+  prefixes: [Linking.createURL('/'), 'nmms-app://'],
+  config: {
+    screens: {
+      CustomerPay: 'pay',
+    },
+  },
+};
 
 function AppNavigator() {
   const { isDark } = useTheme();
   return (
     <>
-      <NavigationContainer>
+      <NavigationContainer linking={linking}>
         <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{ headerShown: false }}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, ShieldCheck, Users, Package, BarChart2,
+  LayoutDashboard, ShieldCheck, Users, Package, BarChart2, DollarSign,
   LogOut, Menu, X, Bell, Sun, Moon, ChevronRight,
 } from 'lucide-react';
 import OverviewPage    from './OverviewPage';
@@ -10,6 +10,7 @@ import OwnersPage      from './OwnersPage';
 import ProspectsPage   from './ProspectsPage';
 import AddProductPage  from './AddProductPage';
 import ReportPage      from './ReportPage';
+import SalesPage       from './SalesPage';
 
 const MENU = [
   { id: 'overview',   label: 'System Overview',     icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
@@ -17,6 +18,7 @@ const MENU = [
   { id: 'prospects',  label: 'Distributors DB',     icon: Users,           grad: ['#10B981','#34D399'] },
   { id: 'product',    label: 'Product Catalog',     icon: Package,         grad: ['#F59E0B','#FCD34D'] },
   { id: 'report',     label: 'System Analytics',    icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
+  { id: 'sales',      label: 'Sales & Transactions',icon: DollarSign,      grad: ['#10B981','#10B981'] },
 ];
 
 const OwnerDashboard = () => {
@@ -40,6 +42,7 @@ const OwnerDashboard = () => {
       case 'prospects': return <ProspectsPage  dark={darkMode} />;
       case 'product':   return <AddProductPage dark={darkMode} />;
       case 'report':    return <ReportPage     dark={darkMode} />;
+      case 'sales':     return <SalesPage      dark={darkMode} />;
       default:          return <OverviewPage   dark={darkMode} />;
     }
   };
