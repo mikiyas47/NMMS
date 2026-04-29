@@ -178,6 +178,81 @@ Route::get('/remove-duplicate-distributor', function () {
     }
 });
 
+// Full flow simulation: reset → double account → refer customer → show result
+Route::get('/test-full-flow/{email}', function ($email) {
+    $dist = \App\Models\Distributor::where('email', $email)->first();
+    if (!$dist) return response()->json(['error' => 'Distributor not found'], 404);
+
+    $distId  = $dist->distributor_id;
+    $product = \App\Models\Product::first();
+    if (!$product) return response()->json(['error' => 'No products in DB'], 404);
+
+    $mlm = app(\App\Services\MlmEngineService::class);
+    $log = [];
+
+    // Step 1: Reset (remove everything except main node)
+    $mainNode = \App\Models\Node::where('distributor_id', $distId)->orderBy('id','asc')->first();
+    if ($mainNode) {
+        $children = \App\Models\Node::where('parent_id', $mainNode->id)->get();
+        foreach ($children as $c) {
+            \App\Models\Account::where('node_id', $c->id)->delete();
+            $c->delete();
+        }
+        $others = \App\Models\Node::where('distributor_id', $distId)->where('id','!=',$mainNode->id)->get();
+        foreach ($others as $o) {
+            \App\Models\Account::where('node_id', $o->id)->delete();
+            $o->delete();
+        }
+        $log[] = 'Reset done. Main node id: ' . $mainNode->id;
+    } else {
+        $log[] = 'No main node — will create fresh';
+    }
+
+    // Step 2: Simulate distributor buying a 2nd account (doubling)
+    try {
+        $secondAccount = $mlm->processPurchase($distId, $product->id);
+        $log[] = 'Doubled account created. Account id: ' . $secondAccount->id . ', Node id: ' . $secondAccount->node_id;
+    } catch (\Exception $e) {
+        $log[] = 'Double failed: ' . $e->getMessage();
+    }
+
+    // Step 3: Simulate a customer referral purchase
+    try {
+        $custAccount = $mlm->processCustomerPurchase(
+            $distId,
+            $product->id,
+            'Test Customer',
+            'testcustomer_sim@example.com',
+            '0900000000'
+        );
+        $log[] = 'Customer node created. Account id: ' . $custAccount->id . ', Node id: ' . $custAccount->node_id;
+    } catch (\Exception $e) {
+        $log[] = 'Customer placement failed: ' . $e->getMessage();
+    }
+
+    // Step 4: Dump the current node structure
+    $allNodes = \App\Models\Node::where('distributor_id', $distId)->with('children')->orderBy('id')->get();
+    $custNode = \App\Models\Node::where('distributor_id', function($q) {
+        $q->select('distributor_id')->from('distributors')->where('email','testcustomer_sim@example.com');
+    })->first();
+
+    $mainNodeFresh  = \App\Models\Node::where('distributor_id', $distId)->orderBy('id','asc')->first();
+    $secondaryNodes = $mainNodeFresh ? \App\Models\Node::where('parent_id', $mainNodeFresh->id)->where('distributor_id', $distId)->get() : [];
+
+    $custParentId = $custNode?->parent_id;
+    $isUnderSecondary = collect($secondaryNodes)->contains('id', $custParentId);
+
+    return response()->json([
+        'log'                   => $log,
+        'main_node'             => $mainNodeFresh,
+        'secondary_nodes'       => $secondaryNodes,
+        'customer_node'         => $custNode,
+        'customer_parent_id'    => $custParentId,
+        'is_under_secondary'    => $isUnderSecondary,
+        'verdict'               => $isUnderSecondary ? '✅ PASS: Customer correctly placed under secondary account!' : '❌ FAIL: Customer NOT under secondary account',
+    ]);
+});
+
 // Temporary: inspect node tree structure for a distributor
 Route::get('/debug-tree/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
