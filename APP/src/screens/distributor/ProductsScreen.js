@@ -18,9 +18,9 @@ import {
   Share,
 } from 'react-native';
 import { ShoppingCart, Search, X, Package, RefreshCw, AlertCircle,
-  CheckCircle, Share2, ExternalLink, CreditCard } from 'lucide-react-native';
+  CheckCircle, Share2, ExternalLink, CreditCard, Zap, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getProducts, getUser } from '../../api/authService';
+import { getProducts, getUser, joinNetwork, getDistributorStatus } from '../../api/authService';
 
 const API_BASE = 'https://nmms-backend.onrender.com';
 
@@ -394,13 +394,23 @@ const ProductsScreen = ({ C, navigation }) => {
   const [sellTarget, setSellTarget]   = useState(null);
   const [distributorId, setDistributorId] = useState(null);
 
-  // Load current distributor id
+  // Load current distributor id + join status
   useEffect(() => {
     getUser().then(u => {
       if (u?.distributor_id) setDistributorId(u.distributor_id);
     });
+    getDistributorStatus().then(res => {
+      setHasJoined(res?.has_joined ?? false);
+      setAccountCount(res?.account_count ?? 0);
+    }).catch(() => {});
   }, []);
   const [viewMedia, setViewMedia]     = useState(null);
+  const [hasJoined, setHasJoined]     = useState(false);
+  const [accountCount, setAccountCount] = useState(0);
+  const [joinModal, setJoinModal]     = useState(false);
+  const [joinProduct, setJoinProduct] = useState(null);
+  const [joinQty, setJoinQty]         = useState(1);
+  const [joining, setJoining]         = useState(false);
   const appState = useRef(AppState.currentState);
 
   // ── Fetch from API ──────────────────────────────────────────────────────────
@@ -451,6 +461,31 @@ const ProductsScreen = ({ C, navigation }) => {
     setFiltered(result);
   }, [search, activeCategory, products]);
 
+  // ── Join Network handler ───────────────────────────────────────────────────
+  const handleJoinNetwork = async () => {
+    if (!joinProduct) return;
+    setJoining(true);
+    try {
+      await joinNetwork({
+        product_id: joinProduct.id,
+        sponsor_id: null,
+        quantity: joinQty,
+      });
+      setJoinModal(false);
+      setHasJoined(true);
+      setAccountCount(prev => prev + joinQty);
+      Alert.alert(
+        '🎉 Welcome to the Network!',
+        `You joined with ${joinQty} account${joinQty > 1 ? 's' : ''}. Your node${joinQty > 1 ? 's have' : ' has'} been placed in the tree.`,
+        [{ text: 'View Tree', onPress: () => {} }, { text: 'OK' }]
+      );
+    } catch (e) {
+      Alert.alert('Join Failed', e.message || 'Could not join the network. Please try again.');
+    } finally {
+      setJoining(false);
+    }
+  };
+
   // ── Sell handler — now opens ShareModal instead of fake alert ───────────────
 
   // ── Render helpers ──────────────────────────────────────────────────────────
@@ -480,6 +515,48 @@ const ProductsScreen = ({ C, navigation }) => {
           ))}
         </View>
       </LinearGradient>
+
+      {/* ── Join Network Banner ── */}
+      {!hasJoined ? (
+        <LinearGradient
+          colors={['#064E3B', '#065F46', '#10B981']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={{ borderRadius: 20, padding: 16, marginBottom: 16, overflow: 'hidden' }}
+        >
+          <View style={{ position: 'absolute', right: -20, top: -20, width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(255,255,255,0.07)' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Zap color="#FCD34D" size={20} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Activate Your MLM Account</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>Purchase a package to join the network and start earning cycles</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={() => { setJoinProduct(products[0] ?? null); setJoinQty(1); setJoinModal(true); }}
+            style={{ marginTop: 12, backgroundColor: '#FCD34D', borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#1F2937', fontWeight: '800', fontSize: 13 }}>Choose Package & Activate →</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+      ) : (
+        <View style={{ backgroundColor: 'rgba(16,185,129,0.1)', borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)', borderRadius: 16, padding: 14, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <CheckCircle color="#10B981" size={20} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: '#10B981', fontWeight: '800', fontSize: 13 }}>Network Active · {accountCount} Account{accountCount > 1 ? 's' : ''}</Text>
+            <Text style={{ color: '#34D399', fontSize: 11, marginTop: 1 }}>You are placed in the MLM tree and earning cycles</Text>
+          </View>
+          {accountCount < 4 && (
+            <TouchableOpacity
+              onPress={() => { setJoinProduct(products[0] ?? null); setJoinQty(1); setJoinModal(true); }}
+              style={{ backgroundColor: '#10B981', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>+ Add</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* Search bar */}
       <View style={{
@@ -626,6 +703,136 @@ const ProductsScreen = ({ C, navigation }) => {
           C={C}
         />
       )}
+
+      {/* ── Join Network Modal ── */}
+      <Modal transparent animationType="slide" visible={joinModal} onRequestClose={() => setJoinModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setJoinModal(false)} />
+          <View style={{
+            backgroundColor: C.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+            paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8,
+            borderTopWidth: 1, borderColor: C.border,
+          }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
+
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+              <LinearGradient colors={['#064E3B', '#10B981']} style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                <Zap color="#FCD34D" size={20} />
+              </LinearGradient>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>Join the MLM Network</Text>
+                <Text style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>Choose your package and number of accounts</Text>
+              </View>
+              <TouchableOpacity onPress={() => setJoinModal(false)} style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: C.inputBg, alignItems: 'center', justifyContent: 'center' }}>
+                <X color={C.muted} size={18} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Product selector */}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1, marginBottom: 10 }}>SELECT PACKAGE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+              {products.map(p => {
+                const active = joinProduct?.id === p.id;
+                return (
+                  <TouchableOpacity key={p.id} onPress={() => setJoinProduct(p)} style={{
+                    width: 140, marginRight: 10, borderRadius: 16, overflow: 'hidden',
+                    borderWidth: 2, borderColor: active ? '#10B981' : C.border,
+                    backgroundColor: active ? 'rgba(16,185,129,0.08)' : C.surface,
+                  }}>
+                    <View style={{ height: 90, backgroundColor: C.inputBg }}>
+                      {p.image
+                        ? <Image source={{ uri: toHttps(p.image) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                        : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Package color={C.muted} size={28} /></View>
+                      }
+                    </View>
+                    <View style={{ padding: 10 }}>
+                      <Text numberOfLines={1} style={{ color: C.text, fontWeight: '700', fontSize: 11, marginBottom: 2 }}>{p.name}</Text>
+                      <Text style={{ color: active ? '#10B981' : C.muted, fontSize: 10 }}>{parseFloat(p.price).toLocaleString()} ETB</Text>
+                      {p.point ? <Text style={{ color: '#F59E0B', fontSize: 10, marginTop: 2 }}>★ {p.point} pts</Text> : null}
+                    </View>
+                    {active && (
+                      <View style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' }}>
+                        <CheckCircle color="#fff" size={14} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Number of accounts */}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1, marginBottom: 10 }}>
+              NUMBER OF ACCOUNTS ({accountCount} / 4 used)
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              {[1, 2, 3, 4].map(n => {
+                const remaining = 4 - accountCount;
+                const disabled = n > remaining;
+                const active = joinQty === n;
+                return (
+                  <TouchableOpacity
+                    key={n} onPress={() => !disabled && setJoinQty(n)}
+                    style={{
+                      flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center',
+                      backgroundColor: active ? '#10B981' : disabled ? C.inputBg : C.surface,
+                      borderWidth: 1.5, borderColor: active ? '#10B981' : C.border,
+                      opacity: disabled ? 0.4 : 1,
+                    }}
+                  >
+                    <Text style={{ color: active ? '#fff' : C.text, fontWeight: '800', fontSize: 16 }}>{n}</Text>
+                    <Text style={{ color: active ? 'rgba(255,255,255,0.7)' : C.muted, fontSize: 9, marginTop: 2 }}>
+                      {n === 1 ? 'Single' : n === 2 ? 'Double' : n === 3 ? 'Triple' : 'Quad'}
+                    </Text>
+                    <Text style={{ color: active ? 'rgba(255,255,255,0.7)' : C.muted, fontSize: 8 }}>
+                      {n * 4} legs
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Summary */}
+            {joinProduct && (
+              <View style={{ backgroundColor: C.inputBg, borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ color: C.muted, fontSize: 12 }}>Package</Text>
+                  <Text style={{ color: C.text, fontWeight: '700', fontSize: 12 }}>{joinProduct.name}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ color: C.muted, fontSize: 12 }}>Accounts</Text>
+                  <Text style={{ color: C.text, fontWeight: '700', fontSize: 12 }}>{joinQty} × = {joinQty * 4} legs</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: C.muted, fontSize: 12 }}>Points</Text>
+                  <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 12 }}>{(joinProduct.point || 0) * joinQty} pts</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Confirm button */}
+            <TouchableOpacity
+              onPress={handleJoinNetwork}
+              disabled={!joinProduct || joining}
+              style={{
+                borderRadius: 16, overflow: 'hidden',
+                opacity: !joinProduct || joining ? 0.6 : 1,
+              }}
+            >
+              <LinearGradient colors={['#064E3B', '#10B981']} start={[0, 0]} end={[1, 0]}
+                style={{ paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                {joining
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Zap color="#FCD34D" size={18} />
+                }
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 10 }}>
+                  {joining ? 'Activating…' : `Activate ${joinQty} Account${joinQty > 1 ? 's' : ''}`}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Media Viewer Modal */}
       {viewMedia && (

@@ -8,12 +8,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   Home, Menu, X, LogOut, User, Users,
   DollarSign, Target, Sun, Moon,
-  ShoppingBag, BookUser, Zap,
+  ShoppingBag, BookUser, Zap, Network,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { logout as logoutApi, getUser } from '../api/authService';
+import { logout as logoutApi, getUser, getWallet } from '../api/authService';
 import DistributorOverview from './distributor/DistributorOverview';
 import MyNetwork          from './distributor/MyNetwork';
+import TreeScreen         from './distributor/TreeScreen';
 import EarningsScreen     from './distributor/EarningsScreen';
 import GoalsScreen        from './distributor/GoalsScreen';
 import ProfileScreen      from './distributor/ProfileScreen';
@@ -27,6 +28,7 @@ const SIDEBAR_WIDTH = 270;
 const MENU = [
   { id: 'overview',  label: 'Overview',    icon: Home,       gradient: ['#6366F1','#818CF8'],  section: 'main' },
   { id: 'network',   label: 'My Network',  icon: Users,      gradient: ['#10B981','#34D399'],  section: 'main' },
+  { id: 'tree',      label: 'My Tree',     icon: Network,    gradient: ['#3B82F6','#60A5FA'],  section: 'main' },
   { id: 'contacts',  label: 'Contacts',    icon: BookUser,   gradient: ['#F59E0B','#FBBF24'],  section: 'main' },
   { id: 'products',  label: 'Products',    icon: ShoppingBag,gradient: ['#8B5CF6','#A78BFA'],  section: 'main' },
   { id: 'earnings',  label: 'Earnings',    icon: DollarSign, gradient: ['#EF4444','#F97316'],  section: 'finance' },
@@ -37,7 +39,7 @@ const MENU = [
 // ─── Bottom tab bar items (most-used) ────────────────────────────────────────
 const TABS = [
   { id: 'overview',  icon: Home,       label: 'Home' },
-  { id: 'contacts',  icon: BookUser,   label: 'Contacts' },
+  { id: 'tree',      icon: Network,    label: 'Tree' },
   { id: 'products',  icon: ShoppingBag,label: 'Products' },
   { id: 'earnings',  icon: DollarSign, label: 'Earnings' },
   { id: 'profile',   icon: User,       label: 'Profile' },
@@ -62,12 +64,20 @@ const DistributorDashboard = ({ navigation }) => {
   const [active, setActive]           = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userName, setUserName]       = useState('');
+  const [userRank, setUserRank]       = useState('None');
   const slideAnim   = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
-  // Load user name from storage
+  const RANK_ICONS  = { None:'🌱', MT:'⭐', TT:'🔥', NTB:'🌿', IBB:'💎', GEB:'👑' };
+  const RANK_LABELS = { None:'Unranked', MT:'Market Trainee', TT:'Team Trainee', NTB:'Natl. Team Builder', IBB:'Intl. Business Builder', GEB:'Global Empire Builder' };
+  const RANK_NEXT   = { None:'MT', MT:'TT', TT:'NTB', NTB:'IBB', IBB:'GEB', GEB:null };
+
+  // Load user name and rank from storage + API
   useEffect(() => {
     getUser().then(u => { if (u?.name) setUserName(u.name.split(' ')[0]); });
+    getWallet().then(res => {
+      if (res?.stats?.rank) setUserRank(res.stats.rank);
+    }).catch(() => {});
   }, []);
 
   const openSidebar = () => {
@@ -97,6 +107,7 @@ const DistributorDashboard = ({ navigation }) => {
     switch (active) {
       case 'overview':  return <DistributorOverview C={C} />;
       case 'network':   return <MyNetwork C={C} />;
+      case 'tree':      return <TreeScreen C={C} />;
       case 'contacts':  return <ContactsScreen C={C} />;
       case 'products':  return <ProductsScreen C={C} navigation={navigation} />;
       case 'earnings':  return <EarningsScreen C={C} />;
@@ -284,12 +295,14 @@ const DistributorDashboard = ({ navigation }) => {
                 paddingHorizontal: 12, paddingVertical: 8,
                 borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
               }}>
-                <Zap color="#FCD34D" size={14} />
+                <Text style={{ fontSize: 16 }}>{RANK_ICONS[userRank] ?? '🌱'}</Text>
                 <Text style={{ color: '#FCD34D', fontSize: 12, fontWeight: '800', marginLeft: 6 }}>
-                  ⭐ Silver Member
+                  {RANK_LABELS[userRank] ?? 'Unranked'}
                 </Text>
                 <View style={{ flex: 1 }} />
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>Next: Gold →</Text>
+                {RANK_NEXT[userRank] && (
+                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>Next: {RANK_NEXT[userRank]} →</Text>
+                )}
               </View>
             </LinearGradient>
 

@@ -13,5 +13,8 @@ class Product extends Model
         'description',
         'image',
         'point',
+        'referral_rate',
+        'cycle_rate',
+        'weekly_cap',
     ];
 }

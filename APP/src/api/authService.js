@@ -245,4 +245,41 @@ export const getSalesHistory = async (distributorId) => {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── MLM Wallet & Stats ────────────────────────────────────────────────────────
+export const getWallet = async () => {
+  const response = await apiClient.get('/wallet');
+  return response.data;
+};
+
+export const runCycleEngine = async () => {
+  const response = await apiClient.post('/wallet/run-cycle');
+  return response.data;
+};
+
+// ── Tree ──────────────────────────────────────────────────────────────────────
+export const getMyTree = async () => {
+  const response = await apiClient.get('/tree');
+  return response.data;
+};
+
+export const getSubtreeData = async (nodeId) => {
+  const response = await apiClient.get(`/tree/${nodeId}`);
+  return response.data;
+};
+// ── Distributor MLM Join ──────────────────────────────────────────────────────
+/**
+ * Join the MLM network by purchasing a product package.
+ * quantity: 1=single, 2=double, 3=triple, 4=quadruple (more legs)
+ */
+export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
+  const response = await apiClient.post('/distributor/join', { product_id, sponsor_id, quantity });
+  return response.data;
+};
+
+export const getDistributorStatus = async () => {
+  const response = await apiClient.get('/distributor/status');
+  return response.data;
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default apiClient;

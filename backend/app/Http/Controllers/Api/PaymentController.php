@@ -175,6 +175,18 @@ class PaymentController extends Controller
                         ->increment('income_yearly', $payment->commission_amount);
 
                     $payment->update(['commission_paid' => true]);
+                    
+                    try {
+                        $mlmEngine = app(\App\Services\MlmEngineService::class);
+                        // Customer purchase: just commission + points, no node creation
+                        $mlmEngine->processCustomerPurchase($payment->distributor_id, $payment->product_id);
+                        $mlmEngine->runCycleEngine($payment->distributor_id);
+                        $mlmEngine->runRankCheck($payment->distributor_id);
+                    } catch (\Exception $e) {
+                        Log::error('Mlm Engine Error: ' . $e->getMessage());
+                    }
+                } else {
+                    $payment->update(['status' => 'failed', 'chapa_payload' => $data]);
                 }
             } else {
                 $payment->update(['status' => 'failed', 'chapa_payload' => $data]);
@@ -359,7 +371,7 @@ class PaymentController extends Controller
     {
         $verified = $this->verifyChapaTransaction($payment->tx_ref);
 
-        if ($verified) {
+        if ($verified && $payment->status !== 'success') {
             DB::transaction(function () use ($payment) {
                 // Credit commission to distributor
                 Distributor::where('distributor_id', $payment->distributor_id)
@@ -372,6 +384,16 @@ class PaymentController extends Controller
                     'webhook_verified' => true,
                     'commission_paid'  => true,
                 ]);
+                
+                try {
+                    $mlmEngine = app(\App\Services\MlmEngineService::class);
+                    // Customer purchase: commission + points only
+                    $mlmEngine->processCustomerPurchase($payment->distributor_id, $payment->product_id);
+                    $mlmEngine->runCycleEngine($payment->distributor_id);
+                    $mlmEngine->runRankCheck($payment->distributor_id);
+                } catch (\Exception $e) {
+                    Log::error('Mlm Engine Error in checkAndFinalizePayment: ' . $e->getMessage());
+                }
             });
         }
     }

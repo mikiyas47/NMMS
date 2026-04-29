@@ -68,6 +68,30 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Tree ──────────────────────────────────────────────────────────────────────
+use App\Http\Controllers\Api\TreeController;
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/tree', [TreeController::class, 'myTree']);
+    Route::get('/tree/{nodeId}', [TreeController::class, 'getSubtree']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Wallet & MLM Stats ────────────────────────────────────────────────────────
+use App\Http\Controllers\Api\WalletController;
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/wallet', [WalletController::class, 'show']);
+    Route::post('/wallet/run-cycle', [WalletController::class, 'runCycle']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Distributor Join (MLM Network Enrollment) ─────────────────────────────────
+use App\Http\Controllers\Api\DistributorJoinController;
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/distributor/join',   [DistributorJoinController::class, 'join']);
+    Route::get('/distributor/status',  [DistributorJoinController::class, 'status']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 

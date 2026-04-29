@@ -6,6 +6,10 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Models\Wallet;
+use App\Models\Stat;
+use App\Models\Account;
+use App\Models\Node;
 
 class Distributor extends Authenticatable
 {
@@ -110,5 +114,29 @@ class Distributor extends Authenticatable
     public function closingAttempts()
     {
         return $this->hasMany(ClosingAttempt::class, 'distributor_id', 'distributor_id');
+    }
+
+    /** Wallet (1-to-1) */
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class, 'distributor_id', 'distributor_id');
+    }
+
+    /** MLM Stats (1-to-1) */
+    public function stat()
+    {
+        return $this->hasOne(Stat::class, 'distributor_id', 'distributor_id');
+    }
+
+    /** MLM Accounts (1-to-many: one per product purchased) */
+    public function accounts()
+    {
+        return $this->hasMany(Account::class, 'distributor_id', 'distributor_id');
+    }
+
+    /** Placement nodes in the binary tree */
+    public function nodes()
+    {
+        return $this->hasMany(Node::class, 'distributor_id', 'distributor_id');
     }
 }
