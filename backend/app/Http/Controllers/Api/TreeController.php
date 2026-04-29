@@ -61,6 +61,9 @@ class TreeController extends Controller
 
         $stat = Stat::where('distributor_id', $node->distributor_id)->first();
         
+        $account = Account::where('node_id', $node->id)->with('product')->first();
+        $productPoints = $account && $account->product ? $account->product->point : 0;
+        
         $childrenData = [];
         if ($depth > 0) {
             foreach ($node->children as $child) {
@@ -71,9 +74,12 @@ class TreeController extends Controller
         return [
             'id' => $node->id,
             'distributor_name' => $node->distributor->name ?? 'Unknown',
+            'distributor_email' => $node->distributor->email ?? 'Unknown',
+            'distributor_phone' => $node->distributor->phone ?? 'Unknown',
             'distributor_id' => $node->distributor_id,
             'leg' => $node->leg,
             'rank' => $stat->rank ?? 'None',
+            'product_points' => $productPoints,
             'left_points' => $stat->left_points ?? 0,
             'right_points' => $stat->right_points ?? 0,
             'total_points' => ($stat->left_points ?? 0) + ($stat->right_points ?? 0) + ($stat->carry_left ?? 0) + ($stat->carry_right ?? 0),
