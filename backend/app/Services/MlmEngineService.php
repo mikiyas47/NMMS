@@ -144,9 +144,9 @@ class MlmEngineService
                 $sponsorProduct = Account::where('distributor_id', $sponsorId)->with('product')->first()?->product;
                 if ($sponsorProduct) {
                     // Use sponsor's referral rate and sold product's point
-                    $rate = $sponsorProduct->referral_rate ?? 0.10;
+                    $rate = $sponsorProduct->referral_rate ?? 10;
                     $points = $product->point ?? 0;
-                    $commission = $rate * $points;
+                    $commission = ($rate / 100) * $points;
                     
                     if ($commission > 0) {
                         $sponsorWallet = Wallet::firstOrCreate(['distributor_id' => $sponsorId]);
@@ -292,9 +292,9 @@ class MlmEngineService
                 ->with('product')
                 ->first();
             if ($sponsorAccount && $sponsorAccount->product) {
-                $rate       = $sponsorAccount->product->referral_rate ?? 0.10;
+                $rate       = $sponsorAccount->product->referral_rate ?? 10;
                 $points     = $product->point ?? 0;
-                $commission = $rate * $points;
+                $commission = ($rate / 100) * $points;
 
                 if ($commission > 0) {
                     $sponsorWallet = Wallet::firstOrCreate(['distributor_id' => $distributorId]);
