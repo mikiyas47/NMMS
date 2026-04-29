@@ -231,10 +231,12 @@ Route::get('/test-full-flow/{email}', function ($email) {
     }
 
     // Step 4: Dump the current node structure
-    $allNodes = \App\Models\Node::where('distributor_id', $distId)->with('children')->orderBy('id')->get();
-    $custNode = \App\Models\Node::where('distributor_id', function($q) {
-        $q->select('distributor_id')->from('distributors')->where('email','testcustomer_sim@example.com');
-    })->first();
+    $custDistributor = \App\Models\Distributor::where('email','testcustomer_sim@example.com')->first();
+    $custNode = $custDistributor
+        ? \App\Models\Node::where('distributor_id', $custDistributor->distributor_id)
+            ->orderBy('id', 'desc')
+            ->first()
+        : null;
 
     $mainNodeFresh  = \App\Models\Node::where('distributor_id', $distId)->orderBy('id','asc')->first();
     $secondaryNodes = $mainNodeFresh ? \App\Models\Node::where('parent_id', $mainNodeFresh->id)->where('distributor_id', $distId)->get() : [];
