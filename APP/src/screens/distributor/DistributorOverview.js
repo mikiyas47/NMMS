@@ -47,9 +47,13 @@ const DistributorOverview = ({ C }) => {
   const load = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(false);
     try {
-      const [userData, wData] = await Promise.all([getUser(), getWallet()]);
+      const [userData, wData] = await Promise.all([getUser(), getWallet().catch(e => {
+        // 404 = wallet route not deployed yet or new distributor — use empty defaults
+        if (e?.response?.status === 404) return null;
+        throw e;
+      })]);
       if (userData?.name) setUserName(userData.name.split(' ')[0]);
-      setWalletData(wData);
+      if (wData) setWalletData(wData);
     } catch (e) {
       console.log('Overview load error:', e.message);
     } finally {

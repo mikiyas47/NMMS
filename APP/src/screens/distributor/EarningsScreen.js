@@ -76,7 +76,13 @@ const EarningsScreen = ({ C }) => {
       setData(res);
       setError(null);
     } catch (e) {
-      setError(e.message || 'Failed to load earnings data.');
+      if (e?.response?.status === 404) {
+        // Route not deployed yet or new distributor with no wallet — show empty state
+        setData(null);
+        setError(null);
+      } else {
+        setError(e.message || 'Failed to load earnings data.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

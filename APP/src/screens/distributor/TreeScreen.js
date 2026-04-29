@@ -111,6 +111,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
 const TreeScreen = ({ C }) => {
   const [treeData, setTreeData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notJoined, setNotJoined] = useState(false);
   const [error, setError] = useState(null);
   const [scale, setScale] = useState(1);
 
@@ -121,12 +122,19 @@ const TreeScreen = ({ C }) => {
   const fetchTree = async () => {
     try {
       setLoading(true);
+      setNotJoined(false);
+      setError(null);
       const res = await getMyTree();
       setTreeData(res.tree);
-      setError(null);
     } catch (err) {
-      console.log('Tree error:', err.message);
-      setError(err.message || 'Failed to load tree. Have you purchased a product?');
+      const status = err?.response?.status;
+      if (status === 404) {
+        // Distributor hasn't joined the network yet — not an error
+        setNotJoined(true);
+      } else {
+        console.log('Tree error:', err.message);
+        setError(err.message || 'Failed to load tree.');
+      }
     } finally {
       setLoading(false);
     }
@@ -148,7 +156,7 @@ const TreeScreen = ({ C }) => {
 
   const handleResetZoom = () => {
     setScale(1);
-    fetchTree(); // reset to root
+    fetchTree();
   };
 
   if (loading && !treeData) {
@@ -160,12 +168,44 @@ const TreeScreen = ({ C }) => {
     );
   }
 
+  // ── Not joined yet ──
+  if (notJoined) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+        <LinearGradient
+          colors={['#064E3B', '#065F46', '#10B981']}
+          style={{ width: 90, height: 90, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}
+        >
+          <Network color="#FCD34D" size={42} />
+        </LinearGradient>
+        <Text style={{ color: C.text, fontSize: 20, fontWeight: '900', textAlign: 'center', marginBottom: 8 }}>
+          You're Not in the Tree Yet
+        </Text>
+        <Text style={{ color: C.muted, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+          Purchase a product package from the Products screen to activate your account and get placed in the MLM network tree.
+        </Text>
+        <LinearGradient
+          colors={['#064E3B', '#10B981']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={{ borderRadius: 16, paddingVertical: 14, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+        >
+          <Text style={{ color: '#FCD34D', fontSize: 18 }}>⚡</Text>
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Go to Products → Activate</Text>
+        </LinearGradient>
+        <TouchableOpacity onPress={fetchTree} style={{ marginTop: 16 }}>
+          <Text style={{ color: C.muted, fontSize: 12 }}>Tap to refresh</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Real error ──
   if (error) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
         <Network color={C.muted} size={48} />
         <Text style={{ color: C.red, marginTop: 12, textAlign: 'center', fontWeight: '600' }}>{error}</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={fetchTree}
           style={{ marginTop: 20, backgroundColor: C.accent, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}
         >
