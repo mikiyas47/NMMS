@@ -224,26 +224,6 @@ const TreeScreen = ({ C, navigate }) => {
         <Text style={{ color: C.muted, fontSize: 13 }}>View and manage your 4-leg downline</Text>
       </View>
 
-      {/* Recommendation Banner */}
-      <LinearGradient
-        colors={['rgba(99,102,241,0.15)', 'rgba(99,102,241,0.05)']}
-        style={{ borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <Zap color="#818CF8" size={20} style={{ marginRight: 8 }} />
-          <Text style={{ color: '#E0E7FF', fontSize: 15, fontWeight: '800' }}>Increase Referral Spaces!</Text>
-        </View>
-        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
-          Double, triple, or quadruple your account by purchasing more products! Each new account adds another 4 empty legs under your main account, allowing you to build a wider network and maximize earnings.
-        </Text>
-        <TouchableOpacity
-          onPress={() => navigate('products')}
-          style={{ backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Get More Accounts (Buy Products)</Text>
-        </TouchableOpacity>
-      </LinearGradient>
-
       {/* Controls */}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginBottom: 10, zIndex: 10 }}>
         <TouchableOpacity onPress={() => handleZoom(0.2)} style={{ backgroundColor: C.surface, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
