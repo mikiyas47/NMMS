@@ -217,12 +217,13 @@ Route::get('/test-full-flow/{email}', function ($email) {
     }
 
     // Step 3: Simulate a customer referral purchase
+    $uniqueCustEmail = 'testcustomer_' . uniqid() . '@example.com';
     try {
         $custAccount = $mlm->processCustomerPurchase(
             $distId,
             $product->id,
             'Test Customer',
-            'testcustomer_sim@example.com',
+            $uniqueCustEmail,
             '0900000000'
         );
         $log[] = 'Customer node created. Account id: ' . $custAccount->id . ', Node id: ' . $custAccount->node_id;
@@ -231,7 +232,7 @@ Route::get('/test-full-flow/{email}', function ($email) {
     }
 
     // Step 4: Dump the current node structure
-    $custDistributor = \App\Models\Distributor::where('email','testcustomer_sim@example.com')->first();
+    $custDistributor = \App\Models\Distributor::where('email', $uniqueCustEmail)->first();
     $custNode = $custDistributor
         ? \App\Models\Node::where('distributor_id', $custDistributor->distributor_id)
             ->orderBy('id', 'desc')
