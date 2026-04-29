@@ -178,6 +178,30 @@ Route::get('/remove-duplicate-distributor', function () {
     }
 });
 
+// Temporary: inspect node tree structure for a distributor
+Route::get('/debug-tree/{email}', function ($email) {
+    $dist = \App\Models\Distributor::where('email', $email)->first();
+    if (!$dist) return response()->json(['error' => 'Distributor not found'], 404);
+
+    $distId = $dist->distributor_id;
+    $nodes = \App\Models\Node::where('distributor_id', $distId)->orderBy('id')->get();
+    $accounts = \App\Models\Account::where('distributor_id', $distId)->get();
+
+    $mainNode = $nodes->first();
+    $secondaryNodes = $mainNode
+        ? \App\Models\Node::where('parent_id', $mainNode->id)->where('distributor_id', $distId)->get()
+        : [];
+
+    return response()->json([
+        'distributor_id' => $distId,
+        'all_nodes'      => $nodes,
+        'accounts'       => $accounts,
+        'main_node'      => $mainNode,
+        'secondary_nodes_count' => collect($secondaryNodes)->count(),
+        'secondary_nodes'       => $secondaryNodes,
+    ]);
+});
+
 // Temporary route to reset a specific distributor's tree (remove duplicates from testing)
 Route::get('/reset-tree/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
