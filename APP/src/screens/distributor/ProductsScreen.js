@@ -246,7 +246,7 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
 };
 
 // ─── Share Payment Modal ───────────────────────────────────────────────────────
-const ShareModal = ({ product, distributorId, accountCount, navigation, onClose, C }) => {
+const ShareModal = ({ product, distributorId, accountCount, navigation, onClose, onBuyMore, C }) => {
   const slideAnim = useRef(new Animated.Value(400)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -359,17 +359,29 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
 
           {/* Account Recommendation */}
           {accountCount < 4 && (
-            <View style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(245,158,11,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                <Users color="#F59E0B" size={16} />
+            <LinearGradient
+              colors={['rgba(99,102,241,0.15)', 'rgba(99,102,241,0.05)']}
+              style={{ borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Zap color="#818CF8" size={20} style={{ marginRight: 8 }} />
+                <Text style={{ color: '#E0E7FF', fontSize: 15, fontWeight: '800' }}>Increase Referral Spaces!</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 12 }}>Pro Tip: Increase your referals!</Text>
-                <Text style={{ color: C.muted, fontSize: 11, marginTop: 2, lineHeight: 15 }}>
-                  You currently have {accountCount} account{accountCount > 1 ? 's' : ''}. Double or Triple your account to unlock up to 16 referral legs and earn more from spill-overs!
-                </Text>
-              </View>
-            </View>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
+                Double, triple, or quadruple your account by purchasing more products! Each new account adds another 4 empty legs under your main account, allowing you to build a wider network and maximize earnings.
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  close();
+                  setTimeout(() => {
+                    if (onBuyMore) onBuyMore();
+                  }, 300);
+                }}
+                style={{ backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Get More Accounts (Buy Products)</Text>
+              </TouchableOpacity>
+            </LinearGradient>
           )}
 
           {/* Action buttons */}
@@ -716,6 +728,12 @@ const ProductsScreen = ({ C, navigation }) => {
           accountCount={accountCount}
           navigation={navigation}
           onClose={() => setSellTarget(null)}
+          onBuyMore={() => {
+            navigation.navigate('CustomerPay', {
+              distributor_id: distributorId,
+              product_id: sellTarget?.id,
+            });
+          }}
           C={C}
         />
       )}
