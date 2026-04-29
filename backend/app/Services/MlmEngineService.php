@@ -187,24 +187,150 @@ class MlmEngineService
     }
 
     /**
-     * Process a CUSTOMER purchase.
-     * Creates a new distributor account for the customer and places them in the tree under the referring distributor.
+     * Process a CUSTOMER purchase via referral link or checkout.
+     *
+     * Placement priority:
+     *  1. Find the sponsor's SECONDARY accounts (doubled/tripled nodes that are
+     *     direct children of the sponsor's main node AND owned by the sponsor).
+     *  2. BFS through those secondary nodes to find an available leg.
+     *  3. If no secondary account exists yet, fall back to the sponsor's main node.
      */
     public function processCustomerPurchase($distributorId, $productId, $customerName, $customerEmail, $customerPhone)
     {
-        // 1. Create a distributor account for the customer
-        $newDist = Distributor::firstOrCreate(
-            ['email' => $customerEmail],
-            [
-                'name' => $customerName,
-                'phone' => $customerPhone,
-                'password' => bcrypt('password123'),
-                'join_date' => now(),
-            ]
-        );
+        DB::beginTransaction();
+        try {
+            $product = Product::findOrFail($productId);
 
-        // 2. Treat this exactly like a standard purchase by the new distributor, sponsored by the referring distributor
-        return $this->processPurchase($newDist->distributor_id, $productId, $distributorId);
+            // 1. Create or find the customer as a distributor record
+            $newDist = Distributor::firstOrCreate(
+                ['email' => $customerEmail],
+                [
+                    'name'      => $customerName,
+                    'phone'     => $customerPhone,
+                    'password'  => bcrypt('password123'),
+                    'join_date' => now(),
+                ]
+            );
+
+            // 2. Ensure wallet + stats for the new customer
+            Wallet::firstOrCreate(['distributor_id' => $newDist->distributor_id]);
+            Stat::firstOrCreate(['distributor_id'   => $newDist->distributor_id]);
+
+            // 3. Locate the sponsor's MAIN node (first/oldest node belonging to sponsor)
+            $sponsorMainNode = Node::where('distributor_id', $distributorId)
+                ->orderBy('id', 'asc')
+                ->first();
+
+            // 4. If sponsor has no main node yet, create one for them
+            if (!$sponsorMainNode) {
+                $companyRoot = Node::whereNull('parent_id')->first();
+                if ($companyRoot) {
+                    $rootPlacement = $this->findPlacementNode($companyRoot->id);
+                    $sponsorMainNode = Node::create([
+                        'parent_id'      => $rootPlacement->id,
+                        'distributor_id' => $distributorId,
+                        'leg'            => $rootPlacement->children()->count() + 1,
+                    ]);
+                } else {
+                    $sponsorMainNode = Node::create([
+                        'parent_id'      => null,
+                        'distributor_id' => $distributorId,
+                        'leg'            => 1,
+                    ]);
+                }
+                // Also create account for the sponsor since they didn't have one
+                Account::firstOrCreate(
+                    ['distributor_id' => $distributorId, 'node_id' => $sponsorMainNode->id],
+                    ['product_id' => $productId, 'sponsor_id' => null]
+                );
+            }
+
+            // 5. Find secondary account nodes: direct children of the main node that
+            //    are also owned by the same sponsor (these are the "doubled" accounts).
+            $secondaryNodes = Node::where('parent_id', $sponsorMainNode->id)
+                ->where('distributor_id', $distributorId)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            // 6. Determine the placement node
+            $placementNode = null;
+
+            if ($secondaryNodes->isNotEmpty()) {
+                // Try to find an available leg in any secondary account (BFS within each)
+                foreach ($secondaryNodes as $secNode) {
+                    $candidate = $this->findPlacementNode($secNode->id);
+                    if ($candidate) {
+                        $placementNode = $candidate;
+                        break;
+                    }
+                }
+            }
+
+            // 7. Fall back to main node if no secondary account had space
+            if (!$placementNode) {
+                $placementNode = $this->findPlacementNode($sponsorMainNode->id);
+            }
+
+            // 8. Create the customer's node
+            $leg     = $placementNode->children()->count() + 1;
+            $newNode = Node::create([
+                'parent_id'      => $placementNode->id,
+                'distributor_id' => $newDist->distributor_id,
+                'leg'            => $leg,
+            ]);
+
+            // 9. Create the customer's account record
+            $account = Account::create([
+                'distributor_id' => $newDist->distributor_id,
+                'node_id'        => $newNode->id,
+                'product_id'     => $productId,
+                'sponsor_id'     => $distributorId,
+            ]);
+
+            // 10. Referral commission to sponsor
+            $sponsorAccount = Account::where('distributor_id', $distributorId)
+                ->with('product')
+                ->first();
+            if ($sponsorAccount && $sponsorAccount->product) {
+                $rate       = $sponsorAccount->product->referral_rate ?? 0.10;
+                $points     = $product->point ?? 0;
+                $commission = $rate * $points;
+
+                if ($commission > 0) {
+                    $sponsorWallet = Wallet::firstOrCreate(['distributor_id' => $distributorId]);
+                    $sponsorWallet->balance      += $commission;
+                    $sponsorWallet->total_earned += $commission;
+                    $sponsorWallet->save();
+                }
+            }
+
+            // 11. Propagate points up the tree
+            $pointsToPropagate = $product->point ?? 0;
+            if ($pointsToPropagate > 0) {
+                $currentNode = $newNode;
+                while ($currentNode->parent_id) {
+                    $parent = Node::find($currentNode->parent_id);
+                    if (!$parent) break;
+
+                    $parentStat = Stat::firstOrCreate(['distributor_id' => $parent->distributor_id]);
+                    if ($currentNode->leg <= 2) {
+                        $parentStat->left_points  += $pointsToPropagate;
+                    } else {
+                        $parentStat->right_points += $pointsToPropagate;
+                    }
+                    $parentStat->save();
+
+                    $currentNode = $parent;
+                }
+            }
+
+            DB::commit();
+            return $account;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
 
     /**
