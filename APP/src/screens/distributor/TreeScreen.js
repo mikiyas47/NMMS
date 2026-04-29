@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Network, ZoomIn, ZoomOut, Maximize, User, Zap } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
 import { getMyTree, getSubtreeData } from '../../api/authService';
 
 const { width, height } = Dimensions.get('window');
@@ -56,26 +55,25 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
         <Text style={{ color: rankColors[0], fontSize: 9, fontWeight: '700' }}>{node.rank}</Text>
       </TouchableOpacity>
 
-      {/* Children Container */}
-      {node.children && node.children.length > 0 && (
+      {/* Children Container (Show 4 legs if children exist OR if it's the end of the loaded tree with no more to load) */}
+      {(!node.has_more || (node.children && node.children.length > 0)) && (
         <>
           <View style={{ width: 2, height: 15, backgroundColor: C.border }} />
           <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-            {/* Horizontal connection line if multiple children */}
-            {node.children.length > 1 && (
-              <View style={{
-                position: 'absolute',
-                top: 0,
-                left: '10%',
-                right: '10%',
-                height: 2,
-                backgroundColor: C.border,
-              }} />
-            )}
+            {/* Horizontal connection line */}
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              left: '12%',
+              right: '12%',
+              height: 2,
+              backgroundColor: C.border,
+            }} />
             
             {/* Render 4 legs (pad with empty if needed) */}
             {[1, 2, 3, 4].map((leg) => {
-              const child = node.children.find(c => c && c.leg === leg);
+              const childrenArray = node.children || [];
+              const child = childrenArray.find(c => c && c.leg === leg);
               return (
                 <View key={`leg-${leg}`} style={{ alignItems: 'center', paddingHorizontal: 2 }}>
                   {child ? (
@@ -109,8 +107,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
   );
 };
 
-const TreeScreen = ({ C }) => {
-  const navigation = useNavigation();
+const TreeScreen = ({ C, navigate }) => {
   const [treeData, setTreeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notJoined, setNotJoined] = useState(false);
@@ -186,7 +183,7 @@ const TreeScreen = ({ C }) => {
         <Text style={{ color: C.muted, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
           Purchase a product package from the Products screen to activate your account and get placed in the MLM network tree.
         </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Products')}>
+        <TouchableOpacity onPress={() => navigate('products')}>
           <LinearGradient
             colors={['#064E3B', '#10B981']}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
@@ -240,7 +237,7 @@ const TreeScreen = ({ C }) => {
           Double, triple, or quadruple your account by purchasing more products! Each new account adds another 4 empty legs under your main account, allowing you to build a wider network and maximize earnings.
         </Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('Products')}
+          onPress={() => navigate('products')}
           style={{ backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
         >
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Get More Accounts (Buy Products)</Text>
