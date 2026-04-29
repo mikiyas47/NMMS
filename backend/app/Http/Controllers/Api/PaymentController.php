@@ -178,8 +178,14 @@ class PaymentController extends Controller
                     
                     try {
                         $mlmEngine = app(\App\Services\MlmEngineService::class);
-                        // Customer purchase: just commission + points, no node creation
-                        $mlmEngine->processCustomerPurchase($payment->distributor_id, $payment->product_id);
+                        // Customer purchase: creates node + commissions + points
+                        $mlmEngine->processCustomerPurchase(
+                            $payment->distributor_id, 
+                            $payment->product_id,
+                            $payment->customer_name,
+                            $payment->customer_email,
+                            $payment->customer_phone
+                        );
                         $mlmEngine->runCycleEngine($payment->distributor_id);
                         $mlmEngine->runRankCheck($payment->distributor_id);
                     } catch (\Exception $e) {
@@ -387,8 +393,14 @@ class PaymentController extends Controller
                 
                 try {
                     $mlmEngine = app(\App\Services\MlmEngineService::class);
-                    // Customer purchase: commission + points only
-                    $mlmEngine->processCustomerPurchase($payment->distributor_id, $payment->product_id);
+                    // Customer purchase: creates node + commissions + points
+                    $mlmEngine->processCustomerPurchase(
+                        $payment->distributor_id, 
+                        $payment->product_id,
+                        $payment->customer_name,
+                        $payment->customer_email,
+                        $payment->customer_phone
+                    );
                     $mlmEngine->runCycleEngine($payment->distributor_id);
                     $mlmEngine->runRankCheck($payment->distributor_id);
                 } catch (\Exception $e) {

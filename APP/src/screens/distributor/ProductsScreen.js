@@ -246,7 +246,7 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
 };
 
 // ─── Share Payment Modal ───────────────────────────────────────────────────────
-const ShareModal = ({ product, distributorId, navigation, onClose, C }) => {
+const ShareModal = ({ product, distributorId, accountCount, navigation, onClose, C }) => {
   const slideAnim = useRef(new Animated.Value(400)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -341,7 +341,7 @@ const ShareModal = ({ product, distributorId, navigation, onClose, C }) => {
           </View>
 
           {/* Commission preview */}
-          <View style={{ backgroundColor:'rgba(16,185,129,0.08)', borderRadius:14, padding:14, marginBottom:20,
+          <View style={{ backgroundColor:'rgba(16,185,129,0.08)', borderRadius:14, padding:14, marginBottom:16,
             borderWidth:1, borderColor:'rgba(16,185,129,0.2)', flexDirection:'row', alignItems:'center' }}>
             <View style={{ width:36, height:36, borderRadius:10, backgroundColor:'rgba(16,185,129,0.15)',
               alignItems:'center', justifyContent:'center', marginRight:12 }}>
@@ -356,6 +356,21 @@ const ShareModal = ({ product, distributorId, navigation, onClose, C }) => {
             <View style={{ flex:1 }} />
             <Text style={{ color:C.muted, fontSize:10, textAlign:'right' }}>Credited{`\n`}automatically</Text>
           </View>
+
+          {/* Account Recommendation */}
+          {accountCount < 4 && (
+            <View style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(245,158,11,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                <Users color="#F59E0B" size={16} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 12 }}>Pro Tip: Increase your referals!</Text>
+                <Text style={{ color: C.muted, fontSize: 11, marginTop: 2, lineHeight: 15 }}>
+                  You currently have {accountCount} account{accountCount > 1 ? 's' : ''}. Double or Triple your account to unlock up to 16 referral legs and earn more from spill-overs!
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Action buttons */}
           <TouchableOpacity onPress={handleShareLink} style={{ borderRadius:16, overflow:'hidden', marginBottom:12 }}>
@@ -698,6 +713,7 @@ const ProductsScreen = ({ C, navigation }) => {
         <ShareModal
           product={sellTarget}
           distributorId={distributorId}
+          accountCount={accountCount}
           navigation={navigation}
           onClose={() => setSellTarget(null)}
           C={C}

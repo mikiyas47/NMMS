@@ -4,7 +4,8 @@ import {
   Animated, ActivityIndicator, Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Network, ZoomIn, ZoomOut, Maximize, User } from 'lucide-react-native';
+import { Network, ZoomIn, ZoomOut, Maximize, User, Zap } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 import { getMyTree, getSubtreeData } from '../../api/authService';
 
 const { width, height } = Dimensions.get('window');
@@ -109,6 +110,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
 };
 
 const TreeScreen = ({ C }) => {
+  const navigation = useNavigation();
   const [treeData, setTreeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notJoined, setNotJoined] = useState(false);
@@ -184,14 +186,16 @@ const TreeScreen = ({ C }) => {
         <Text style={{ color: C.muted, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
           Purchase a product package from the Products screen to activate your account and get placed in the MLM network tree.
         </Text>
-        <LinearGradient
-          colors={['#064E3B', '#10B981']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={{ borderRadius: 16, paddingVertical: 14, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
-        >
-          <Text style={{ color: '#FCD34D', fontSize: 18 }}>⚡</Text>
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Go to Products → Activate</Text>
-        </LinearGradient>
+        <TouchableOpacity onPress={() => navigation.navigate('Products')}>
+          <LinearGradient
+            colors={['#064E3B', '#10B981']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={{ borderRadius: 16, paddingVertical: 14, paddingHorizontal: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+          >
+            <Text style={{ color: '#FCD34D', fontSize: 18 }}>⚡</Text>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Go to Products → Activate</Text>
+          </LinearGradient>
+        </TouchableOpacity>
         <TouchableOpacity onPress={fetchTree} style={{ marginTop: 16 }}>
           <Text style={{ color: C.muted, fontSize: 12 }}>Tap to refresh</Text>
         </TouchableOpacity>
@@ -222,6 +226,26 @@ const TreeScreen = ({ C }) => {
         <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }}>Placement Tree</Text>
         <Text style={{ color: C.muted, fontSize: 13 }}>View and manage your 4-leg downline</Text>
       </View>
+
+      {/* Recommendation Banner */}
+      <LinearGradient
+        colors={['rgba(99,102,241,0.15)', 'rgba(99,102,241,0.05)']}
+        style={{ borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+          <Zap color="#818CF8" size={20} style={{ marginRight: 8 }} />
+          <Text style={{ color: '#E0E7FF', fontSize: 15, fontWeight: '800' }}>Increase Referral Spaces!</Text>
+        </View>
+        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 18, marginBottom: 12 }}>
+          Double, triple, or quadruple your account by purchasing more products! Each new account adds another 4 empty legs under your main account, allowing you to build a wider network and maximize earnings.
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Products')}
+          style={{ backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Get More Accounts (Buy Products)</Text>
+        </TouchableOpacity>
+      </LinearGradient>
 
       {/* Controls */}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginBottom: 10, zIndex: 10 }}>

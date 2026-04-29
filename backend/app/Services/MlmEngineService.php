@@ -79,23 +79,37 @@ class MlmEngineService
             } else {
                 // First account.
                 if ($sponsorId) {
-                    $sponsorAccount = Account::where('distributor_id', $sponsorId)->first();
-                    if ($sponsorAccount) {
-                        $placementNode = $this->findPlacementNode($sponsorAccount->node_id);
-                        $leg = $placementNode->children()->count() + 1;
-                        $newNode = Node::create([
-                            'parent_id' => $placementNode->id,
-                            'distributor_id' => $distributorId,
-                            'leg' => $leg
-                        ]);
-                    } else {
-                        // Sponsor has no node? Create root node.
-                        $newNode = Node::create([
-                            'parent_id' => null,
-                            'distributor_id' => $distributorId,
-                            'leg' => 1
-                        ]);
+                    // Find the sponsor's node
+                    $sponsorNode = Node::where('distributor_id', $sponsorId)->first();
+                    
+                    if (!$sponsorNode) {
+                        // Sponsor doesn't have a node yet (hasn't bought a product but referred someone).
+                        // Create a node for the sponsor so the tree can be built correctly.
+                        $companyRoot = Node::whereNull('parent_id')->first();
+                        if ($companyRoot) {
+                            $rootPlacement = $this->findPlacementNode($companyRoot->id);
+                            $sponsorNode = Node::create([
+                                'parent_id' => $rootPlacement->id,
+                                'distributor_id' => $sponsorId,
+                                'leg' => $rootPlacement->children()->count() + 1
+                            ]);
+                        } else {
+                            $sponsorNode = Node::create([
+                                'parent_id' => null,
+                                'distributor_id' => $sponsorId,
+                                'leg' => 1
+                            ]);
+                        }
                     }
+
+                    // Now find where to place the customer under the sponsor
+                    $placementNode = $this->findPlacementNode($sponsorNode->id);
+                    $leg = $placementNode->children()->count() + 1;
+                    $newNode = Node::create([
+                        'parent_id' => $placementNode->id,
+                        'distributor_id' => $distributorId,
+                        'leg' => $leg
+                    ]);
                 } else {
                     // No sponsor, maybe company root
                     $root = Node::whereNull('parent_id')->first();
@@ -173,55 +187,24 @@ class MlmEngineService
     }
 
     /**
-     * Process a CUSTOMER purchase (no node created).
-     * Only credits referral commission and propagates points up the tree.
-     * Called from the Chapa webhook when a customer buys via a distributor's link.
+     * Process a CUSTOMER purchase.
+     * Creates a new distributor account for the customer and places them in the tree under the referring distributor.
      */
-    public function processCustomerPurchase($distributorId, $productId)
+    public function processCustomerPurchase($distributorId, $productId, $customerName, $customerEmail, $customerPhone)
     {
-        DB::beginTransaction();
-        try {
-            $product = Product::findOrFail($productId);
-            $points  = $product->point ?? 0;
+        // 1. Create a distributor account for the customer
+        $newDist = Distributor::firstOrCreate(
+            ['email' => $customerEmail],
+            [
+                'name' => $customerName,
+                'phone' => $customerPhone,
+                'password' => bcrypt('password123'),
+                'join_date' => now(),
+            ]
+        );
 
-            // B. Referral Commission to the distributor
-            $wallet      = Wallet::firstOrCreate(['distributor_id' => $distributorId]);
-            $distAccount = Account::where('distributor_id', $distributorId)->with('product')->first();
-            $rate        = $distAccount?->product?->referral_rate ?? 0.10;
-            $commission  = $rate * $points;
-
-            if ($commission > 0) {
-                $wallet->balance      += $commission;
-                $wallet->total_earned += $commission;
-                $wallet->save();
-            }
-
-            // C. Points Propagation up the tree
-            if ($points > 0) {
-                $rootNode = Node::where('distributor_id', $distributorId)->first();
-                if ($rootNode) {
-                    $currentNode = $rootNode;
-                    while ($currentNode->parent_id) {
-                        $parent = Node::find($currentNode->parent_id);
-                        if (!$parent) break;
-
-                        $parentStat = Stat::firstOrCreate(['distributor_id' => $parent->distributor_id]);
-                        if ($currentNode->leg == 1 || $currentNode->leg == 2) {
-                            $parentStat->left_points += $points;
-                        } else {
-                            $parentStat->right_points += $points;
-                        }
-                        $parentStat->save();
-                        $currentNode = $parent;
-                    }
-                }
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
+        // 2. Treat this exactly like a standard purchase by the new distributor, sponsored by the referring distributor
+        return $this->processPurchase($newDist->distributor_id, $productId, $distributorId);
     }
 
     /**
