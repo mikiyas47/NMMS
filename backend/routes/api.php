@@ -178,4 +178,37 @@ Route::get('/remove-duplicate-distributor', function () {
     }
 });
 
+// Temporary route to reset a specific distributor's tree (remove duplicates from testing)
+Route::get('/reset-tree/{email}', function ($email) {
+    $dist = \App\Models\Distributor::where('email', $email)->first();
+    if (!$dist) return response()->json(['error' => 'Distributor not found'], 404);
+    
+    $distId = $dist->distributor_id;
+    
+    // Find my main node
+    $mainNode = \App\Models\Node::where('distributor_id', $distId)->orderBy('id', 'asc')->first();
+    
+    if (!$mainNode) return response()->json(['message' => 'No main node found']);
+    
+    // Delete all nodes where parent_id = my main node's id
+    $childNodes = \App\Models\Node::where('parent_id', $mainNode->id)->get();
+    
+    $deletedCount = 0;
+    foreach ($childNodes as $child) {
+        \App\Models\Account::where('node_id', $child->id)->delete();
+        $child->delete();
+        $deletedCount++;
+    }
+    
+    // Also delete any other nodes I own except the main node
+    $myOtherNodes = \App\Models\Node::where('distributor_id', $distId)->where('id', '!=', $mainNode->id)->get();
+    foreach ($myOtherNodes as $other) {
+        \App\Models\Account::where('node_id', $other->id)->delete();
+        $other->delete();
+        $deletedCount++;
+    }
+    
+    return response()->json(['message' => "Successfully deleted $deletedCount extra accounts/nodes for $email. The tree is clean!"]);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
