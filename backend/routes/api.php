@@ -309,6 +309,14 @@ Route::get('/reset-tree/{email}', function ($email) {
         $other->delete();
         $deletedCount++;
     }
+
+    // Reset their stats to 0 to fix left/right points that were messed up
+    \App\Models\Stat::where('distributor_id', $distId)->update([
+        'left_points' => 0,
+        'right_points' => 0,
+        'carry_left' => 0,
+        'carry_right' => 0
+    ]);
     
     return response()->json(['message' => "Successfully deleted $deletedCount extra accounts/nodes for $email. The tree is clean!"]);
 });
