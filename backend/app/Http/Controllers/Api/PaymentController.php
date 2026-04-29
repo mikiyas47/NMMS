@@ -156,11 +156,17 @@ class PaymentController extends Controller
         }
 
         DB::transaction(function () use ($payment, $status, $data) {
+            // Lock the row to prevent race conditions
+            $lockedPayment = Payment::where('id', $payment->id)->lockForUpdate()->first();
+            if ($lockedPayment->status === 'success') {
+                return; // Already processed by another thread
+            }
+
             if ($status === 'success') {
                 // Double-verify directly with Chapa
-                $verified = $this->verifyChapaTransaction($payment->tx_ref);
+                $verified = $this->verifyChapaTransaction($lockedPayment->tx_ref);
 
-                $payment->update([
+                $lockedPayment->update([
                     'status'           => $verified ? 'success' : 'rejected',
                     'webhook_verified'  => $verified,
                     'chapa_reference'  => $data['reference'] ?? null,
@@ -169,33 +175,33 @@ class PaymentController extends Controller
 
                 if ($verified) {
                     // Credit commission to distributor
-                    Distributor::where('distributor_id', $payment->distributor_id)
-                        ->increment('income_monthly', $payment->commission_amount);
-                    Distributor::where('distributor_id', $payment->distributor_id)
-                        ->increment('income_yearly', $payment->commission_amount);
+                    Distributor::where('distributor_id', $lockedPayment->distributor_id)
+                        ->increment('income_monthly', $lockedPayment->commission_amount);
+                    Distributor::where('distributor_id', $lockedPayment->distributor_id)
+                        ->increment('income_yearly', $lockedPayment->commission_amount);
 
-                    $payment->update(['commission_paid' => true]);
+                    $lockedPayment->update(['commission_paid' => true]);
                     
                     try {
                         $mlmEngine = app(\App\Services\MlmEngineService::class);
                         // Customer purchase: creates node + commissions + points
                         $mlmEngine->processCustomerPurchase(
-                            $payment->distributor_id, 
-                            $payment->product_id,
-                            $payment->customer_name,
-                            $payment->customer_email,
-                            $payment->customer_phone
+                            $lockedPayment->distributor_id, 
+                            $lockedPayment->product_id,
+                            $lockedPayment->customer_name,
+                            $lockedPayment->customer_email,
+                            $lockedPayment->customer_phone
                         );
-                        $mlmEngine->runCycleEngine($payment->distributor_id);
-                        $mlmEngine->runRankCheck($payment->distributor_id);
+                        $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
+                        $mlmEngine->runRankCheck($lockedPayment->distributor_id);
                     } catch (\Exception $e) {
                         Log::error('Mlm Engine Error: ' . $e->getMessage());
                     }
                 } else {
-                    $payment->update(['status' => 'failed', 'chapa_payload' => $data]);
+                    $lockedPayment->update(['status' => 'failed', 'chapa_payload' => $data]);
                 }
             } else {
-                $payment->update(['status' => 'failed', 'chapa_payload' => $data]);
+                $lockedPayment->update(['status' => 'failed', 'chapa_payload' => $data]);
             }
         });
 
@@ -377,15 +383,21 @@ class PaymentController extends Controller
     {
         $verified = $this->verifyChapaTransaction($payment->tx_ref);
 
-        if ($verified && $payment->status !== 'success') {
+        if ($verified) {
             DB::transaction(function () use ($payment) {
-                // Credit commission to distributor
-                Distributor::where('distributor_id', $payment->distributor_id)
-                    ->increment('income_monthly', $payment->commission_amount);
-                Distributor::where('distributor_id', $payment->distributor_id)
-                    ->increment('income_yearly', $payment->commission_amount);
+                // Lock the row to prevent race conditions
+                $lockedPayment = Payment::where('id', $payment->id)->lockForUpdate()->first();
+                if ($lockedPayment->status === 'success') {
+                    return; // Already processed
+                }
 
-                $payment->update([
+                // Credit commission to distributor
+                Distributor::where('distributor_id', $lockedPayment->distributor_id)
+                    ->increment('income_monthly', $lockedPayment->commission_amount);
+                Distributor::where('distributor_id', $lockedPayment->distributor_id)
+                    ->increment('income_yearly', $lockedPayment->commission_amount);
+
+                $lockedPayment->update([
                     'status'           => 'success',
                     'webhook_verified' => true,
                     'commission_paid'  => true,
@@ -395,14 +407,14 @@ class PaymentController extends Controller
                     $mlmEngine = app(\App\Services\MlmEngineService::class);
                     // Customer purchase: creates node + commissions + points
                     $mlmEngine->processCustomerPurchase(
-                        $payment->distributor_id, 
-                        $payment->product_id,
-                        $payment->customer_name,
-                        $payment->customer_email,
-                        $payment->customer_phone
+                        $lockedPayment->distributor_id, 
+                        $lockedPayment->product_id,
+                        $lockedPayment->customer_name,
+                        $lockedPayment->customer_email,
+                        $lockedPayment->customer_phone
                     );
-                    $mlmEngine->runCycleEngine($payment->distributor_id);
-                    $mlmEngine->runRankCheck($payment->distributor_id);
+                    $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
+                    $mlmEngine->runRankCheck($lockedPayment->distributor_id);
                 } catch (\Exception $e) {
                     Log::error('Mlm Engine Error in checkAndFinalizePayment: ' . $e->getMessage());
                 }
