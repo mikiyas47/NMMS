@@ -17,6 +17,31 @@ import { User, Mail, Phone, Lock, ArrowRight, TrendingUp, ChevronLeft, Sun, Moon
 import { register as registerApi } from '../api/authService';
 import { useTheme } from '../context/ThemeContext';
 
+const Field = ({ icon: Icon, placeholder, value, onChangeText, keyboard, secure, C, showPassword, setShowPassword }) => (
+  <View
+    className="flex-row items-center rounded-xl mb-4 px-4 h-14"
+    style={{ backgroundColor: C.inputBg }}
+  >
+    <Icon color={C.muted} size={20} />
+    <TextInput
+      placeholder={placeholder}
+      placeholderTextColor={C.muted}
+      className="flex-1 ml-3 text-base"
+      style={{ color: C.text }}
+      value={value}
+      onChangeText={onChangeText}
+      keyboardType={keyboard || 'default'}
+      secureTextEntry={secure && !showPassword}
+      autoCapitalize="none"
+    />
+    {secure && (
+      <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2">
+        {showPassword ? <EyeOff color={C.muted} size={20} /> : <Eye color={C.muted} size={20} />}
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
 const RegistrationScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -48,31 +73,6 @@ const RegistrationScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
-
-  const Field = ({ icon: Icon, placeholder, value, onChangeText, keyboard, secure }) => (
-    <View
-      className="flex-row items-center rounded-xl mb-4 px-4 h-14"
-      style={{ backgroundColor: C.inputBg }}
-    >
-      <Icon color={C.muted} size={20} />
-      <TextInput
-        placeholder={placeholder}
-        placeholderTextColor={C.muted}
-        className="flex-1 ml-3 text-base"
-        style={{ color: C.text }}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboard || 'default'}
-        secureTextEntry={secure && !showPassword}
-        autoCapitalize="none"
-      />
-      {secure && (
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2">
-          {showPassword ? <EyeOff color={C.muted} size={20} /> : <Eye color={C.muted} size={20} />}
-        </TouchableOpacity>
-      )}
-    </View>
-  );
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -121,10 +121,10 @@ const RegistrationScreen = ({ navigation }) => {
               <View className="w-full rounded-3xl p-7 shadow-2xl" style={{ backgroundColor: C.surface }}>
                 <Text className="text-xl font-bold text-center mb-6" style={{ color: C.text }}>Create Account</Text>
 
-                <Field icon={User}  placeholder="Full Name"       value={name}     onChangeText={setName} />
-                <Field icon={Mail}  placeholder="Email Address"   value={email}    onChangeText={setEmail} keyboard="email-address" />
-                <Field icon={Phone} placeholder="Phone Number"    value={phone}    onChangeText={setPhone} keyboard="phone-pad" />
-                <Field icon={Lock}  placeholder="Create Password" value={password} onChangeText={setPassword} secure />
+                <Field icon={User}  placeholder="Full Name"       value={name}     onChangeText={setName} C={C} />
+                <Field icon={Mail}  placeholder="Email Address"   value={email}    onChangeText={setEmail} keyboard="email-address" C={C} />
+                <Field icon={Phone} placeholder="Phone Number"    value={phone}    onChangeText={setPhone} keyboard="phone-pad" C={C} />
+                <Field icon={Lock}  placeholder="Create Password" value={password} onChangeText={setPassword} secure C={C} showPassword={showPassword} setShowPassword={setShowPassword} />
 
                 <TouchableOpacity
                   className="w-full h-14 rounded-xl overflow-hidden mt-2"

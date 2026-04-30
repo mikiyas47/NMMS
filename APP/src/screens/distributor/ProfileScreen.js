@@ -8,7 +8,7 @@ import {
   Edit, ChevronRight, Shield, Star, Award,
   Bell, Lock, HelpCircle, LogOut, X,
 } from 'lucide-react-native';
-import { getUser, updatePassword } from '../../api/authService';
+import { getUser, updatePassword, getWallet } from '../../api/authService';
 
 const FadeIn = ({ delay = 0, children }) => {
   const anim = useRef(new Animated.Value(0)).current;
@@ -23,13 +23,15 @@ const FadeIn = ({ delay = 0, children }) => {
 };
 
 const ProfileScreen = ({ C }) => {
-  const [user, setUser] = React.useState(null);
+  const [user,         setUser]         = React.useState(null);
+  const [walletData,   setWalletData]   = React.useState(null);
   const [modalVisible, setModalVisible] = React.useState(false);
-  const [changing, setChanging] = React.useState(false);
-  const [passData, setPassData] = React.useState({ current_password: '', new_password: '' });
+  const [changing,     setChanging]     = React.useState(false);
+  const [passData,     setPassData]     = React.useState({ current_password: '', new_password: '' });
 
   useEffect(() => {
     getUser().then(u => setUser(u));
+    getWallet().then(res => setWalletData(res)).catch(() => {});
   }, []);
 
   const handleChangePassword = async () => {
@@ -111,9 +113,9 @@ const ProfileScreen = ({ C }) => {
       <FadeIn delay={80}>
         <View style={{ flexDirection:'row', gap:10, marginBottom:20 }}>
           {[
-            { label:'Referrals', value:'8',    icon:Award, color:'#6366F1', bg:'rgba(99,102,241,0.12)' },
-            { label:'Team',      value:'42',   icon:User,  color:'#10B981', bg:'rgba(16,185,129,0.12)' },
-            { label:'Earned',    value:'$2.4k',icon:Star,  color:'#F59E0B', bg:'rgba(245,158,11,0.12)' },
+            { label:'Directs',  value: String(walletData?.team?.direct_count ?? '—'), icon:Award, color:'#6366F1', bg:'rgba(99,102,241,0.12)' },
+            { label:'Team',     value: String(walletData?.team?.total_team   ?? '—'), icon:User,  color:'#10B981', bg:'rgba(16,185,129,0.12)' },
+            { label:'Earned',   value: walletData ? '$' + parseFloat(walletData.wallet?.total_earned ?? 0).toFixed(0) : '—', icon:Star, color:'#F59E0B', bg:'rgba(245,158,11,0.12)' },
           ].map((s, i) => (
             <View key={i} style={{ flex:1, backgroundColor:C.surface, borderRadius:18, borderWidth:1, borderColor:C.border, padding:14, alignItems:'center' }}>
               <View style={{ width:36, height:36, borderRadius:10, backgroundColor:s.bg, alignItems:'center', justifyContent:'center', marginBottom:8 }}>

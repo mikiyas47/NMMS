@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Animated, ActivityIndicator, Dimensions
+  Animated, ActivityIndicator, Dimensions, Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Network, ZoomIn, ZoomOut, Maximize, User, Zap } from 'lucide-react-native';
@@ -18,7 +18,7 @@ const RANK_COLORS = {
   GEB: ['#C084FC', '#7E22CE'], // Purple
 };
 
-const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
+const TreeNode = ({ node, isRoot = false, C, onNodeClick }) => {
   if (!node) {
     return (
       <View style={{ alignItems: 'center', marginHorizontal: 10 }}>
@@ -38,7 +38,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
 
       {/* Node Card */}
       <TouchableOpacity 
-        onPress={() => onExpand(node)}
+        onPress={() => onNodeClick(node)}
         activeOpacity={0.8}
         style={{ alignItems: 'center' }}
       >
@@ -51,7 +51,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
         <View style={{ backgroundColor: C.surface, marginTop: -10, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
           <Text style={{ color: C.text, fontSize: 10, fontWeight: '800' }}>{node.distributor_name}</Text>
         </View>
-        <Text style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{node.total_points} PTS</Text>
+        <Text style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{node.product_points || 0} PTS</Text>
         <Text style={{ color: rankColors[0], fontSize: 9, fontWeight: '700' }}>{node.rank}</Text>
       </TouchableOpacity>
 
@@ -77,7 +77,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
               return (
                 <View key={`leg-${leg}`} style={{ alignItems: 'center', paddingHorizontal: 2 }}>
                   {child ? (
-                    <TreeNode node={child} C={C} onExpand={onExpand} />
+                    <TreeNode node={child} C={C} onNodeClick={onNodeClick} />
                   ) : (
                     <View style={{ alignItems: 'center' }}>
                        <View style={{ width: 2, height: 20, backgroundColor: C.border }} />
@@ -96,7 +96,7 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
         <>
           <View style={{ width: 2, height: 15, backgroundColor: C.border }} />
           <TouchableOpacity 
-            onPress={() => onExpand(node)}
+            onPress={() => onNodeClick(node)}
             style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}
           >
             <Text style={{ color: C.accent, fontSize: 10, fontWeight: '700' }}>Load Subtree</Text>
@@ -107,12 +107,59 @@ const TreeNode = ({ node, isRoot = false, C, onExpand }) => {
   );
 };
 
+// ── Node Info Modal Component ──
+const NodeInfoModal = ({ visible, node, onClose, C }) => {
+  if (!node) return null;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ width: '100%', maxWidth: 360, backgroundColor: C.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: C.border }}>
+          
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            <LinearGradient
+              colors={RANK_COLORS[node.rank] || RANK_COLORS.None}
+              style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}
+            >
+              <User color="#fff" size={28} />
+            </LinearGradient>
+            <Text style={{ color: C.text, fontSize: 18, fontWeight: '800' }}>{node.distributor_name}</Text>
+            <Text style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>{node.rank} Rank</Text>
+          </View>
+
+          <View style={{ gap: 12, marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 }}>
+              <Text style={{ color: C.muted, fontSize: 12 }}>Email</Text>
+              <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{node.distributor_email}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 }}>
+              <Text style={{ color: C.muted, fontSize: 12 }}>Phone</Text>
+              <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{node.distributor_phone}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 }}>
+              <Text style={{ color: C.muted, fontSize: 12 }}>Product Points</Text>
+              <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{node.product_points} PTS</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={onClose}
+            style={{ backgroundColor: C.accent, paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 const TreeScreen = ({ C, navigate }) => {
   const [treeData, setTreeData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notJoined, setNotJoined] = useState(false);
   const [error, setError] = useState(null);
   const [scale, setScale] = useState(1);
+  const [selectedNode, setSelectedNode] = useState(null);
 
   useEffect(() => {
     fetchTree();
@@ -139,7 +186,8 @@ const TreeScreen = ({ C, navigate }) => {
     }
   };
 
-  const handleExpand = async (node) => {
+  const handleNodeClick = async (node) => {
+    setSelectedNode(node);
     if (!node.has_more) return;
     try {
       const res = await getSubtreeData(node.id);
@@ -242,7 +290,7 @@ const TreeScreen = ({ C, navigate }) => {
         <ScrollView horizontal maximumZoomScale={3} minimumZoomScale={0.5} contentContainerStyle={{ minWidth: width * 2 }}>
           <ScrollView contentContainerStyle={{ paddingVertical: 40, alignItems: 'center', minWidth: width * 2 }}>
             <View style={{ transform: [{ scale }] }}>
-              {treeData && <TreeNode node={treeData} isRoot={true} C={C} onExpand={handleExpand} />}
+              {treeData && <TreeNode node={treeData} isRoot={true} C={C} onNodeClick={handleNodeClick} />}
             </View>
           </ScrollView>
         </ScrollView>
@@ -257,6 +305,13 @@ const TreeScreen = ({ C, navigate }) => {
           </View>
         ))}
       </View>
+
+      <NodeInfoModal
+        visible={!!selectedNode}
+        node={selectedNode}
+        onClose={() => setSelectedNode(null)}
+        C={C}
+      />
     </View>
   );
 };
