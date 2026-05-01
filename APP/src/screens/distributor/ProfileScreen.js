@@ -100,7 +100,7 @@ const ProfileScreen = ({ C }) => {
 
           <View style={{ flexDirection:'row', gap:8, marginTop:14 }}>
             <View style={{ backgroundColor:'rgba(245,158,11,0.25)', borderRadius:20, paddingHorizontal:14, paddingVertical:6, borderWidth:1, borderColor:'rgba(245,158,11,0.4)' }}>
-              <Text style={{ color:'#FCD34D', fontSize:12, fontWeight:'800' }}>⭐ {user?.rank || 'MEMBER'}</Text>
+              <Text style={{ color:'#FCD34D', fontSize:12, fontWeight:'800' }}>⭐ {!user?.rank || user?.rank === 'CT' || user?.rank === 'None' ? 'Customer Trainee(CT)' : user.rank}</Text>
             </View>
             <View style={{ backgroundColor:'rgba(16,185,129,0.25)', borderRadius:20, paddingHorizontal:14, paddingVertical:6, borderWidth:1, borderColor:'rgba(16,185,129,0.4)' }}>
               <Text style={{ color:'#6EE7B7', fontSize:12, fontWeight:'800' }}>✦ ACTIVE</Text>

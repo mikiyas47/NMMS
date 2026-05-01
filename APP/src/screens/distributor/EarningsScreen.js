@@ -12,15 +12,19 @@ import { getWallet, runCycleEngine } from '../../api/authService';
 
 // ── Rank config ──────────────────────────────────────────────────────────────
 const RANK_CONFIG = {
-  None:  { label: 'None',                         colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: '4 legs ≥ 200 pts & 5,000 total' },
-  MT:    { label: 'Market Trainee',               colors: ['#FBBF24','#D97706'], icon: '⭐', requirement: '2 MT legs & 10,000 total' },
-  TT:    { label: 'Team Trainee',                 colors: ['#F97316','#C2410C'], icon: '🔥', requirement: '4 TT legs & 50,000 total' },
-  NTB:   { label: 'National Team Builder',        colors: ['#34D399','#059669'], icon: '🌿', requirement: '4 NTB legs & 200,000 total' },
-  IBB:   { label: 'Intl. Business Builder',       colors: ['#60A5FA','#2563EB'], icon: '💎', requirement: '4 IBB legs & 800,000 total' },
-  GEB:   { label: 'Global Empire Builder',        colors: ['#C084FC','#7E22CE'], icon: '👑', requirement: 'Special: Crown Achiever ($50K)' },
+  None:  { label: 'Customer Trainee(CT)',         colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked/New' },
+  CT:    { label: 'Customer Trainee(CT)',         colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked/New' },
+  MT:    { label: 'Market Trainee',               colors: ['#FBBF24','#D97706'], icon: '⭐', requirement: '4 legs ≥ 200 pts & 5,000 total' },
+  TT:    { label: 'Team Trainee',                 colors: ['#F97316','#C2410C'], icon: '🔥', requirement: '2 MT legs & 10,000 total' },
+  NTB:   { label: 'National Team Builder',        colors: ['#34D399','#059669'], icon: '🌿', requirement: '4 TT legs & 50,000 total' },
+  IBB:   { label: 'Intl. Business Builder',       colors: ['#60A5FA','#2563EB'], icon: '💎', requirement: '4 NTB legs & 200,000 total' },
+  GEB:   { label: 'Global Empire Builder',        colors: ['#C084FC','#7E22CE'], icon: '👑', requirement: '4 IBB legs & 800,000 total' },
+  CA:    { label: 'Crown Achiever',               colors: ['#FBBF24','#D97706'], icon: '🏆', requirement: 'Reach GEB ($50K Award)' },
+  C_AWARD:{label: 'Crown Award',                  colors: ['#F59E0B','#B45309'], icon: '🏅', requirement: 'Multiple GEB legs ($100K Award)' },
+  AL:    { label: 'Alpha Legend',                 colors: ['#FCD34D','#B45309'], icon: '🌟', requirement: '4 CA legs ($500K Award)' },
 };
 
-const RANK_ORDER = ['None','MT','TT','NTB','IBB','GEB'];
+const RANK_ORDER = ['CT','MT','TT','NTB','IBB','GEB','CA','C_AWARD','AL'];
 
 // ── Animated fade in ─────────────────────────────────────────────────────────
 const FadeIn = ({ delay = 0, children }) => {
@@ -143,8 +147,10 @@ const EarningsScreen = ({ C }) => {
   const team   = data?.team     || { direct_count: 0, total_team: 0, legs: [] };
   const commissions = data?.recent_commissions || [];
 
-  const currentRankCfg  = RANK_CONFIG[stats.rank] || RANK_CONFIG['None'];
-  const rankIdx         = RANK_ORDER.indexOf(stats.rank);
+  let activeRank = stats.rank;
+  if (!activeRank || activeRank === 'None') activeRank = 'CT';
+  const currentRankCfg  = RANK_CONFIG[activeRank] || RANK_CONFIG['CT'];
+  const rankIdx         = RANK_ORDER.indexOf(activeRank);
   const nextRank        = RANK_ORDER[rankIdx + 1];
   const nextRankCfg     = nextRank ? RANK_CONFIG[nextRank] : null;
 
@@ -215,11 +221,11 @@ const EarningsScreen = ({ C }) => {
             <Text style={{ fontSize: 36 }}>{currentRankCfg.icon}</Text>
             <View style={{ marginLeft: 14 }}>
               <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 1.2 }}>CURRENT RANK</Text>
-              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>{stats.rank === 'None' ? 'Unranked' : currentRankCfg.label}</Text>
+              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>{currentRankCfg.label}</Text>
             </View>
             <View style={{ flex: 1 }} />
             <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{stats.rank}</Text>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{activeRank}</Text>
             </View>
           </View>
 
@@ -343,7 +349,7 @@ const EarningsScreen = ({ C }) => {
           <Text style={{ color: C.text, fontWeight: '800', fontSize: 15, marginBottom: 14 }}>Rank Ladder</Text>
           {RANK_ORDER.filter(r => r !== 'None').map((rank, idx) => {
             const cfg     = RANK_CONFIG[rank];
-            const achieved = RANK_ORDER.indexOf(stats.rank) >= RANK_ORDER.indexOf(rank) && stats.rank !== 'None';
+            const achieved = RANK_ORDER.indexOf(activeRank) >= RANK_ORDER.indexOf(rank) && activeRank !== 'None';
             return (
               <View key={rank} style={{
                 flexDirection: 'row', alignItems: 'center',

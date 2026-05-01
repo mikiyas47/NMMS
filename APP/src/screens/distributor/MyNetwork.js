@@ -32,6 +32,7 @@ const RANK_COLORS = {
   None: '#9CA3AF', CT: '#9CA3AF',
   MT: '#FBBF24', TT: '#F97316',
   NTB: '#34D399', IBB: '#60A5FA', GEB: '#C084FC',
+  CA: '#FBBF24', C_AWARD: '#F59E0B', AL: '#FCD34D'
 };
 
 /**
@@ -51,7 +52,7 @@ const flattenTree = (node, isRoot = false, depth = 0) => {
       name:     node.distributor_name || 'Unknown',
       email:    node.distributor_email || '—',
       phone:    node.distributor_phone || '—',
-      rank:     node.rank || 'None',
+      rank:     node.rank === 'CT' || node.rank === 'None' || !node.rank ? 'Customer Trainee(CT)' : node.rank,
       points:   node.product_points || 0,
       leg:      node.leg,
       level:    depth === 1 ? 'Direct' : 'Team',
@@ -286,7 +287,7 @@ const MyNetwork = ({ C }) => {
             ) : (
               filtered.map((member, i) => {
                 const avatarColor  = AVATAR_COLORS[i % AVATAR_COLORS.length];
-                const rankColor    = RANK_COLORS[member.rank] || RANK_COLORS['None'];
+                const rankColor    = RANK_COLORS[member.rank === 'Customer Trainee(CT)' ? 'CT' : member.rank] || RANK_COLORS['CT'];
                 const isDirect     = member.level === 'Direct';
 
                 return (
@@ -332,7 +333,7 @@ const MyNetwork = ({ C }) => {
                         {/* Rank badge */}
                         <View style={{ backgroundColor: rankColor + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
                           <Text style={{ fontSize: 10, fontWeight: '700', color: rankColor }}>
-                            {member.rank || 'None'}
+                            {member.rank}
                           </Text>
                         </View>
                       </View>

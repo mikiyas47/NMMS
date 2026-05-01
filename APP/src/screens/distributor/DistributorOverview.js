@@ -13,8 +13,8 @@ import { getWallet, getUser } from '../../api/authService';
 const { width } = Dimensions.get('window');
 const CARD_W = (width - 48) / 2;
 
-const RANK_ICONS = { None: '🌱', MT: '⭐', TT: '🔥', NTB: '🌿', IBB: '💎', GEB: '👑' };
-const RANK_COLORS = { None: '#9CA3AF', MT: '#FBBF24', TT: '#F97316', NTB: '#34D399', IBB: '#60A5FA', GEB: '#C084FC' };
+const RANK_ICONS = { None: '🌱', CT: '🌱', MT: '⭐', TT: '🔥', NTB: '🌿', IBB: '💎', GEB: '👑', CA: '🏆', C_AWARD: '🏅', AL: '🌟' };
+const RANK_COLORS = { None: '#9CA3AF', CT: '#9CA3AF', MT: '#FBBF24', TT: '#F97316', NTB: '#34D399', IBB: '#60A5FA', GEB: '#C084FC', CA: '#FBBF24', C_AWARD: '#F59E0B', AL: '#FCD34D' };
 
 // Fade-in wrapper
 const FadeIn = ({ delay = 0, children }) => {
@@ -69,7 +69,7 @@ const DistributorOverview = ({ C }) => {
   const team   = walletData?.team   || { direct_count: 0, total_team: 0 };
   const commissions = walletData?.recent_commissions || [];
 
-  const rank      = stats.rank || 'None';
+  const rank      = stats.rank && stats.rank !== 'None' ? stats.rank : 'CT';
   const rankColor = RANK_COLORS[rank] || '#9CA3AF';
   const rankIcon  = RANK_ICONS[rank]  || '🌱';
 
@@ -118,7 +118,7 @@ const DistributorOverview = ({ C }) => {
             <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <Text style={{ fontSize: 14 }}>{rankIcon}</Text>
               <Text style={{ color: rankColor === '#9CA3AF' ? '#FCD34D' : rankColor, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
-                {rank === 'None' ? 'UNRANKED' : rank}
+                {rank === 'CT' ? 'Customer Trainee(CT)' : rank}
               </Text>
             </View>
           </View>

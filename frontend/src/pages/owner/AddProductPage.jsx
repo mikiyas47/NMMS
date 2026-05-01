@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Package, Tag, DollarSign, FileText, Search,
   Edit2, Trash2, Plus, Check, X, Image as ImageIcon,
-  Star,
+  Star, Archive,
 } from 'lucide-react';
 import client from '../../api/client';
 

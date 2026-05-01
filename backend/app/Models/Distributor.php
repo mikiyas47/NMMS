@@ -78,14 +78,15 @@ class Distributor extends Authenticatable
      * Human-readable rank labels keyed by enum value.
      */
     public static array $rankLabels = [
-        'CT'  => 'Customer Trainee',
-        'MT'  => 'Market Trainee',
-        'TT'  => 'Team Trainee',
-        'NTB' => 'National Team Builder',
-        'IBB' => 'International Business Builder',
-        'GEB' => 'Global Empire Builder',
-        'CA'  => 'Crown Achiever',
-        'AL'  => 'Alpha Legend',
+        'CT'      => 'Customer Trainee',
+        'MT'      => 'Market Trainee',
+        'TT'      => 'Team Trainee',
+        'NTB'     => 'National Team Builder',
+        'IBB'     => 'International Business Builder',
+        'GEB'     => 'Global Empire Builder',
+        'CA'      => 'Crown Achiever',
+        'C_AWARD' => 'Crown Award',
+        'AL'      => 'Alpha Legend',
     ];
 
     /**

@@ -191,14 +191,25 @@ class MlmEngineService
                     $parent = Node::find($currentNode->parent_id);
                     if (!$parent) break;
                     
-                    $parentStat = Stat::firstOrCreate(['distributor_id' => $parent->distributor_id]);
-                    
-                    if ($currentNode->leg == 1 || $currentNode->leg == 2) {
-                        $parentStat->left_points += $pointsToPropagate;
-                    } else {
-                        $parentStat->right_points += $pointsToPropagate;
+                    // Prevent double counting for multi-accounts by only updating at the main node
+                    $isMainNode = true;
+                    if ($parent->parent_id) {
+                        $grandpa = Node::find($parent->parent_id);
+                        if ($grandpa && $grandpa->distributor_id === $parent->distributor_id) {
+                            $isMainNode = false;
+                        }
                     }
-                    $parentStat->save();
+
+                    if ($isMainNode) {
+                        $parentStat = Stat::firstOrCreate(['distributor_id' => $parent->distributor_id]);
+                        
+                        if ($currentNode->leg == 1 || $currentNode->leg == 2) {
+                            $parentStat->left_points += $pointsToPropagate;
+                        } else {
+                            $parentStat->right_points += $pointsToPropagate;
+                        }
+                        $parentStat->save();
+                    }
                     
                     $currentNode = $parent;
                 }
@@ -341,13 +352,24 @@ class MlmEngineService
                     $parent = Node::find($currentNode->parent_id);
                     if (!$parent) break;
 
-                    $parentStat = Stat::firstOrCreate(['distributor_id' => $parent->distributor_id]);
-                    if ($currentNode->leg <= 2) {
-                        $parentStat->left_points  += $pointsToPropagate;
-                    } else {
-                        $parentStat->right_points += $pointsToPropagate;
+                    // Prevent double counting for multi-accounts by only updating at the main node
+                    $isMainNode = true;
+                    if ($parent->parent_id) {
+                        $grandpa = Node::find($parent->parent_id);
+                        if ($grandpa && $grandpa->distributor_id === $parent->distributor_id) {
+                            $isMainNode = false;
+                        }
                     }
-                    $parentStat->save();
+
+                    if ($isMainNode) {
+                        $parentStat = Stat::firstOrCreate(['distributor_id' => $parent->distributor_id]);
+                        if ($currentNode->leg <= 2) {
+                            $parentStat->left_points  += $pointsToPropagate;
+                        } else {
+                            $parentStat->right_points += $pointsToPropagate;
+                        }
+                        $parentStat->save();
+                    }
 
                     $currentNode = $parent;
                 }
@@ -460,7 +482,8 @@ class MlmEngineService
             $legRanks[$child->leg] = $this->getHighestRankInSubtree($child->id);
         }
 
-        $newRank = $stat->rank;
+        $currentRank = $stat->rank ?: 'CT';
+        $newRank = $currentRank;
 
         // MT
         if ($this->countLegsWithPoints($node, 200) >= 4 && $totalPoints >= 5000) {
@@ -478,22 +501,90 @@ class MlmEngineService
         if ($this->countLegsWithRank($legRanks, 'NTB') >= 4 && $totalPoints >= 200000) {
             $newRank = 'IBB';
         }
-        // GEB
+        // GEB -> Crown Achiever (CA)
         if ($this->countLegsWithRank($legRanks, 'IBB') >= 4 && $totalPoints >= 800000) {
-            $newRank = 'GEB';
+            $newRank = 'CA'; // GEB becomes CA
+        }
+        
+        // Multiple GEB lines -> Crown Award (C_AWARD)
+        if ($this->countLegsWithRank($legRanks, 'GEB') >= 2) {
+            $newRank = 'C_AWARD';
+        }
+        
+        // 4 CA lines -> Alpha Legend (AL)
+        if ($this->countLegsWithRank($legRanks, 'CA') >= 4) {
+            $newRank = 'AL';
         }
 
-        if ($newRank !== $stat->rank) {
+        if ($newRank !== $currentRank) {
             $stat->rank = $newRank;
             $stat->save();
+            
+            $dist = Distributor::where('distributor_id', $distributorId)->first();
+            if ($dist) {
+                $dist->rank = $newRank;
+                $dist->save();
+            }
+
+            $this->payRankBonus($distributorId, $currentRank, $newRank);
+        }
+    }
+
+    private function payRankBonus($distributorId, $oldRank, $newRank)
+    {
+        $ranks = ['CT' => 0, 'MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5, 'CA' => 6, 'C_AWARD' => 7, 'AL' => 8];
+        $oldScore = $ranks[$oldRank] ?? 0;
+        $newScore = $ranks[$newRank] ?? 0;
+        
+        $bonuses = [
+            'CA' => 50000,
+            'C_AWARD' => 100000,
+            'AL' => 500000
+        ];
+
+        $totalBonus = 0;
+        foreach ($bonuses as $rankName => $amount) {
+            $rankScore = $ranks[$rankName];
+            if ($oldScore < $rankScore && $newScore >= $rankScore) {
+                $totalBonus += $amount;
+            }
+        }
+
+        if ($totalBonus > 0) {
+            $wallet = Wallet::firstOrCreate(['distributor_id' => $distributorId]);
+            $wallet->balance += $totalBonus;
+            $wallet->total_earned += $totalBonus;
+            $wallet->save();
+
+            $dist = Distributor::where('distributor_id', $distributorId)->first();
+            if ($dist) {
+                $dist->income_monthly += $totalBonus;
+                $dist->income_yearly += $totalBonus;
+                $dist->save();
+            }
+
+            \App\Models\Payment::create([
+                'product_id'        => 1,
+                'distributor_id'    => $distributorId,
+                'customer_name'     => 'Rank Achievement Bonus (' . $newRank . ')',
+                'customer_email'    => $dist->email ?? 'system',
+                'tx_ref'            => 'RANKBONUS-' . strtoupper(\Illuminate\Support\Str::random(8)),
+                'amount'            => $totalBonus,
+                'currency'          => 'ETB',
+                'quantity'          => 1,
+                'commission_amount' => $totalBonus,
+                'status'            => 'success',
+                'webhook_verified'  => true,
+                'commission_paid'   => true,
+            ]);
         }
     }
 
     private function getHighestRankInSubtree($nodeId)
     {
-        $ranks = ['MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5];
+        $ranks = ['CT' => 0, 'MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5, 'CA' => 6, 'C_AWARD' => 7, 'AL' => 8];
         $highest = 0;
-        $highestRank = null;
+        $highestRank = 'CT';
 
         $queue = [$nodeId];
         while (!empty($queue)) {
@@ -517,7 +608,7 @@ class MlmEngineService
 
     private function countLegsWithRank($legRanks, $requiredRank)
     {
-        $ranks = ['MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5];
+        $ranks = ['CT' => 0, 'MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5, 'CA' => 6, 'C_AWARD' => 7, 'AL' => 8];
         $reqScore = $ranks[$requiredRank] ?? 0;
         $count = 0;
         foreach ($legRanks as $rank) {

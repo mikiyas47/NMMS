@@ -68,9 +68,9 @@ const DistributorDashboard = ({ navigation }) => {
   const slideAnim   = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
-  const RANK_ICONS  = { None:'🌱', MT:'⭐', TT:'🔥', NTB:'🌿', IBB:'💎', GEB:'👑' };
-  const RANK_LABELS = { None:'Unranked', MT:'Market Trainee', TT:'Team Trainee', NTB:'Natl. Team Builder', IBB:'Intl. Business Builder', GEB:'Global Empire Builder' };
-  const RANK_NEXT   = { None:'MT', MT:'TT', TT:'NTB', NTB:'IBB', IBB:'GEB', GEB:null };
+  const RANK_ICONS  = { None:'🌱', CT:'🌱', MT:'⭐', TT:'🔥', NTB:'🌿', IBB:'💎', GEB:'👑', CA:'🏆', C_AWARD:'🏅', AL:'🌟' };
+  const RANK_LABELS = { None:'Customer Trainee(CT)', CT:'Customer Trainee(CT)', MT:'Market Trainee', TT:'Team Trainee', NTB:'Natl. Team Builder', IBB:'Intl. Business Builder', GEB:'Global Empire Builder', CA:'Crown Achiever', C_AWARD:'Crown Award', AL:'Alpha Legend' };
+  const RANK_NEXT   = { None:'MT', CT:'MT', MT:'TT', TT:'NTB', NTB:'IBB', IBB:'GEB', GEB:'CA', CA:'C_AWARD', C_AWARD:'AL', AL:null };
 
   // Load user name and rank from storage + API
   useEffect(() => {

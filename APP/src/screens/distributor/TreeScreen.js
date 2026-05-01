@@ -11,11 +11,15 @@ const { width, height } = Dimensions.get('window');
 
 const RANK_COLORS = {
   None: ['#9CA3AF', '#4B5563'],
+  CT: ['#9CA3AF', '#4B5563'],
   MT: ['#FBBF24', '#D97706'], // Yellow/Amber
   TT: ['#F97316', '#C2410C'], // Orange
   NTB: ['#34D399', '#059669'], // Green
   IBB: ['#60A5FA', '#2563EB'], // Blue
   GEB: ['#C084FC', '#7E22CE'], // Purple
+  CA: ['#FBBF24', '#D97706'], // Gold
+  C_AWARD: ['#F59E0B', '#B45309'], // Dark Gold
+  AL: ['#FCD34D', '#B45309'], // Bright Gold
 };
 
 const TreeNode = ({ node, isRoot = false, C, onNodeClick }) => {
