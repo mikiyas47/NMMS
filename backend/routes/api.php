@@ -160,6 +160,28 @@ Route::get('/debug-rate/{distributorId}', function ($distributorId) {
     ]);
 });
 
+// Debug all rates
+Route::get('/debug-all-rates', function () {
+    $distributors = \App\Models\Distributor::limit(10)->get();
+    $result = [];
+    foreach ($distributors as $distributor) {
+        $accounts = \App\Models\Account::where('distributor_id', $distributor->distributor_id)->with('product')->get();
+        $rate = 10;
+        foreach ($accounts as $acc) {
+            if ($acc->product && $acc->product->referral_rate > $rate) {
+                $rate = $acc->product->referral_rate;
+            }
+        }
+        $result[] = [
+            'id' => $distributor->distributor_id,
+            'name' => $distributor->name,
+            'accounts' => $accounts->count(),
+            'rate' => $rate . '%'
+        ];
+    }
+    return response()->json($result);
+});
+
 // Shows all tables + previously-run migrations
 Route::get('/db-status', function () {
     try {
