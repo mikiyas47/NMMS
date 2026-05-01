@@ -95,6 +95,49 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 
+// Automatically creates missing Account records for legacy tree data
+Route::get('/fix-accounts', function () {
+    $nodes = \App\Models\Node::all();
+    $fixed = 0;
+
+    foreach ($nodes as $node) {
+        $hasAccount = \App\Models\Account::where('distributor_id', $node->distributor_id)->exists();
+        
+        if (!$hasAccount) {
+            $payment = \App\Models\Payment::where('distributor_id', $node->distributor_id)
+                ->whereNotNull('product_id')
+                ->first();
+                
+            $productId = $payment ? $payment->product_id : null;
+            if (!$productId) {
+                $golden = \App\Models\Product::where('category', 'golden')->first();
+                $productId = $golden ? $golden->id : 3; // default to 3 if unknown
+            }
+
+            $sponsorId = null;
+            if ($node->parent_id) {
+                $parent = \App\Models\Node::find($node->parent_id);
+                if ($parent) {
+                    $sponsorId = $parent->distributor_id;
+                }
+            }
+
+            \App\Models\Account::create([
+                'distributor_id' => $node->distributor_id,
+                'node_id'        => $node->id,
+                'product_id'     => $productId,
+                'sponsor_id'     => $sponsorId,
+            ]);
+            
+            $fixed++;
+        }
+    }
+
+    return response()->json([
+        'message' => "Successfully fixed and generated $fixed missing accounts for legacy tree data."
+    ]);
+});
+
 // Shows all tables + previously-run migrations
 Route::get('/db-status', function () {
     try {
