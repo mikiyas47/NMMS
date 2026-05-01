@@ -42,7 +42,7 @@ class MlmEngineService
      * Process a product purchase.
      * Handles account creation, multi-account rule, referral commission, and point propagation.
      */
-    public function processPurchase($distributorId, $productId, $sponsorId = null)
+    public function processPurchase($distributorId, $productId, $sponsorId = null, $quantity = 1)
     {
         DB::beginTransaction();
         try {
@@ -141,24 +141,50 @@ class MlmEngineService
 
             // B. Referral Commission
             if ($sponsorId) {
-                $sponsorProduct = Account::where('distributor_id', $sponsorId)->with('product')->first()?->product;
-                if ($sponsorProduct) {
-                    // Use sponsor's referral rate and sold product's point
-                    $rate = $sponsorProduct->referral_rate ?? 10;
+                $sponsorAccounts = Account::where('distributor_id', $sponsorId)->with('product')->get();
+                if ($sponsorAccounts->isNotEmpty()) {
+                    // Use highest referral rate from all sponsor's accounts
+                    $rate = 10;
+                    foreach ($sponsorAccounts as $acc) {
+                        if ($acc->product && $acc->product->referral_rate > $rate) {
+                            $rate = $acc->product->referral_rate;
+                        }
+                    }
                     $points = $product->point ?? 0;
-                    $commission = ($rate / 100) * $points;
+                    $commission = ($rate / 100) * $points * $quantity;
                     
                     if ($commission > 0) {
                         $sponsorWallet = Wallet::firstOrCreate(['distributor_id' => $sponsorId]);
                         $sponsorWallet->balance += $commission;
                         $sponsorWallet->total_earned += $commission;
                         $sponsorWallet->save();
+
+                        \App\Models\Distributor::where('distributor_id', $sponsorId)
+                            ->increment('income_monthly', $commission);
+                        \App\Models\Distributor::where('distributor_id', $sponsorId)
+                            ->increment('income_yearly', $commission);
+
+                        // Create payment record so it shows up in "Recent Commissions"
+                        \App\Models\Payment::create([
+                            'product_id'        => $productId,
+                            'distributor_id'    => $sponsorId,
+                            'customer_name'     => $distributor->name ?? 'Distributor',
+                            'customer_email'    => $distributor->email ?? 'N/A',
+                            'tx_ref'            => 'JOIN-' . strtoupper(\Illuminate\Support\Str::random(10)),
+                            'amount'            => ($product->price ?? 0) * $quantity,
+                            'currency'          => 'ETB',
+                            'quantity'          => $quantity,
+                            'commission_amount' => $commission,
+                            'status'            => 'success',
+                            'webhook_verified'  => true,
+                            'commission_paid'   => true,
+                        ]);
                     }
                 }
             }
 
             // C. Points Propagation Engine
-            $pointsToPropagate = $product->point ?? 0;
+            $pointsToPropagate = ($product->point ?? 0) * $quantity;
             if ($pointsToPropagate > 0) {
                 $currentNode = $newNode;
                 while ($currentNode->parent_id) {
@@ -195,7 +221,7 @@ class MlmEngineService
      *  2. BFS through those secondary nodes to find an available leg.
      *  3. If no secondary account exists yet, fall back to the sponsor's main node.
      */
-    public function processCustomerPurchase($distributorId, $productId, $customerName, $customerEmail, $customerPhone)
+    public function processCustomerPurchase($distributorId, $productId, $customerName, $customerEmail, $customerPhone, $quantity = 1)
     {
         DB::beginTransaction();
         try {
@@ -288,13 +314,16 @@ class MlmEngineService
             ]);
 
             // 10. Referral commission to sponsor
-            $sponsorAccount = Account::where('distributor_id', $distributorId)
-                ->with('product')
-                ->first();
-            if ($sponsorAccount && $sponsorAccount->product) {
-                $rate       = $sponsorAccount->product->referral_rate ?? 10;
+            $sponsorAccounts = Account::where('distributor_id', $distributorId)->with('product')->get();
+            if ($sponsorAccounts->isNotEmpty()) {
+                $rate = 10;
+                foreach ($sponsorAccounts as $acc) {
+                    if ($acc->product && $acc->product->referral_rate > $rate) {
+                        $rate = $acc->product->referral_rate;
+                    }
+                }
                 $points     = $product->point ?? 0;
-                $commission = ($rate / 100) * $points;
+                $commission = ($rate / 100) * $points * $quantity;
 
                 if ($commission > 0) {
                     $sponsorWallet = Wallet::firstOrCreate(['distributor_id' => $distributorId]);
@@ -305,7 +334,7 @@ class MlmEngineService
             }
 
             // 11. Propagate points up the tree
-            $pointsToPropagate = $product->point ?? 0;
+            $pointsToPropagate = ($product->point ?? 0) * $quantity;
             if ($pointsToPropagate > 0) {
                 $currentNode = $newNode;
                 while ($currentNode->parent_id) {
@@ -339,15 +368,22 @@ class MlmEngineService
     public function runCycleEngine($distributorId)
     {
         $stat = Stat::where('distributor_id', $distributorId)->first();
-        if (!$stat) return;
+        if (!$stat) return ['cycles' => 0, 'earnings' => 0];
 
         $wallet = Wallet::where('distributor_id', $distributorId)->first();
-        if (!$wallet) return;
+        if (!$wallet) return ['cycles' => 0, 'earnings' => 0];
 
-        $account = Account::where('distributor_id', $distributorId)->with('product')->first();
-        if (!$account || !$account->product) return;
+        $accounts = Account::where('distributor_id', $distributorId)->with('product')->get();
+        if ($accounts->isEmpty()) return ['cycles' => 0, 'earnings' => 0];
 
-        $product = $account->product;
+        $bestCycleRate = 0;
+        $bestWeeklyCap = 0;
+        foreach ($accounts as $acc) {
+            if ($acc->product) {
+                if ($acc->product->cycle_rate > $bestCycleRate) $bestCycleRate = $acc->product->cycle_rate;
+                if ($acc->product->weekly_cap > $bestWeeklyCap) $bestWeeklyCap = $acc->product->weekly_cap;
+            }
+        }
         
         $totalLeft = $stat->left_points + $stat->carry_left;
         $totalRight = $stat->right_points + $stat->carry_right;
@@ -355,8 +391,8 @@ class MlmEngineService
         $cycles = floor(min($totalLeft, $totalRight) / 600);
         
         if ($cycles > 0) {
-            $earnings = $cycles * ($product->cycle_rate ?? 50); // Default $50 per cycle
-            $cap = $product->weekly_cap ?? 5000;
+            $earnings = $cycles * $bestCycleRate;
+            $cap = $bestWeeklyCap;
 
             if ($wallet->weekly_earnings + $earnings > $cap) {
                 $earnings = $cap - $wallet->weekly_earnings;
@@ -375,8 +411,35 @@ class MlmEngineService
                 $wallet->weekly_earnings += $earnings;
                 $wallet->total_earned += $earnings;
                 $wallet->save();
+
+                \App\Models\Distributor::where('distributor_id', $distributorId)
+                    ->increment('income_weekly', $earnings);
+                \App\Models\Distributor::where('distributor_id', $distributorId)
+                    ->increment('income_monthly', $earnings);
+                \App\Models\Distributor::where('distributor_id', $distributorId)
+                    ->increment('income_yearly', $earnings);
+
+                $distributor = \App\Models\Distributor::where('distributor_id', $distributorId)->first();
+                $highestAcc = $accounts->sortByDesc(fn($a) => $a->product->cycle_rate ?? 0)->first();
+
+                \App\Models\Payment::create([
+                    'product_id'        => $highestAcc ? $highestAcc->product_id : 1,
+                    'distributor_id'    => $distributorId,
+                    'customer_name'     => 'Cycle Bonus (' . $cycles . ' cycles)',
+                    'customer_email'    => $distributor->email ?? 'N/A',
+                    'tx_ref'            => 'CYCLE-' . strtoupper(\Illuminate\Support\Str::random(10)),
+                    'amount'            => $earnings,
+                    'currency'          => 'ETB',
+                    'quantity'          => $cycles,
+                    'commission_amount' => $earnings,
+                    'status'            => 'success',
+                    'webhook_verified'  => true,
+                    'commission_paid'   => true,
+                ]);
             }
+            return ['cycles' => $cycles, 'earnings' => $earnings];
         }
+        return ['cycles' => 0, 'earnings' => 0];
     }
 
     /**

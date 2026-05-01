@@ -14,7 +14,6 @@ use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
-    const COMMISSION_RATE = 0.10;
     const CHAPA_BASE      = 'https://api.chapa.co/v1';
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -37,7 +36,16 @@ class PaymentController extends Controller
 
         $unitPrice        = (float) $product->price;
         $totalAmount      = round($unitPrice * $data['quantity'], 2);
-        $commissionAmount = round($totalAmount * self::COMMISSION_RATE, 2);
+
+        $sponsorAccounts = \App\Models\Account::where('distributor_id', $data['distributor_id'])->with('product')->get();
+        $rate = 10;
+        foreach ($sponsorAccounts as $acc) {
+            if ($acc->product && $acc->product->referral_rate > $rate) {
+                $rate = $acc->product->referral_rate;
+            }
+        }
+        $points = $product->point ?? 0;
+        $commissionAmount = ($rate / 100) * $points * $data['quantity'];
 
         // Unique reference — ties product + distributor + customer together
         $txRef = 'NMMS-' . strtoupper(Str::random(10)) . '-' . time();
@@ -190,7 +198,8 @@ class PaymentController extends Controller
                             $lockedPayment->product_id,
                             $lockedPayment->customer_name,
                             $lockedPayment->customer_email,
-                            $lockedPayment->customer_phone
+                            $lockedPayment->customer_phone,
+                            $lockedPayment->quantity
                         );
                         $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
                         $mlmEngine->runRankCheck($lockedPayment->distributor_id);
@@ -411,7 +420,8 @@ class PaymentController extends Controller
                         $lockedPayment->product_id,
                         $lockedPayment->customer_name,
                         $lockedPayment->customer_email,
-                        $lockedPayment->customer_phone
+                        $lockedPayment->customer_phone,
+                        $lockedPayment->quantity
                     );
                     $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
                     $mlmEngine->runRankCheck($lockedPayment->distributor_id);

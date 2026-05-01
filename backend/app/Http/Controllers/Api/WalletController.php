@@ -95,15 +95,20 @@ class WalletController extends Controller
         $user = $request->user();
         $distributorId = $user->distributor_id ?? $user->id;
 
-        $mlm->runCycleEngine($distributorId);
+        $result = $mlm->runCycleEngine($distributorId);
         $mlm->runRankCheck($distributorId);
 
         $wallet = Wallet::where('distributor_id', $distributorId)->first();
         $stat   = Stat::where('distributor_id', $distributorId)->first();
 
+        $message = $result['cycles'] > 0 
+            ? "Cycle engine ran successfully! Earned $" . $result['earnings'] . " from " . $result['cycles'] . " cycles."
+            : "No cycles completed. You need at least 600 matching points on both legs.";
+
         return response()->json([
             'status'  => 'success',
-            'message' => 'Cycle engine ran successfully.',
+            'message' => $message,
+            'result'  => $result,
             'wallet'  => $wallet,
             'stats'   => $stat,
         ]);
