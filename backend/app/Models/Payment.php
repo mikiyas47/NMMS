@@ -10,6 +10,7 @@ class Payment extends Model
         'product_id',
         'distributor_id',
         'prospect_id',
+        'leg',
         'customer_name',
         'customer_email',
         'customer_phone',

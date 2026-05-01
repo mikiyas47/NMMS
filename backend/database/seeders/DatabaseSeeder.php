@@ -28,6 +28,18 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // Owner account
+        User::firstOrCreate(
+            ['email' => 'miki@gmail.com'],
+            [
+                'name'     => 'Miki Owner',
+                'phone'    => '0000000000',
+                'password' => \Hash::make('miki#123'),
+                'role'     => 'owner',
+                'status'   => 'active',
+            ]
+        );
+
         \App\Models\Distributor::firstOrCreate(
             ['email' => 'ab@gmail.com'],
             [

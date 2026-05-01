@@ -20,7 +20,7 @@ import {
 import { ShoppingCart, Search, X, Package, RefreshCw, AlertCircle,
   CheckCircle, Share2, ExternalLink, CreditCard, Zap, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getProducts, getUser, joinNetwork, getDistributorStatus } from '../../api/authService';
+import { getProducts, getUser, joinNetwork, getDistributorStatus, getMyTree } from '../../api/authService';
 
 const API_BASE = 'https://nmms-backend.onrender.com';
 
@@ -250,11 +250,16 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
   const slideAnim = useRef(new Animated.Value(400)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
+  const [selectedLeg, setSelectedLeg] = useState(1);
+  const [treeData, setTreeData] = useState(null);
+
   useEffect(() => {
     Animated.parallel([
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 6 }),
       Animated.timing(fadeAnim,  { toValue: 1, duration: 250, useNativeDriver: true }),
     ]).start();
+
+    getMyTree().then(res => setTreeData(res?.tree || null)).catch(() => {});
   }, []);
 
   const close = () => {
@@ -264,10 +269,12 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
     ]).start(onClose);
   };
 
+  const isLegEmpty = treeData && !treeData.children?.find(c => c.leg === selectedLeg);
+
   // Deep-link URL the customer will open (Mobile App)
-  const payLink = `nmms-app://pay?distributor_id=${distributorId}&product_id=${product?.id}`;
+  const payLink = `nmms-app://pay?distributor_id=${distributorId}&product_id=${product?.id}&leg=${selectedLeg}`;
   // Web fallback URL (React Frontend)
-  const webLink = `https://nmms-ochre.vercel.app/pay?distributor_id=${distributorId}&product_id=${product?.id}`;
+  const webLink = `https://nmms-ochre.vercel.app/pay?distributor_id=${distributorId}&product_id=${product?.id}&leg=${selectedLeg}`;
 
   const handleShareLink = async () => {
     try {
@@ -291,6 +298,7 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
       navigation.navigate('CustomerPay', {
         distributor_id: distributorId,
         product_id: product?.id,
+        leg: selectedLeg,
       });
     }, 300);
   };
@@ -357,8 +365,26 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
             <Text style={{ color:C.muted, fontSize:10, textAlign:'right' }}>Credited{`\n`}automatically</Text>
           </View>
 
+          {/* Leg Selection */}
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1, marginBottom: 10 }}>SELECT PLACEMENT LEG</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+            {[1, 2, 3, 4].map(leg => (
+              <TouchableOpacity
+                key={leg}
+                onPress={() => setSelectedLeg(leg)}
+                style={{
+                  flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+                  backgroundColor: selectedLeg === leg ? '#6366F1' : C.inputBg,
+                  borderWidth: 1, borderColor: selectedLeg === leg ? '#6366F1' : C.border,
+                }}
+              >
+                <Text style={{ color: selectedLeg === leg ? '#fff' : C.text, fontWeight: '800', fontSize: 15 }}>Leg {leg}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Account Recommendation */}
-          {accountCount < 4 && (
+          {isLegEmpty && accountCount < 4 && (
             <LinearGradient
               colors={['rgba(99,102,241,0.15)', 'rgba(99,102,241,0.05)']}
               style={{ borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' }}

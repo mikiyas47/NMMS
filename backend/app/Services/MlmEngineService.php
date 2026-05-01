@@ -232,7 +232,7 @@ class MlmEngineService
      *  2. BFS through those secondary nodes to find an available leg.
      *  3. If no secondary account exists yet, fall back to the sponsor's main node.
      */
-    public function processCustomerPurchase($distributorId, $productId, $customerName, $customerEmail, $customerPhone, $quantity = 1)
+    public function processCustomerPurchase($distributorId, $productId, $customerName, $customerEmail, $customerPhone, $quantity = 1, $preferredLeg = null)
     {
         DB::beginTransaction();
         try {
@@ -291,25 +291,45 @@ class MlmEngineService
 
             // 6. Determine the placement node
             $placementNode = null;
+            $leg = null;
 
-            if ($secondaryNodes->isNotEmpty()) {
-                // Try to find an available leg in any secondary account (BFS within each)
-                foreach ($secondaryNodes as $secNode) {
-                    $candidate = $this->findPlacementNode($secNode->id);
-                    if ($candidate) {
-                        $placementNode = $candidate;
-                        break;
+            if ($preferredLeg) {
+                $existingLegChild = Node::where('parent_id', $sponsorMainNode->id)
+                    ->where('leg', $preferredLeg)
+                    ->first();
+                if ($existingLegChild) {
+                    $placementNode = $this->findPlacementNode($existingLegChild->id);
+                    $leg = $placementNode->children()->count() + 1;
+                } else {
+                    $placementNode = $sponsorMainNode;
+                    $leg = $preferredLeg;
+                }
+            } else {
+                if ($secondaryNodes->isNotEmpty()) {
+                    // Try to find an available leg in any secondary account (BFS within each)
+                    foreach ($secondaryNodes as $secNode) {
+                        $candidate = $this->findPlacementNode($secNode->id);
+                        if ($candidate && $candidate->children()->count() < 4) {
+                            $placementNode = $candidate;
+                            break;
+                        }
                     }
                 }
+
+                // 7. Fall back to main node if no secondary account had space
+                if (!$placementNode) {
+                    $placementNode = $this->findPlacementNode($sponsorMainNode->id);
+                }
+                
+                $leg = $placementNode->children()->count() + 1;
             }
 
-            // 7. Fall back to main node if no secondary account had space
-            if (!$placementNode) {
-                $placementNode = $this->findPlacementNode($sponsorMainNode->id);
+            // Fallback safety limit for leg
+            if ($leg > 4) {
+                $leg = 4;
             }
 
             // 8. Create the customer's node
-            $leg     = $placementNode->children()->count() + 1;
             $newNode = Node::create([
                 'parent_id'      => $placementNode->id,
                 'distributor_id' => $newDist->distributor_id,

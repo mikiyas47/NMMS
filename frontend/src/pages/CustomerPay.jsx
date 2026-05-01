@@ -8,6 +8,7 @@ const CustomerPay = () => {
   const [searchParams] = useSearchParams();
   const distributorId = searchParams.get('distributor_id');
   const preSelectedProductId = searchParams.get('product_id');
+  const leg = searchParams.get('leg');
 
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelected] = useState(null);
@@ -88,7 +89,8 @@ const CustomerPay = () => {
           quantity: quantity,
           customer_name: name.trim(),
           customer_email: email.trim(),
-          customer_phone: phone.trim()
+          customer_phone: phone.trim(),
+          leg: leg
         })
       });
       

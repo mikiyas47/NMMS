@@ -29,6 +29,7 @@ class PaymentController extends Controller
             'customer_email' => 'required|email|max:120',
             'customer_phone' => 'nullable|string|max:20',
             'prospect_id'    => 'nullable|exists:prospects,prospect_id',
+            'leg'            => 'nullable|integer|between:1,4',
         ]);
 
         // Lock price from backend — distributor cannot override
@@ -57,6 +58,7 @@ class PaymentController extends Controller
             'customer_name'     => $data['customer_name'],
             'customer_email'    => $data['customer_email'],
             'customer_phone'    => $data['customer_phone'] ?? null,
+            'leg'               => $data['leg'] ?? null,
             'tx_ref'            => $txRef,
             'amount'            => $totalAmount,
             'currency'          => 'ETB',
@@ -199,7 +201,8 @@ class PaymentController extends Controller
                             $lockedPayment->customer_name,
                             $lockedPayment->customer_email,
                             $lockedPayment->customer_phone,
-                            $lockedPayment->quantity
+                            $lockedPayment->quantity,
+                            $lockedPayment->leg
                         );
                         $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
                         $mlmEngine->runRankCheck($lockedPayment->distributor_id);
@@ -421,7 +424,8 @@ class PaymentController extends Controller
                         $lockedPayment->customer_name,
                         $lockedPayment->customer_email,
                         $lockedPayment->customer_phone,
-                        $lockedPayment->quantity
+                        $lockedPayment->quantity,
+                        $lockedPayment->leg
                     );
                     $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
                     $mlmEngine->runRankCheck($lockedPayment->distributor_id);

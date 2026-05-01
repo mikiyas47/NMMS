@@ -251,7 +251,7 @@ const Row = ({ label, value, accent, last }) => (
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const CustomerPayScreen = ({ route, navigation }) => {
   // Params can come from deep-link or from distributor sharing a link
-  const { distributor_id, product_id: preSelectedProductId } = route?.params ?? {};
+  const { distributor_id, product_id: preSelectedProductId, leg } = route?.params ?? {};
 
   const [products, setProducts]         = useState([]);
   const [selectedProduct, setSelected]  = useState(null);
@@ -337,6 +337,7 @@ const CustomerPayScreen = ({ route, navigation }) => {
         customer_name:  name.trim(),
         customer_email: email.trim(),
         customer_phone: phone.trim() || undefined,
+        leg:            leg,
       });
 
       if (res.payment_url && res.tx_ref) {

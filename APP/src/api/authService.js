@@ -8,6 +8,8 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
   },
 });
 
@@ -78,7 +80,10 @@ export const logout = async () => {
 
 export const getProducts = async () => {
   try {
-    const response = await apiClient.get('/products');
+    // Append a timestamp to bust any HTTP cache layer
+    const response = await apiClient.get('/products', {
+      params: { _t: Date.now() },
+    });
     return response.data;
   } catch (error) {
     throw error.response ? error.response.data : new Error('Network Error');
