@@ -138,6 +138,28 @@ Route::get('/fix-accounts', function () {
     ]);
 });
 
+// Temporary route to debug a distributor's rate
+Route::get('/debug-rate/{distributorId}', function ($distributorId) {
+    $distributor = \App\Models\Distributor::find($distributorId);
+    if (!$distributor) return response()->json(['error' => 'Distributor not found']);
+
+    $accounts = \App\Models\Account::where('distributor_id', $distributorId)->with('product')->get();
+    
+    $rate = 10;
+    foreach ($accounts as $acc) {
+        if ($acc->product && $acc->product->referral_rate > $rate) {
+            $rate = $acc->product->referral_rate;
+        }
+    }
+
+    return response()->json([
+        'distributor_name' => $distributor->name,
+        'accounts_count' => $accounts->count(),
+        'accounts' => $accounts,
+        'calculated_rate' => $rate,
+    ]);
+});
+
 // Shows all tables + previously-run migrations
 Route::get('/db-status', function () {
     try {
