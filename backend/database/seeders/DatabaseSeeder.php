@@ -36,7 +36,8 @@ class DatabaseSeeder extends Seeder
                 'password' => \Hash::make('Abebe'),
                 'rank'     => 'CT',
                 'is_paid'  => true,
-            ]
         );
+
+        $this->call(ProductUpdateSeeder::class);
     }
 }
