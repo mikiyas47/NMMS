@@ -28,7 +28,7 @@ import {
   CheckCircle, XCircle, ArrowLeft, CreditCard,
   Shield, Lock, Package, Zap,
 } from 'lucide-react-native';
-import { getProducts, initiatePayment, verifyPayment } from '../api/authService';
+import { getProducts, initiatePayment, verifyPayment, getUser } from '../api/authService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -251,7 +251,7 @@ const Row = ({ label, value, accent, last }) => (
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const CustomerPayScreen = ({ route, navigation }) => {
   // Params can come from deep-link or from distributor sharing a link
-  const { distributor_id, product_id: preSelectedProductId, leg } = route?.params ?? {};
+  const { distributor_id, product_id: preSelectedProductId, leg, self_purchase } = route?.params ?? {};
 
   const [products, setProducts]         = useState([]);
   const [selectedProduct, setSelected]  = useState(null);
@@ -269,6 +269,8 @@ const CustomerPayScreen = ({ route, navigation }) => {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [polling, setPolling]           = useState(false);
   const pollRef                         = useRef(null);
+  // Self-purchase: ready to auto-pay once product + user info are loaded
+  const [selfPayReady, setSelfPayReady] = useState(false);
 
   // Load products on mount
   useEffect(() => {
@@ -280,6 +282,16 @@ const CustomerPayScreen = ({ route, navigation }) => {
         if (preSelectedProductId) {
           const found = list.find(p => String(p.id) === String(preSelectedProductId));
           if (found) setSelected(found);
+        }
+        // For self-purchase: pre-fill distributor's own info from local storage
+        if (self_purchase) {
+          const user = await getUser();
+          if (user) {
+            setName(user.name  ?? '');
+            setEmail(user.email ?? '');
+            setPhone(user.phone ?? '');
+          }
+          setSelfPayReady(true);
         }
       } catch (e) {
         Alert.alert('Error', 'Could not load products. Please check your connection.');
@@ -356,6 +368,13 @@ const CustomerPayScreen = ({ route, navigation }) => {
     }
   };
 
+  // ── Auto-pay for self-purchase (distributor buying their own extra account) ──
+  useEffect(() => {
+    if (self_purchase && selfPayReady && selectedProduct && name && email && !submitting && !paymentUrl && !paymentStatus) {
+      handlePay();
+    }
+  }, [self_purchase, selfPayReady, selectedProduct, name, email]);
+
   const total = selectedProduct
     ? (parseFloat(selectedProduct.price) * quantity).toFixed(2)
     : '0.00';
@@ -425,11 +444,18 @@ const CustomerPayScreen = ({ route, navigation }) => {
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────
-  if (loadingProducts) {
+  if (loadingProducts || (self_purchase && !paymentUrl && !paymentStatus)) {
     return (
-      <LinearGradient colors={[DARK_BG, SURFACE]} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <LinearGradient colors={[DARK_BG, SURFACE]} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
         <ActivityIndicator size="large" color={ACCENT} />
-        <Text style={{ color: MUTED, marginTop: 14, fontSize: 14 }}>Loading products…</Text>
+        <Text style={{ color: TEXT, marginTop: 18, fontSize: 17, fontWeight: '800', textAlign: 'center' }}>
+          {self_purchase ? 'Preparing your payment…' : 'Loading products…'}
+        </Text>
+        {self_purchase && (
+          <Text style={{ color: MUTED, marginTop: 8, fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+            We're setting up your account upgrade.{`\n`}You'll be redirected to Chapa shortly.
+          </Text>
+        )}
       </LinearGradient>
     );
   }

@@ -51,7 +51,8 @@ class DistributorJoinController extends Controller
                 $account = $mlm->processPurchase($distributorId, $data['product_id'], $sponsorId);
                 $accounts[] = $account;
             }
-            $mlm->runCycleEngine($distributorId);
+            // Cycle engine is NOT run automatically — distributor must click
+            // "Run Cycle Engine" in the Earnings screen to trigger it.
             $mlm->runRankCheck($distributorId);
 
             return response()->json([

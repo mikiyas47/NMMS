@@ -55,7 +55,7 @@ const TreeNode = ({ node, isRoot = false, C, onNodeClick }) => {
         <View style={{ backgroundColor: C.surface, marginTop: -10, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
           <Text style={{ color: C.text, fontSize: 10, fontWeight: '800' }}>{node.distributor_name}</Text>
         </View>
-        <Text style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{node.product_points || 0} PTS</Text>
+        <Text style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>Own: {node.product_points || 0} PTS</Text>
         <Text style={{ color: rankColors[0], fontSize: 9, fontWeight: '700' }}>{node.rank}</Text>
       </TouchableOpacity>
 
@@ -140,8 +140,8 @@ const NodeInfoModal = ({ visible, node, onClose, C }) => {
               <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{node.distributor_phone}</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 }}>
-              <Text style={{ color: C.muted, fontSize: 12 }}>Product Points</Text>
-              <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{node.product_points} PTS</Text>
+              <Text style={{ color: C.muted, fontSize: 12 }}>Own Package Points</Text>
+              <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{node.own_points || node.product_points || 0} PTS</Text>
             </View>
           </View>
 

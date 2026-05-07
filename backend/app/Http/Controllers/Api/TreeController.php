@@ -8,12 +8,15 @@ use App\Models\Node;
 use App\Models\Account;
 use App\Models\Distributor;
 use App\Models\Stat;
+use App\Services\MlmEngineService;
 use Illuminate\Support\Facades\DB;
 
 class TreeController extends Controller
 {
     /**
-     * Get the tree structure for the currently authenticated distributor
+     * GET /api/tree
+     * Returns the tree structure for the authenticated distributor.
+     * Each node shows own_points only — no stored left/right/team points.
      */
     public function myTree(Request $request)
     {
@@ -24,31 +27,31 @@ class TreeController extends Controller
 
         $distributorId = $user->distributor_id ?? $user->id;
 
-        // Find the root node for this distributor
         $rootNode = Node::where('distributor_id', $distributorId)->first();
         if (!$rootNode) {
             return response()->json(['message' => 'No tree found. You have not purchased a product yet.'], 404);
         }
 
         $tree = $this->buildTree($rootNode->id, 3); // Load up to 3 levels deep initially
-        
+
         return response()->json([
             'status' => 'success',
-            'tree' => $tree
+            'tree'   => $tree,
         ]);
     }
-    
+
     /**
-     * Get the subtree for a specific node (for expanding deep branches)
+     * GET /api/tree/{nodeId}
+     * Returns the subtree for a specific node (for expanding deep branches).
      */
     public function getSubtree($nodeId)
     {
         $node = Node::findOrFail($nodeId);
         $tree = $this->buildTree($node->id, 2);
-        
+
         return response()->json([
             'status' => 'success',
-            'tree' => $tree
+            'tree'   => $tree,
         ]);
     }
 
@@ -60,10 +63,11 @@ class TreeController extends Controller
         if (!$node) return null;
 
         $stat = Stat::where('distributor_id', $node->distributor_id)->first();
-        
-        $account = Account::where('node_id', $node->id)->with('product')->first();
+
+        // own_points = sum of product.point for all accounts this node's distributor owns
+        $account       = Account::where('node_id', $node->id)->with('product')->first();
         $productPoints = $account && $account->product ? $account->product->point : 0;
-        
+
         $childrenData = [];
         if ($depth > 0) {
             foreach ($node->children as $child) {
@@ -72,19 +76,18 @@ class TreeController extends Controller
         }
 
         return [
-            'id' => $node->id,
-            'distributor_name' => $node->distributor->name ?? 'Unknown',
-            'distributor_email' => $node->distributor->email ?? 'Unknown',
-            'distributor_phone' => $node->distributor->phone ?? 'Unknown',
-            'distributor_id' => $node->distributor_id,
-            'leg' => $node->leg,
-            'rank' => $stat->rank ?? 'None',
-            'product_points' => $productPoints,
-            'left_points' => $stat->left_points ?? 0,
-            'right_points' => $stat->right_points ?? 0,
-            'total_points' => ($stat->left_points ?? 0) + ($stat->right_points ?? 0) + ($stat->carry_left ?? 0) + ($stat->carry_right ?? 0),
-            'children' => $childrenData,
-            'has_more' => $node->children->count() > 0 && $depth == 0
+            'id'               => $node->id,
+            'distributor_name' => $node->distributor->name  ?? 'Unknown',
+            'distributor_email'=> $node->distributor->email ?? 'Unknown',
+            'distributor_phone'=> $node->distributor->phone ?? 'Unknown',
+            'distributor_id'   => $node->distributor_id,
+            'leg'              => $node->leg,
+            'rank'             => $stat->rank ?? 'None',
+            // own_points = this distributor's personal package points only
+            'product_points'   => $productPoints,
+            'own_points'       => $stat->own_points ?? $productPoints,
+            'children'         => $childrenData,
+            'has_more'         => $node->children->count() > 0 && $depth == 0,
         ];
     }
 }

@@ -400,12 +400,12 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
                 onPress={() => {
                   close();
                   setTimeout(() => {
-                    if (onBuyMore) onBuyMore();
+                    if (onBuyMore) onBuyMore(selectedLeg);
                   }, 300);
                 }}
                 style={{ backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Get More Accounts (Buy Products)</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Get More Accounts (Buy Now)</Text>
               </TouchableOpacity>
             </LinearGradient>
           )}
@@ -754,10 +754,12 @@ const ProductsScreen = ({ C, navigation }) => {
           accountCount={accountCount}
           navigation={navigation}
           onClose={() => setSellTarget(null)}
-          onBuyMore={() => {
+          onBuyMore={(leg) => {
             navigation.navigate('CustomerPay', {
               distributor_id: distributorId,
               product_id: sellTarget?.id,
+              leg: leg,
+              self_purchase: true,
             });
           }}
           C={C}

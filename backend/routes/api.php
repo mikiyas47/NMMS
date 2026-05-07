@@ -87,8 +87,8 @@ Route::middleware('auth:sanctum')->group(function () {
 // ── Distributor Join (MLM Network Enrollment) ─────────────────────────────────
 use App\Http\Controllers\Api\DistributorJoinController;
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/distributor/join',   [DistributorJoinController::class, 'join']);
-    Route::get('/distributor/status',  [DistributorJoinController::class, 'status']);
+    Route::post('/distributor/join', [DistributorJoinController::class, 'join']);
+    Route::get('/distributor/status', [DistributorJoinController::class, 'status']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -102,12 +102,12 @@ Route::get('/fix-accounts', function () {
 
     foreach ($nodes as $node) {
         $hasAccount = \App\Models\Account::where('distributor_id', $node->distributor_id)->exists();
-        
+
         if (!$hasAccount) {
             $payment = \App\Models\Payment::where('distributor_id', $node->distributor_id)
                 ->whereNotNull('product_id')
                 ->first();
-                
+
             $productId = $payment ? $payment->product_id : null;
             if (!$productId) {
                 $golden = \App\Models\Product::where('category', 'golden')->first();
@@ -124,11 +124,11 @@ Route::get('/fix-accounts', function () {
 
             \App\Models\Account::create([
                 'distributor_id' => $node->distributor_id,
-                'node_id'        => $node->id,
-                'product_id'     => $productId,
-                'sponsor_id'     => $sponsorId,
+                'node_id' => $node->id,
+                'product_id' => $productId,
+                'sponsor_id' => $sponsorId,
             ]);
-            
+
             $fixed++;
         }
     }
@@ -141,10 +141,11 @@ Route::get('/fix-accounts', function () {
 // Temporary route to debug a distributor's rate
 Route::get('/debug-rate/{distributorId}', function ($distributorId) {
     $distributor = \App\Models\Distributor::find($distributorId);
-    if (!$distributor) return response()->json(['error' => 'Distributor not found']);
+    if (!$distributor)
+        return response()->json(['error' => 'Distributor not found']);
 
     $accounts = \App\Models\Account::where('distributor_id', $distributorId)->with('product')->get();
-    
+
     $rate = 10;
     foreach ($accounts as $acc) {
         if ($acc->product && $acc->product->referral_rate > $rate) {
@@ -268,24 +269,26 @@ Route::get('/remove-duplicate-distributor', function () {
 // Full flow simulation: reset → double account → refer customer → show result
 Route::get('/test-full-flow/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
-    if (!$dist) return response()->json(['error' => 'Distributor not found'], 404);
+    if (!$dist)
+        return response()->json(['error' => 'Distributor not found'], 404);
 
-    $distId  = $dist->distributor_id;
+    $distId = $dist->distributor_id;
     $product = \App\Models\Product::first();
-    if (!$product) return response()->json(['error' => 'No products in DB'], 404);
+    if (!$product)
+        return response()->json(['error' => 'No products in DB'], 404);
 
     $mlm = app(\App\Services\MlmEngineService::class);
     $log = [];
 
     // Step 1: Reset (remove everything except main node)
-    $mainNode = \App\Models\Node::where('distributor_id', $distId)->orderBy('id','asc')->first();
+    $mainNode = \App\Models\Node::where('distributor_id', $distId)->orderBy('id', 'asc')->first();
     if ($mainNode) {
         $children = \App\Models\Node::where('parent_id', $mainNode->id)->get();
         foreach ($children as $c) {
             \App\Models\Account::where('node_id', $c->id)->delete();
             $c->delete();
         }
-        $others = \App\Models\Node::where('distributor_id', $distId)->where('id','!=',$mainNode->id)->get();
+        $others = \App\Models\Node::where('distributor_id', $distId)->where('id', '!=', $mainNode->id)->get();
         foreach ($others as $o) {
             \App\Models\Account::where('node_id', $o->id)->delete();
             $o->delete();
@@ -326,27 +329,28 @@ Route::get('/test-full-flow/{email}', function ($email) {
             ->first()
         : null;
 
-    $mainNodeFresh  = \App\Models\Node::where('distributor_id', $distId)->orderBy('id','asc')->first();
+    $mainNodeFresh = \App\Models\Node::where('distributor_id', $distId)->orderBy('id', 'asc')->first();
     $secondaryNodes = $mainNodeFresh ? \App\Models\Node::where('parent_id', $mainNodeFresh->id)->where('distributor_id', $distId)->get() : [];
 
     $custParentId = $custNode?->parent_id;
     $isUnderSecondary = collect($secondaryNodes)->contains('id', $custParentId);
 
     return response()->json([
-        'log'                   => $log,
-        'main_node'             => $mainNodeFresh,
-        'secondary_nodes'       => $secondaryNodes,
-        'customer_node'         => $custNode,
-        'customer_parent_id'    => $custParentId,
-        'is_under_secondary'    => $isUnderSecondary,
-        'verdict'               => $isUnderSecondary ? '✅ PASS: Customer correctly placed under secondary account!' : '❌ FAIL: Customer NOT under secondary account',
+        'log' => $log,
+        'main_node' => $mainNodeFresh,
+        'secondary_nodes' => $secondaryNodes,
+        'customer_node' => $custNode,
+        'customer_parent_id' => $custParentId,
+        'is_under_secondary' => $isUnderSecondary,
+        'verdict' => $isUnderSecondary ? '✅ PASS: Customer correctly placed under secondary account!' : '❌ FAIL: Customer NOT under secondary account',
     ]);
 });
 
 // Temporary: inspect node tree structure for a distributor
 Route::get('/debug-tree/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
-    if (!$dist) return response()->json(['error' => 'Distributor not found'], 404);
+    if (!$dist)
+        return response()->json(['error' => 'Distributor not found'], 404);
 
     $distId = $dist->distributor_id;
     $nodes = \App\Models\Node::where('distributor_id', $distId)->orderBy('id')->get();
@@ -359,36 +363,38 @@ Route::get('/debug-tree/{email}', function ($email) {
 
     return response()->json([
         'distributor_id' => $distId,
-        'all_nodes'      => $nodes,
-        'accounts'       => $accounts,
-        'main_node'      => $mainNode,
+        'all_nodes' => $nodes,
+        'accounts' => $accounts,
+        'main_node' => $mainNode,
         'secondary_nodes_count' => collect($secondaryNodes)->count(),
-        'secondary_nodes'       => $secondaryNodes,
+        'secondary_nodes' => $secondaryNodes,
     ]);
 });
 
 // Temporary route to reset a specific distributor's tree (remove duplicates from testing)
 Route::get('/reset-tree/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
-    if (!$dist) return response()->json(['error' => 'Distributor not found'], 404);
-    
+    if (!$dist)
+        return response()->json(['error' => 'Distributor not found'], 404);
+
     $distId = $dist->distributor_id;
-    
+
     // Find my main node
     $mainNode = \App\Models\Node::where('distributor_id', $distId)->orderBy('id', 'asc')->first();
-    
-    if (!$mainNode) return response()->json(['message' => 'No main node found']);
-    
+
+    if (!$mainNode)
+        return response()->json(['message' => 'No main node found']);
+
     // Delete all nodes where parent_id = my main node's id
     $childNodes = \App\Models\Node::where('parent_id', $mainNode->id)->get();
-    
+
     $deletedCount = 0;
     foreach ($childNodes as $child) {
         \App\Models\Account::where('node_id', $child->id)->delete();
         $child->delete();
         $deletedCount++;
     }
-    
+
     // Also delete any other nodes I own except the main node
     $myOtherNodes = \App\Models\Node::where('distributor_id', $distId)->where('id', '!=', $mainNode->id)->get();
     foreach ($myOtherNodes as $other) {
@@ -404,7 +410,7 @@ Route::get('/reset-tree/{email}', function ($email) {
         'carry_left' => 0,
         'carry_right' => 0
     ]);
-    
+
     return response()->json(['message' => "Successfully deleted $deletedCount extra accounts/nodes for $email. The tree is clean!"]);
 });
 

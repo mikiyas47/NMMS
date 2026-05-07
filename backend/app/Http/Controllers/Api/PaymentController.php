@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 
 class PaymentController extends Controller
 {
-    const CHAPA_BASE      = 'https://api.chapa.co/v1';
+    const CHAPA_BASE = 'https://api.chapa.co/v1';
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. INITIATE — POST /api/payments/initiate
@@ -22,21 +22,21 @@ class PaymentController extends Controller
     public function initiate(Request $request)
     {
         $data = $request->validate([
-            'product_id'     => 'required|exists:products,id',
+            'product_id' => 'required|exists:products,id',
             'distributor_id' => 'required|exists:distributors,distributor_id',
-            'quantity'       => 'required|integer|min:1',
-            'customer_name'  => 'required|string|max:120',
+            'quantity' => 'required|integer|min:1',
+            'customer_name' => 'required|string|max:120',
             'customer_email' => 'required|email|max:120',
             'customer_phone' => 'nullable|string|max:20',
-            'prospect_id'    => 'nullable|exists:prospects,prospect_id',
-            'leg'            => 'nullable|integer|between:1,4',
+            'prospect_id' => 'nullable|exists:prospects,prospect_id',
+            'leg' => 'nullable|integer|between:1,4',
         ]);
 
         // Lock price from backend — distributor cannot override
         $product = Product::findOrFail($data['product_id']);
 
-        $unitPrice        = (float) $product->price;
-        $totalAmount      = round($unitPrice * $data['quantity'], 2);
+        $unitPrice = (float) $product->price;
+        $totalAmount = round($unitPrice * $data['quantity'], 2);
 
         $sponsorAccounts = \App\Models\Account::where('distributor_id', $data['distributor_id'])->with('product')->get();
         $rate = 10;
@@ -52,37 +52,37 @@ class PaymentController extends Controller
         $txRef = 'NMMS-' . strtoupper(Str::random(10)) . '-' . time();
 
         $payment = Payment::create([
-            'product_id'        => $product->id,
-            'distributor_id'    => $data['distributor_id'],
-            'prospect_id'       => $data['prospect_id'] ?? null,
-            'customer_name'     => $data['customer_name'],
-            'customer_email'    => $data['customer_email'],
-            'customer_phone'    => $data['customer_phone'] ?? null,
-            'leg'               => $data['leg'] ?? null,
-            'tx_ref'            => $txRef,
-            'amount'            => $totalAmount,
-            'currency'          => 'ETB',
-            'quantity'          => $data['quantity'],
+            'product_id' => $product->id,
+            'distributor_id' => $data['distributor_id'],
+            'prospect_id' => $data['prospect_id'] ?? null,
+            'customer_name' => $data['customer_name'],
+            'customer_email' => $data['customer_email'],
+            'customer_phone' => $data['customer_phone'] ?? null,
+            'leg' => $data['leg'] ?? null,
+            'tx_ref' => $txRef,
+            'amount' => $totalAmount,
+            'currency' => 'ETB',
+            'quantity' => $data['quantity'],
             'commission_amount' => $commissionAmount,
-            'status'            => 'pending',
+            'status' => 'pending',
         ]);
 
         // Call Chapa to create checkout link
         $chapaSecret = env('CHAPA_SECRET_KEY');
-        $nameParts   = explode(' ', trim($data['customer_name']));
+        $nameParts = explode(' ', trim($data['customer_name']));
 
         $chapaPayload = [
-            'amount'        => $totalAmount,
-            'currency'      => 'ETB',
-            'email'         => $data['customer_email'],
-            'first_name'    => $nameParts[0],
-            'last_name'     => count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '-',
-            'phone_number'  => $data['customer_phone'] ?? '',
-            'tx_ref'        => $txRef,
-            'callback_url'  => env('APP_URL') . '/api/payments/webhook',
-            'return_url'    => env('APP_URL') . '/api/payments/return?tx_ref=' . $txRef,
+            'amount' => $totalAmount,
+            'currency' => 'ETB',
+            'email' => $data['customer_email'],
+            'first_name' => $nameParts[0],
+            'last_name' => count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '-',
+            'phone_number' => $data['customer_phone'] ?? '',
+            'tx_ref' => $txRef,
+            'callback_url' => env('APP_URL') . '/api/payments/webhook',
+            'return_url' => env('APP_URL') . '/api/payments/return?tx_ref=' . $txRef,
             'customization' => [
-                'title'       => 'NMMS Purchase',
+                'title' => 'NMMS Purchase',
                 'description' => $data['quantity'] . 'x ' . Str::limit($product->name, 20),
             ],
         ];
@@ -90,7 +90,7 @@ class PaymentController extends Controller
         try {
             $chapaResponse = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $chapaSecret,
-                'Content-Type'  => 'application/json',
+                'Content-Type' => 'application/json',
             ])->post(self::CHAPA_BASE . '/transaction/initialize', $chapaPayload);
 
             $body = $chapaResponse->json();
@@ -99,7 +99,7 @@ class PaymentController extends Controller
                 Log::error('Chapa init failed', ['body' => $body]);
                 $payment->update(['status' => 'failed']);
                 return response()->json([
-                    'status'  => 'error',
+                    'status' => 'error',
                     'message' => $body['message'] ?? 'Payment gateway error. Please try again.',
                 ], 502);
             }
@@ -108,12 +108,12 @@ class PaymentController extends Controller
             $payment->update(['payment_url' => $checkoutUrl]);
 
             return response()->json([
-                'status'      => 'success',
-                'tx_ref'      => $txRef,
+                'status' => 'success',
+                'tx_ref' => $txRef,
                 'payment_url' => $checkoutUrl,
-                'amount'      => $totalAmount,
-                'product'     => $product->name,
-                'payment_id'  => $payment->id,
+                'amount' => $totalAmount,
+                'product' => $product->name,
+                'payment_id' => $payment->id,
             ]);
 
         } catch (\Exception $e) {
@@ -139,8 +139,8 @@ class PaymentController extends Controller
             }
         }
 
-        $data   = $request->json()->all();
-        $txRef  = $data['tx_ref'] ?? $data['reference'] ?? null;
+        $data = $request->json()->all();
+        $txRef = $data['tx_ref'] ?? $data['reference'] ?? null;
         $status = strtolower($data['status'] ?? '');
 
         if (!$txRef) {
@@ -177,10 +177,10 @@ class PaymentController extends Controller
                 $verified = $this->verifyChapaTransaction($lockedPayment->tx_ref);
 
                 $lockedPayment->update([
-                    'status'           => $verified ? 'success' : 'rejected',
-                    'webhook_verified'  => $verified,
-                    'chapa_reference'  => $data['reference'] ?? null,
-                    'chapa_payload'    => $data,
+                    'status' => $verified ? 'success' : 'rejected',
+                    'webhook_verified' => $verified,
+                    'chapa_reference' => $data['reference'] ?? null,
+                    'chapa_payload' => $data,
                 ]);
 
                 if ($verified) {
@@ -191,21 +191,41 @@ class PaymentController extends Controller
                         ->increment('income_yearly', $lockedPayment->commission_amount);
 
                     $lockedPayment->update(['commission_paid' => true]);
-                    
+
                     try {
                         $mlmEngine = app(\App\Services\MlmEngineService::class);
-                        // Customer purchase: creates node + commissions + points
-                        $mlmEngine->processCustomerPurchase(
-                            $lockedPayment->distributor_id, 
-                            $lockedPayment->product_id,
-                            $lockedPayment->customer_name,
-                            $lockedPayment->customer_email,
-                            $lockedPayment->customer_phone,
-                            $lockedPayment->quantity,
-                            $lockedPayment->leg
-                        );
-                        $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
-                        $mlmEngine->runRankCheck($lockedPayment->distributor_id);
+
+                        // Detect self-purchase: distributor is buying for themselves
+                        $distributor = Distributor::where('distributor_id', $lockedPayment->distributor_id)->first();
+                        $isSelfPurchase = $distributor &&
+                            strtolower(trim($distributor->email)) === strtolower(trim($lockedPayment->customer_email));
+
+                        if ($isSelfPurchase) {
+                            // Self-purchase (doubling/tripling/quadrupling):
+                            // adds accounts to THIS distributor, not a new one.
+                            // quantity loop inside processPurchase() creates the correct
+                            // number of accounts → refreshOwnPoints() sums them all.
+                            $mlmEngine->processPurchase(
+                                $lockedPayment->distributor_id,
+                                $lockedPayment->product_id,
+                                null,                        // no external sponsor
+                                $lockedPayment->quantity    // e.g. 4 → 4×800 = 3200 pts
+                            );
+                        } else {
+                            // Normal customer referral purchase
+                            $mlmEngine->processCustomerPurchase(
+                                $lockedPayment->distributor_id,
+                                $lockedPayment->product_id,
+                                $lockedPayment->customer_name,
+                                $lockedPayment->customer_email,
+                                $lockedPayment->customer_phone,
+                                $lockedPayment->quantity,
+                                $lockedPayment->leg
+                            );
+                            // Cycle engine is NOT run automatically — distributor must click
+                            // "Run Cycle Engine" in the Earnings screen to trigger it.
+                            $mlmEngine->runRankCheck($lockedPayment->distributor_id);
+                        }
                     } catch (\Exception $e) {
                         Log::error('Mlm Engine Error: ' . $e->getMessage());
                     }
@@ -237,10 +257,10 @@ class PaymentController extends Controller
         }
 
         return response()->json([
-            'status'           => $payment->status,
-            'tx_ref'           => $payment->tx_ref,
-            'amount'           => $payment->amount,
-            'commission'       => $payment->commission_amount,
+            'status' => $payment->status,
+            'tx_ref' => $payment->tx_ref,
+            'amount' => $payment->amount,
+            'commission' => $payment->commission_amount,
             'webhook_verified' => $payment->webhook_verified,
         ]);
     }
@@ -251,19 +271,19 @@ class PaymentController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function returnUrl(Request $request)
     {
-        $txRef   = $request->query('tx_ref');
+        $txRef = $request->query('tx_ref');
         $payment = Payment::where('tx_ref', $txRef)->first();
-        
+
         if ($payment && $payment->status === 'pending') {
             $this->checkAndFinalizePayment($payment);
             $payment->refresh();
         }
 
-        $status  = $payment?->status ?? 'pending';
+        $status = $payment?->status ?? 'pending';
 
         return response()->json([
-            'tx_ref'  => $txRef,
-            'status'  => $status,
+            'tx_ref' => $txRef,
+            'status' => $status,
             'message' => $status === 'success'
                 ? 'Payment successful! You may close this page.'
                 : 'Payment ' . $status . '. You may close this page.',
@@ -284,7 +304,7 @@ class PaymentController extends Controller
         }
 
         $query = Payment::with(['product', 'distributor']);
-        
+
         // Filter by distributor_id
         if ($distributorId) {
             $query->where('payments.distributor_id', $distributorId);
@@ -300,25 +320,25 @@ class PaymentController extends Controller
 
         // General search (checks multiple fields)
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('payments.product_id', 'like', "%{$search}%")
-                  ->orWhere('payments.distributor_id', 'like', "%{$search}%")
-                  ->orWhere('payments.customer_name', 'like', "%{$search}%")
-                  ->orWhere('payments.tx_ref', 'like', "%{$search}%")
-                  ->orWhereHas('distributor', function($q2) use ($search) {
-                      $q2->where('name', 'like', "%{$search}%")
-                         ->orWhere('distributor_id', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('product', function($q3) use ($search) {
-                      $q3->where('name', 'like', "%{$search}%")
-                         ->orWhere('id', 'like', "%{$search}%");
-                  });
+                    ->orWhere('payments.distributor_id', 'like', "%{$search}%")
+                    ->orWhere('payments.customer_name', 'like', "%{$search}%")
+                    ->orWhere('payments.tx_ref', 'like', "%{$search}%")
+                    ->orWhereHas('distributor', function ($q2) use ($search) {
+                        $q2->where('name', 'like', "%{$search}%")
+                            ->orWhere('distributor_id', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('product', function ($q3) use ($search) {
+                        $q3->where('name', 'like', "%{$search}%")
+                            ->orWhere('id', 'like', "%{$search}%");
+                    });
             });
         }
 
         // Specific distributor name filter
         if ($distributorName) {
-            $query->whereHas('distributor', function($q) use ($distributorName) {
+            $query->whereHas('distributor', function ($q) use ($distributorName) {
                 $q->where('name', 'like', "%{$distributorName}%");
             });
         }
@@ -344,30 +364,30 @@ class PaymentController extends Controller
         $perPage = $request->query('per_page', 15);
         $paginator = $query->orderByDesc('payments.created_at')->paginate($perPage);
 
-        $paginator->getCollection()->transform(function($p) {
+        $paginator->getCollection()->transform(function ($p) {
             return [
-                'id'            => $p->id,
-                'tx_ref'        => $p->tx_ref,
-                'product'       => $p->product?->name,
-                'quantity'      => $p->quantity,
-                'amount'        => $p->amount,
-                'commission'    => $p->commission_amount,
+                'id' => $p->id,
+                'tx_ref' => $p->tx_ref,
+                'product' => $p->product?->name,
+                'quantity' => $p->quantity,
+                'amount' => $p->amount,
+                'commission' => $p->commission_amount,
                 'customer_name' => $p->customer_name,
-                'customer_email'=> $p->customer_email,
+                'customer_email' => $p->customer_email,
                 'distributor_name' => $p->distributor?->name ?? 'Unknown',
-                'status'        => $p->status,
-                'created_at'    => $p->created_at,
+                'status' => $p->status,
+                'created_at' => $p->created_at,
             ];
         });
 
         return response()->json([
-            'status' => 'success', 
-            'data'   => $paginator->items(),
-            'meta'   => [
+            'status' => 'success',
+            'data' => $paginator->items(),
+            'meta' => [
                 'current_page' => $paginator->currentPage(),
-                'last_page'    => $paginator->lastPage(),
-                'per_page'     => $paginator->perPage(),
-                'total'        => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
             ]
         ]);
     }
@@ -410,25 +430,44 @@ class PaymentController extends Controller
                     ->increment('income_yearly', $lockedPayment->commission_amount);
 
                 $lockedPayment->update([
-                    'status'           => 'success',
+                    'status' => 'success',
                     'webhook_verified' => true,
-                    'commission_paid'  => true,
+                    'commission_paid' => true,
                 ]);
-                
+
                 try {
                     $mlmEngine = app(\App\Services\MlmEngineService::class);
-                    // Customer purchase: creates node + commissions + points
-                    $mlmEngine->processCustomerPurchase(
-                        $lockedPayment->distributor_id, 
-                        $lockedPayment->product_id,
-                        $lockedPayment->customer_name,
-                        $lockedPayment->customer_email,
-                        $lockedPayment->customer_phone,
-                        $lockedPayment->quantity,
-                        $lockedPayment->leg
-                    );
-                    $mlmEngine->runCycleEngine($lockedPayment->distributor_id);
-                    $mlmEngine->runRankCheck($lockedPayment->distributor_id);
+
+                    // Detect self-purchase: distributor is buying for themselves
+                    $distributor = Distributor::where('distributor_id', $lockedPayment->distributor_id)->first();
+                    $isSelfPurchase = $distributor &&
+                        strtolower(trim($distributor->email)) === strtolower(trim($lockedPayment->customer_email));
+
+                    if ($isSelfPurchase) {
+                        // Self-purchase (doubling/tripling/quadrupling):
+                        // quantity loop inside processPurchase() creates the correct
+                        // number of accounts → refreshOwnPoints() sums them all.
+                        $mlmEngine->processPurchase(
+                            $lockedPayment->distributor_id,
+                            $lockedPayment->product_id,
+                            null,                        // no external sponsor
+                            $lockedPayment->quantity    // e.g. 4 → 4×800 = 3200 pts
+                        );
+                    } else {
+                        // Normal customer referral purchase
+                        $mlmEngine->processCustomerPurchase(
+                            $lockedPayment->distributor_id,
+                            $lockedPayment->product_id,
+                            $lockedPayment->customer_name,
+                            $lockedPayment->customer_email,
+                            $lockedPayment->customer_phone,
+                            $lockedPayment->quantity,
+                            $lockedPayment->leg
+                        );
+                        // Cycle engine is NOT run automatically — distributor must click
+                        // "Run Cycle Engine" in the Earnings screen to trigger it.
+                        $mlmEngine->runRankCheck($lockedPayment->distributor_id);
+                    }
                 } catch (\Exception $e) {
                     Log::error('Mlm Engine Error in checkAndFinalizePayment: ' . $e->getMessage());
                 }

@@ -65,23 +65,25 @@ const DistributorOverview = ({ C }) => {
   const onRefresh = () => { setRefreshing(true); load(true); };
 
   const wallet = walletData?.wallet || { balance: 0, weekly_earnings: 0, total_earned: 0 };
-  const stats  = walletData?.stats  || { left_points: 0, right_points: 0, rank: 'None', total_points: 0 };
+  const stats  = walletData?.stats  || { rank: 'None', own_points: 0, total_points: 0, cycle_pool: 0 };
   const team   = walletData?.team   || { direct_count: 0, total_team: 0 };
   const commissions = walletData?.recent_commissions || [];
 
-  const rank      = stats.rank && stats.rank !== 'None' ? stats.rank : 'CT';
-  const rankColor = RANK_COLORS[rank] || '#9CA3AF';
-  const rankIcon  = RANK_ICONS[rank]  || '🌱';
+  const rank       = stats.rank && stats.rank !== 'None' ? stats.rank : 'CT';
+  const rankColor  = RANK_COLORS[rank] || '#9CA3AF';
+  const rankIcon   = RANK_ICONS[rank]  || '🌱';
+  const ownPoints  = stats.own_points   || 0;
+  const totalPoints = stats.total_points || 0;
 
-  const cycleLeft  = stats.left_points  + (stats.carry_left  || 0);
-  const cycleRight = stats.right_points + (stats.carry_right || 0);
-  const cyclePct   = Math.min(100, (Math.min(cycleLeft, cycleRight) / 600) * 100);
+  // Cycle pool = total_points (the live tree total IS the pool — nothing is deducted)
+  const cyclePool = stats.cycle_pool || stats.total_points || 0;
+  const cyclePct  = Math.min(100, (cyclePool / 600) * 100);
 
   const statCards = [
-    { label: 'Directs',      value: String(team.direct_count || 0), sub: 'referrals',        icon: Users,       grad: ['#6366F1','#818CF8'], glow: '#6366F1' },
-    { label: 'Team',         value: String(team.total_team   || 0), sub: 'total members',    icon: Network,     grad: ['#10B981','#34D399'], glow: '#10B981' },
-    { label: 'Balance',      value: fmt(wallet.balance),            sub: 'in wallet',         icon: DollarSign,  grad: ['#F59E0B','#FCD34D'], glow: '#F59E0B' },
-    { label: 'This Week',    value: fmt(wallet.weekly_earnings),    sub: 'earned this wk',   icon: TrendingUp,  grad: ['#8B5CF6','#A78BFA'], glow: '#8B5CF6' },
+    { label: 'Total Points', value: totalPoints.toLocaleString(), sub: 'own + network',    icon: Star,        grad: ['#FBBF24','#F59E0B'], glow: '#FBBF24' },
+    { label: 'Own Packages', value: ownPoints.toLocaleString(),   sub: 'personal volume',  icon: Network,     grad: ['#10B981','#34D399'], glow: '#10B981' },
+    { label: 'Balance',      value: fmt(wallet.balance),          sub: 'in wallet',         icon: DollarSign,  grad: ['#F59E0B','#FCD34D'], glow: '#F59E0B' },
+    { label: 'This Week',    value: fmt(wallet.weekly_earnings),  sub: 'earned this wk',   icon: TrendingUp,  grad: ['#8B5CF6','#A78BFA'], glow: '#8B5CF6' },
   ];
 
   const quickActions = [
@@ -123,12 +125,23 @@ const DistributorOverview = ({ C }) => {
             </View>
           </View>
 
-          {/* Binary Cycle Progress */}
+          {/* Total Points + Cycle Pool */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+              <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>TOTAL POINTS</Text>
+              <Text style={{ color: '#FCD34D', fontSize: 20, fontWeight: '900', marginTop: 2 }}>{totalPoints.toLocaleString()}</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+              <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>OWN PACKAGES</Text>
+              <Text style={{ color: '#86EFAC', fontSize: 20, fontWeight: '900', marginTop: 2 }}>{ownPoints.toLocaleString()}</Text>
+            </View>
+          </View>
+          {/* Cycle Pool Progress */}
           <View style={{ backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 12 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' }}>Binary Cycle Progress</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' }}>Cycle Pool (All Legs)</Text>
               <Text style={{ color: '#FCD34D', fontSize: 12, fontWeight: '800' }}>
-                {Math.min(cycleLeft, cycleRight)} / 600 pts
+                {cyclePool.toLocaleString()} / 600 pts
               </Text>
             </View>
             <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3 }}>
@@ -137,7 +150,7 @@ const DistributorOverview = ({ C }) => {
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
               <TrendingUp color="#86EFAC" size={13} />
               <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginLeft: 6 }}>
-                Left: {cycleLeft} pts · Right: {cycleRight} pts
+                {Math.floor(cyclePool / 600)} cycle{Math.floor(cyclePool / 600) !== 1 ? 's' : ''} ready · {cyclePool % 600} pts remainder
               </Text>
             </View>
           </View>
@@ -206,9 +219,9 @@ const DistributorOverview = ({ C }) => {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={{ color: C.text, fontWeight: '800', fontSize: 14 }}>Keep Growing! 🚀</Text>
               <Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
-                {stats.total_points > 0
-                  ? `${stats.total_points.toLocaleString()} total points accumulated`
-                  : 'Refer your first member to start earning!'}
+                {totalPoints > 0
+                  ? `${totalPoints.toLocaleString()} total pts · ${ownPoints.toLocaleString()} personal`
+                  : 'Purchase a package to start earning points!'}
               </Text>
             </View>
             <View style={{ backgroundColor: 'rgba(245,158,11,0.2)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>

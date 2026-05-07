@@ -6,27 +6,27 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   DollarSign, TrendingUp, Award, Zap, ChevronRight,
-  RefreshCw, Clock, Star, Shield, Crown, Gem,
+  RefreshCw, Clock, Star, Shield, Crown, Gem, Package,
 } from 'lucide-react-native';
 import { getWallet, runCycleEngine } from '../../api/authService';
 
-// ── Rank config ──────────────────────────────────────────────────────────────
+// ── Rank config ───────────────────────────────────────────────────────────────
 const RANK_CONFIG = {
-  None:  { label: 'Customer Trainee(CT)',         colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked/New' },
-  CT:    { label: 'Customer Trainee(CT)',         colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked/New' },
-  MT:    { label: 'Market Trainee',               colors: ['#FBBF24','#D97706'], icon: '⭐', requirement: '4 legs ≥ 200 pts & 5,000 total' },
-  TT:    { label: 'Team Trainee',                 colors: ['#F97316','#C2410C'], icon: '🔥', requirement: '2 MT legs & 10,000 total' },
-  NTB:   { label: 'National Team Builder',        colors: ['#34D399','#059669'], icon: '🌿', requirement: '4 TT legs & 50,000 total' },
-  IBB:   { label: 'Intl. Business Builder',       colors: ['#60A5FA','#2563EB'], icon: '💎', requirement: '4 NTB legs & 200,000 total' },
-  GEB:   { label: 'Global Empire Builder',        colors: ['#C084FC','#7E22CE'], icon: '👑', requirement: '4 IBB legs & 800,000 total' },
-  CA:    { label: 'Crown Achiever',               colors: ['#FBBF24','#D97706'], icon: '🏆', requirement: 'Reach GEB ($50K Award)' },
-  C_AWARD:{label: 'Crown Award',                  colors: ['#F59E0B','#B45309'], icon: '🏅', requirement: 'Multiple GEB legs ($100K Award)' },
-  AL:    { label: 'Alpha Legend',                 colors: ['#FCD34D','#B45309'], icon: '🌟', requirement: '4 CA legs ($500K Award)' },
+  None:    { label: 'Customer Trainee (CT)',      colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked / New' },
+  CT:      { label: 'Customer Trainee (CT)',      colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked / New' },
+  MT:      { label: 'Market Trainee',             colors: ['#FBBF24','#D97706'], icon: '⭐', requirement: 'All 4 legs ≥ 200 pts & 5,000 total' },
+  TT:      { label: 'Team Trainee',               colors: ['#F97316','#C2410C'], icon: '🔥', requirement: '2 MT legs & 10,000 total' },
+  NTB:     { label: 'National Team Builder',      colors: ['#34D399','#059669'], icon: '🌿', requirement: '4 TT legs & 50,000 total' },
+  IBB:     { label: 'Intl. Business Builder',     colors: ['#60A5FA','#2563EB'], icon: '💎', requirement: '4 NTB legs & 200,000 total' },
+  GEB:     { label: 'Global Empire Builder',      colors: ['#C084FC','#7E22CE'], icon: '👑', requirement: '4 IBB legs & 800,000 total' },
+  CA:      { label: 'Crown Achiever',             colors: ['#FBBF24','#D97706'], icon: '🏆', requirement: '4 GEB legs ($50K Award)' },
+  C_AWARD: { label: 'Crown Award',                colors: ['#F59E0B','#B45309'], icon: '🏅', requirement: '2+ CA legs ($100K Award)' },
+  AL:      { label: 'Alpha Legend',               colors: ['#FCD34D','#B45309'], icon: '🌟', requirement: '4 CA legs ($500K Award)' },
 };
 
 const RANK_ORDER = ['CT','MT','TT','NTB','IBB','GEB','CA','C_AWARD','AL'];
 
-// ── Animated fade in ─────────────────────────────────────────────────────────
+// ── Animated fade-in ──────────────────────────────────────────────────────────
 const FadeIn = ({ delay = 0, children }) => {
   const anim  = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(20)).current;
@@ -49,12 +49,12 @@ const StatPill = ({ label, value, color, C }) => (
     flex: 1, backgroundColor: C.surface, borderWidth: 1,
     borderColor: C.border, borderRadius: 16, padding: 14, alignItems: 'center',
   }}>
-    <Text style={{ fontSize: 20, fontWeight: '900', color }}>{value}</Text>
+    <Text style={{ fontSize: 18, fontWeight: '900', color }}>{value}</Text>
     <Text style={{ fontSize: 10, color: C.muted, marginTop: 3, textAlign: 'center' }}>{label}</Text>
   </View>
 );
 
-// ── Progress bar ─────────────────────────────────────────────────────────────
+// ── Progress bar ──────────────────────────────────────────────────────────────
 const ProgressBar = ({ pct, colors }) => (
   <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
     <LinearGradient
@@ -67,11 +67,11 @@ const ProgressBar = ({ pct, colors }) => (
 
 // ─────────────────────────────────────────────────────────────────────────────
 const EarningsScreen = ({ C }) => {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]             = useState(null);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [cycling, setCycling] = useState(false);
-  const [error, setError]     = useState(null);
+  const [cycling, setCycling]       = useState(false);
+  const [error, setError]           = useState(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -80,13 +80,8 @@ const EarningsScreen = ({ C }) => {
       setData(res);
       setError(null);
     } catch (e) {
-      if (e?.response?.status === 404) {
-        // Route not deployed yet or new distributor with no wallet — show empty state
-        setData(null);
-        setError(null);
-      } else {
-        setError(e.message || 'Failed to load earnings data.');
-      }
+      if (e?.response?.status === 404) { setData(null); setError(null); }
+      else setError(e.message || 'Failed to load earnings data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,7 +89,6 @@ const EarningsScreen = ({ C }) => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
   const onRefresh = () => { setRefreshing(true); load(true); };
 
   const handleRunCycle = async () => {
@@ -107,9 +101,12 @@ const EarningsScreen = ({ C }) => {
           text: 'Run Now', onPress: async () => {
             setCycling(true);
             try {
-              await runCycleEngine();
+              const result = await runCycleEngine();
               await load(true);
-              Alert.alert('✅ Done', 'Cycle engine ran successfully! Your wallet has been updated.');
+              const msg = result?.result?.cycles > 0
+                ? `✅ ${result.result.cycles} cycle(s) completed!\nEarned: $${parseFloat(result.result.earnings).toFixed(2)}`
+                : '⏳ Not enough points yet. Keep growing your team!';
+              Alert.alert('Cycle Engine', msg);
             } catch (e) {
               Alert.alert('Error', e.message || 'Cycle engine failed.');
             } finally {
@@ -142,23 +139,27 @@ const EarningsScreen = ({ C }) => {
     );
   }
 
-  const wallet = data?.wallet   || { balance: 0, weekly_earnings: 0, total_earned: 0 };
-  const stats  = data?.stats    || { left_points: 0, right_points: 0, carry_left: 0, carry_right: 0, rank: 'None', total_points: 0 };
-  const team   = data?.team     || { direct_count: 0, total_team: 0, legs: [] };
+  const wallet      = data?.wallet  || { balance: 0, weekly_earnings: 0, total_earned: 0 };
+  const stats       = data?.stats   || { cycle_pool: 0, rank: 'CT', own_points: 0, total_points: 0 };
+  const team        = data?.team    || { direct_count: 0, total_team: 0, legs: [] };
   const commissions = data?.recent_commissions || [];
 
   let activeRank = stats.rank;
   if (!activeRank || activeRank === 'None') activeRank = 'CT';
-  const currentRankCfg  = RANK_CONFIG[activeRank] || RANK_CONFIG['CT'];
-  const rankIdx         = RANK_ORDER.indexOf(activeRank);
-  const nextRank        = RANK_ORDER[rankIdx + 1];
-  const nextRankCfg     = nextRank ? RANK_CONFIG[nextRank] : null;
+  const currentRankCfg = RANK_CONFIG[activeRank] || RANK_CONFIG['CT'];
+  const rankIdx        = RANK_ORDER.indexOf(activeRank);
+  const nextRank       = RANK_ORDER[rankIdx + 1];
+  const nextRankCfg    = nextRank ? RANK_CONFIG[nextRank] : null;
 
-  // Cycle progress: needs 600 balanced on each side
-  const cycleLeft  = stats.left_points  + stats.carry_left;
-  const cycleRight = stats.right_points + stats.carry_right;
-  const cyclePct   = Math.min(100, (Math.min(cycleLeft, cycleRight) / 600) * 100);
-  const cyclesReady = Math.floor(Math.min(cycleLeft, cycleRight) / 600);
+  // ── Cycle calculation ────────────────────────────────────────────────────
+  // cycle_pool = total_points (the live tree total IS the pool — nothing is deducted)
+  const cycleAvailable = stats.cycle_pool || stats.total_points || 0;
+  const cyclesReady    = Math.floor(cycleAvailable / 600);
+  const cyclePct       = Math.min(100, (cycleAvailable / 600) * 100);
+
+  // Total points displayed = own packages + network left + right
+  const totalPoints = stats.total_points || 0;
+  const ownPoints   = stats.own_points   || 0;
 
   const fmt = (n) => {
     const num = parseFloat(n ?? 0);
@@ -172,20 +173,17 @@ const EarningsScreen = ({ C }) => {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
     >
 
-      {/* ── Wallet Header Banner ── */}
+      {/* ── Wallet Header ── */}
       <FadeIn delay={0}>
         <LinearGradient
-          colors={['#064E3B', '#065F46', '#10B981']}
+          colors={['#064E3B','#065F46','#10B981']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={{ borderRadius: 24, padding: 22, marginBottom: 16, overflow: 'hidden' }}
         >
           <View style={{ position: 'absolute', right: -30, top: -30, width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(255,255,255,0.06)' }} />
           <View style={{ position: 'absolute', left: -20, bottom: -20, width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(255,255,255,0.04)' }} />
-
           <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: '700', letterSpacing: 1.5 }}>TOTAL WALLET BALANCE</Text>
-          <Text style={{ color: '#fff', fontSize: 38, fontWeight: '900', marginTop: 4 }}>
-            ${fmt(wallet.balance)}
-          </Text>
+          <Text style={{ color: '#fff', fontSize: 38, fontWeight: '900', marginTop: 4 }}>${fmt(wallet.balance)}</Text>
           <View style={{ flexDirection: 'row', gap: 16, marginTop: 16 }}>
             <View>
               <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>This Week</Text>
@@ -203,9 +201,9 @@ const EarningsScreen = ({ C }) => {
       {/* ── Stats Row ── */}
       <FadeIn delay={60}>
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-          <StatPill label="Left Points"  value={cycleLeft.toLocaleString()}  color={C.blue}   C={C} />
-          <StatPill label="Right Points" value={cycleRight.toLocaleString()} color={C.purple} C={C} />
-          <StatPill label="Team Size"    value={team.total_team}             color={C.green}  C={C} />
+          <StatPill label="Total Points"  value={(stats.total_points || 0).toLocaleString()} color={C.blue}   C={C} />
+          <StatPill label="Cycle Pool"    value={(stats.cycle_pool   || 0).toLocaleString()} color={C.purple} C={C} />
+          <StatPill label="Team Size"     value={team.total_team}                             color={C.green}  C={C} />
         </View>
       </FadeIn>
 
@@ -229,21 +227,37 @@ const EarningsScreen = ({ C }) => {
             </View>
           </View>
 
-          {nextRankCfg && (
-            <View style={{ marginTop: 14 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11 }}>Next: {nextRankCfg.label}</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11 }}>{stats.total_points.toLocaleString()} pts</Text>
+          {/* ── Total Points inside rank card ── */}
+          <View style={{ marginTop: 16, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 14, padding: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1 }}>TOTAL POINTS</Text>
+                <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', marginTop: 2 }}>
+                  {totalPoints.toLocaleString()}
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}> pts</Text>
+                </Text>
               </View>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, marginTop: 4 }}>
-                Requirement: {nextRankCfg.requirement}
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1 }}>OWN PACKAGES</Text>
+                <Text style={{ color: '#FCD34D', fontSize: 20, fontWeight: '900', marginTop: 2 }}>
+                  {ownPoints.toLocaleString()}
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: 'rgba(252,211,77,0.8)' }}> pts</Text>
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {nextRankCfg && (
+            <View style={{ marginTop: 12 }}>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>
+                Next: {nextRankCfg.label} — {nextRankCfg.requirement}
               </Text>
             </View>
           )}
         </LinearGradient>
       </FadeIn>
 
-      {/* ── Binary Cycle Progress ── */}
+      {/* ── Earning Cycle Engine ── */}
       <FadeIn delay={140}>
         <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 18, marginBottom: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
@@ -251,8 +265,8 @@ const EarningsScreen = ({ C }) => {
               <Zap color="#fff" size={18} />
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontWeight: '800', fontSize: 15 }}>Binary Cycle Progress</Text>
-              <Text style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>600 balanced pts per cycle</Text>
+              <Text style={{ color: C.text, fontWeight: '800', fontSize: 15 }}>Earning Cycle Engine</Text>
+              <Text style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>600 pts per cycle (all legs combined)</Text>
             </View>
             {cyclesReady > 0 && (
               <View style={{ backgroundColor: '#10B98120', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
@@ -261,22 +275,29 @@ const EarningsScreen = ({ C }) => {
             )}
           </View>
 
-          {/* Left / Right bars */}
-          {[
-            { label: 'Left',  val: cycleLeft,  colors: ['#6366F1','#818CF8'] },
-            { label: 'Right', val: cycleRight, colors: ['#10B981','#34D399'] },
-          ].map(leg => {
-            const pct = Math.min(100, (leg.val / 600) * 100);
-            return (
-              <View key={leg.label} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <Text style={{ color: C.muted, fontSize: 12, fontWeight: '600' }}>{leg.label}</Text>
-                  <Text style={{ color: C.text, fontSize: 12, fontWeight: '800' }}>{leg.val} <Text style={{ color: C.muted, fontWeight: '400' }}>/ 600</Text></Text>
-                </View>
-                <ProgressBar pct={pct} colors={leg.colors} />
-              </View>
-            );
-          })}
+          {/* Cycle pool bar */}
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+              <Text style={{ color: C.muted, fontSize: 12, fontWeight: '600' }}>Total Points (Cycle Pool)</Text>
+              <Text style={{ color: C.text, fontSize: 12, fontWeight: '800' }}>
+                {cycleAvailable.toLocaleString()} <Text style={{ color: C.muted, fontWeight: '400' }}>pts</Text>
+              </Text>
+            </View>
+            <ProgressBar pct={cyclePct} colors={['#6366F1','#10B981']} />
+          </View>
+
+          {/* Cycle math summary */}
+          {cyclesReady > 0 && (
+            <View style={{ backgroundColor: '#10B98110', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+              <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Cycle Calculation Preview</Text>
+              <Text style={{ color: C.muted, fontSize: 11 }}>
+                {cycleAvailable.toLocaleString()} pts ÷ 600 = {cyclesReady} cycle{cyclesReady > 1 ? 's' : ''}
+              </Text>
+              <Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>
+                Remainder: {cycleAvailable % 600} pts (stays in your total — not deducted)
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
             onPress={handleRunCycle}
@@ -285,7 +306,6 @@ const EarningsScreen = ({ C }) => {
               backgroundColor: cyclesReady > 0 ? '#10B981' : C.inputBg,
               borderRadius: 12, height: 44,
               alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
-              marginTop: 4,
               opacity: cycling ? 0.7 : 1,
             }}
           >
@@ -310,7 +330,7 @@ const EarningsScreen = ({ C }) => {
             </Text>
           ) : (
             [1, 2, 3, 4].map(legNum => {
-              const leg = team.legs.find(l => l.leg === legNum);
+              const leg     = team.legs.find(l => l.leg === legNum);
               const rankCfg = leg?.rank ? (RANK_CONFIG[leg.rank] || RANK_CONFIG['None']) : RANK_CONFIG['None'];
               return (
                 <View key={legNum} style={{
@@ -328,12 +348,12 @@ const EarningsScreen = ({ C }) => {
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>Leg {legNum}</Text>
                     <Text style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>
-                      {leg ? `${leg.points.toLocaleString()} pts · ${leg.rank || 'None'}` : 'Empty slot'}
+                      {leg ? `${(leg.points || 0).toLocaleString()} pts · ${leg.rank || 'CT'}` : 'Empty slot'}
                     </Text>
                   </View>
                   {leg && (
                     <View style={{ backgroundColor: rankCfg.colors[0] + '22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                      <Text style={{ color: rankCfg.colors[0], fontSize: 11, fontWeight: '700' }}>{leg.rank || 'None'}</Text>
+                      <Text style={{ color: rankCfg.colors[0], fontSize: 11, fontWeight: '700' }}>{leg.rank || 'CT'}</Text>
                     </View>
                   )}
                 </View>
@@ -347,14 +367,14 @@ const EarningsScreen = ({ C }) => {
       <FadeIn delay={220}>
         <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 18, marginBottom: 16 }}>
           <Text style={{ color: C.text, fontWeight: '800', fontSize: 15, marginBottom: 14 }}>Rank Ladder</Text>
-          {RANK_ORDER.filter(r => r !== 'None').map((rank, idx) => {
-            const cfg     = RANK_CONFIG[rank];
+          {RANK_ORDER.map((rank, idx) => {
+            const cfg      = RANK_CONFIG[rank];
             const achieved = RANK_ORDER.indexOf(activeRank) >= RANK_ORDER.indexOf(rank) && activeRank !== 'None';
             return (
               <View key={rank} style={{
                 flexDirection: 'row', alignItems: 'center',
                 paddingVertical: 10,
-                borderBottomWidth: idx < RANK_ORDER.length - 2 ? 1 : 0,
+                borderBottomWidth: idx < RANK_ORDER.length - 1 ? 1 : 0,
                 borderBottomColor: C.border,
                 opacity: achieved ? 1 : 0.5,
               }}>
@@ -402,7 +422,7 @@ const EarningsScreen = ({ C }) => {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                   <Clock color={C.muted} size={10} />
                   <Text style={{ color: C.muted, fontSize: 10 }}>
-                    {new Date(c.date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                    {new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </Text>
                 </View>
               </View>

@@ -22,7 +22,7 @@ class RunWeeklyMlmFlow extends Command
      *
      * @var string
      */
-    protected $description = 'Runs the weekly cycle engine, rank checks, and resets weekly earnings.';
+    protected $description = 'Runs weekly rank checks and resets weekly earnings. Does NOT run the cycle engine — distributors must trigger that manually via the Earnings screen.';
 
     /**
      * Execute the console command.
@@ -37,18 +37,18 @@ class RunWeeklyMlmFlow extends Command
         foreach ($distributors as $distributor) {
             DB::beginTransaction();
             try {
-                // 1. Run Cycle Engine
-                $mlmEngine->runCycleEngine($distributor->distributor_id);
-
-                // 2. Run Rank Check
+                // 1. Run Rank Check (uses live subtree volume — no stored left/right points)
                 $mlmEngine->runRankCheck($distributor->distributor_id);
 
-                // 3. Reset Weekly Earnings
+                // 2. Reset Weekly Earnings
                 $wallet = Wallet::where('distributor_id', $distributor->distributor_id)->first();
                 if ($wallet) {
                     $wallet->weekly_earnings = 0;
                     $wallet->save();
                 }
+
+                // NOTE: Cycle engine is intentionally NOT run here.
+                // Distributors must click "Run Cycle Engine" in the Earnings screen.
 
                 DB::commit();
             } catch (\Exception $e) {
