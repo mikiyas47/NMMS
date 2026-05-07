@@ -106,7 +106,42 @@ class MlmEngineService
                 $nodes[] = $newNode;
             }
 
-            // Referral commission to sponsor
+            // ── Commission on own purchase ────────────────────────────────────
+            // The distributor earns commission on every account they buy themselves
+            // (single, double, triple, quadruple). Rate is taken from their best
+            // existing account's referral_rate (or 10% minimum).
+            $ownAccounts = Account::where('distributor_id', $distributorId)->with('product')->get();
+            $selfRate = 10;
+            foreach ($ownAccounts as $acc) {
+                if ($acc->product && $acc->product->referral_rate > $selfRate) {
+                    $selfRate = $acc->product->referral_rate;
+                }
+            }
+            $selfCommission = ($selfRate / 100) * ($product->point ?? 0) * $quantity;
+            if ($selfCommission > 0) {
+                $selfWallet = Wallet::firstOrCreate(['distributor_id' => $distributorId]);
+                $selfWallet->balance      += $selfCommission;
+                $selfWallet->total_earned += $selfCommission;
+                $selfWallet->save();
+                Distributor::where('distributor_id', $distributorId)->increment('income_monthly', $selfCommission);
+                Distributor::where('distributor_id', $distributorId)->increment('income_yearly',  $selfCommission);
+                \App\Models\Payment::create([
+                    'product_id'        => $productId,
+                    'distributor_id'    => $distributorId,
+                    'customer_name'     => 'Own Account Commission (' . $quantity . 'x ' . $product->name . ')',
+                    'customer_email'    => $distributor->email ?? 'N/A',
+                    'tx_ref'            => 'SELF-' . strtoupper(\Illuminate\Support\Str::random(10)),
+                    'amount'            => ($product->price ?? 0) * $quantity,
+                    'currency'          => 'ETB',
+                    'quantity'          => $quantity,
+                    'commission_amount' => $selfCommission,
+                    'status'            => 'success',
+                    'webhook_verified'  => true,
+                    'commission_paid'   => true,
+                ]);
+            }
+
+            // ── Referral commission to sponsor (if referred by someone) ───────
             if ($sponsorId) {
                 $sponsorAccounts = Account::where('distributor_id', $sponsorId)->with('product')->get();
                 if ($sponsorAccounts->isNotEmpty()) {
