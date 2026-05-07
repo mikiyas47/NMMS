@@ -91,6 +91,12 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Customer → Distributor Upgrade (public — no auth needed) ─────────────────
+use App\Http\Controllers\Api\CustomerUpgradeController;
+Route::post('/customer/upgrade', [CustomerUpgradeController::class, 'upgrade']);
+Route::get('/customer/status',   [CustomerUpgradeController::class, 'status']);
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 

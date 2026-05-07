@@ -29,6 +29,7 @@ class Distributor extends Authenticatable
         'email',
         'password',
         'rank',
+        'upline_id',
         'income_monthly',
         'income_weekly',
         'income_yearly',

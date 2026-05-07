@@ -256,9 +256,50 @@ export const getWallet = async () => {
   return response.data;
 };
 
-export const runCycleEngine = async () => {
-  const response = await apiClient.post('/wallet/run-cycle');
-  return response.data;
+// ── Customer → Distributor Upgrade ───────────────────────────────────────────
+/**
+ * Called after a successful customer payment when the customer chooses to
+ * become a distributor. Sets their real password and activates their account.
+ * Returns a Sanctum token so they can log in immediately.
+ */
+export const upgradeToDistributor = async ({ email, password, password_confirmation, tx_ref }) => {
+  try {
+    const response = await apiClient.post('/customer/upgrade', {
+      email,
+      password,
+      password_confirmation,
+      tx_ref,
+    });
+    // Auto-store token so they are logged in right away
+    if (response.data.access_token) {
+      await AsyncStorage.setItem('authToken', response.data.access_token);
+      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  } catch (error) {
+    const errData = error.response?.data;
+    let msg = errData?.message ?? 'Upgrade failed. Please try again.';
+    if (errData?.errors) {
+      const first = Object.values(errData.errors)[0];
+      msg = Array.isArray(first) ? first[0] : first;
+    }
+    throw new Error(msg);
+  }
+};
+
+/**
+ * Check whether a customer email already has an active distributor account.
+ * Used to skip the upgrade prompt for returning distributors.
+ */
+export const checkCustomerStatus = async (email, txRef) => {
+  try {
+    const response = await apiClient.get('/customer/status', {
+      params: { email, tx_ref: txRef },
+    });
+    return response.data;
+  } catch {
+    return { is_distributor: false };
+  }
 };
 
 // ── Tree ──────────────────────────────────────────────────────────────────────

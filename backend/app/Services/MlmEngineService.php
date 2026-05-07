@@ -162,10 +162,26 @@ class MlmEngineService
         try {
             $product = Product::findOrFail($productId);
 
+            // Generate a random temporary password so the customer can log in
+            // immediately after upgrading. The upgrade endpoint replaces this.
+            $tempPassword = \Illuminate\Support\Str::random(12);
+
             $newDist = Distributor::firstOrCreate(
                 ['email' => $customerEmail],
-                ['name' => $customerName, 'phone' => $customerPhone, 'password' => bcrypt('password123'), 'join_date' => now()]
+                [
+                    'name'      => $customerName,
+                    'phone'     => $customerPhone,
+                    'password'  => bcrypt($tempPassword),
+                    'upline_id' => $distributorId,   // link to sponsor from day one
+                    'join_date' => now(),
+                ]
             );
+
+            // If the distributor already existed but has no upline set, set it now
+            if (!$newDist->wasRecentlyCreated && !$newDist->upline_id) {
+                $newDist->upline_id = $distributorId;
+                $newDist->save();
+            }
 
             Wallet::firstOrCreate(['distributor_id' => $newDist->distributor_id]);
             Stat::firstOrCreate(['distributor_id'   => $newDist->distributor_id]);
