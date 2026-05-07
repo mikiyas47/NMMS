@@ -639,7 +639,7 @@ const CustomerPayScreen = ({ route, navigation }) => {
     return () => clearInterval(pollRef.current);
   }, []);
 
-  // Poll backend for payment confirmation
+  // Poll backend for payment confirmation — checks every 2 seconds
   const startPolling = useCallback((ref) => {
     setPolling(true);
     let attempts = 0;
@@ -659,8 +659,8 @@ const CustomerPayScreen = ({ route, navigation }) => {
           setPaymentStatus('failed');
         }
       } catch {}
-      if (attempts > 60) { clearInterval(pollRef.current); setPolling(false); }
-    }, 5000);
+      if (attempts > 150) { clearInterval(pollRef.current); setPolling(false); }
+    }, 2000); // poll every 2 seconds instead of 5
   }, []);
 
   // Initiate Chapa payment
@@ -759,6 +759,20 @@ const CustomerPayScreen = ({ route, navigation }) => {
         <WebView
           source={{ uri: paymentUrl }}
           style={{ flex: 1 }}
+          // Intercept BEFORE the return URL page loads — this fires instantly
+          // when Chapa redirects, without waiting for the page to render.
+          onShouldStartLoadWithRequest={(request) => {
+            if (request.url && request.url.includes('/api/payments/return')) {
+              // Don't load the return page — jump straight to success screen
+              setPaymentUrl(null);
+              setPaymentStatus('success');
+              setPolling(false);
+              clearInterval(pollRef.current);
+              return false; // block the WebView from loading this URL
+            }
+            return true;
+          }}
+          // Backup: also catch it in navigation state change
           onNavigationStateChange={(state) => {
             if (state.url && state.url.includes('/api/payments/return')) {
               setPaymentUrl(null);

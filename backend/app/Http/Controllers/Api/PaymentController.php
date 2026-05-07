@@ -240,7 +240,9 @@ class PaymentController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // 3. VERIFY — GET /api/payments/verify/{txRef}
-    //    Mobile app polls this to check payment status
+    //    Mobile app polls this to check payment status.
+    //    Returns the stored status immediately — no Chapa re-verification here.
+    //    The webhook already verified with Chapa; polling just reads the result.
     // ─────────────────────────────────────────────────────────────────────────
     public function verify($txRef)
     {
@@ -249,30 +251,53 @@ class PaymentController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Not found'], 404);
         }
 
+        // If still pending after a reasonable time, do ONE Chapa check as fallback
+        // (covers the case where the webhook never arrived)
         if ($payment->status === 'pending') {
-            $this->checkAndFinalizePayment($payment);
-            $payment->refresh();
+            $ageSeconds = now()->diffInSeconds($payment->created_at);
+            // Only hit Chapa if the payment is older than 15 seconds
+            // (gives the webhook time to arrive first)
+            if ($ageSeconds > 15) {
+                $this->checkAndFinalizePayment($payment);
+                $payment->refresh();
+            }
         }
 
         return response()->json([
-            'status' => $payment->status,
-            'tx_ref' => $payment->tx_ref,
-            'amount' => $payment->amount,
-            'commission' => $payment->commission_amount,
+            'status'           => $payment->status,
+            'tx_ref'           => $payment->tx_ref,
+            'amount'           => $payment->amount,
+            'commission'       => $payment->commission_amount,
             'webhook_verified' => $payment->webhook_verified,
         ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // 4. RETURN URL — GET /api/payments/return?tx_ref=...
-    //    Browser redirect after Chapa checkout page
+    //    Browser redirect after Chapa checkout page.
+    //    This is called by the WebView when Chapa redirects back.
+    //    We do NOT re-verify with Chapa here — the webhook handles that.
+    //    We just return the current stored status immediately so the WebView
+    //    page loads fast and the app can detect the URL change instantly.
     // ─────────────────────────────────────────────────────────────────────────
     public function returnUrl(Request $request)
     {
-        $txRef = $request->query('tx_ref');
+        $txRef   = $request->query('tx_ref');
         $payment = Payment::where('tx_ref', $txRef)->first();
 
-        if ($payment && $payment->status === 'pending') {
+        // If the webhook already processed it, return immediately
+        if ($payment && $payment->status !== 'pending') {
+            return response()->json([
+                'tx_ref'  => $txRef,
+                'status'  => $payment->status,
+                'message' => $payment->status === 'success'
+                    ? 'Payment successful! You may close this page.'
+                    : 'Payment ' . $payment->status . '. You may close this page.',
+            ]);
+        }
+
+        // Webhook hasn't arrived yet — do one quick Chapa check
+        if ($payment) {
             $this->checkAndFinalizePayment($payment);
             $payment->refresh();
         }
@@ -280,8 +305,8 @@ class PaymentController extends Controller
         $status = $payment?->status ?? 'pending';
 
         return response()->json([
-            'tx_ref' => $txRef,
-            'status' => $status,
+            'tx_ref'  => $txRef,
+            'status'  => $status,
             'message' => $status === 'success'
                 ? 'Payment successful! You may close this page.'
                 : 'Payment ' . $status . '. You may close this page.',
