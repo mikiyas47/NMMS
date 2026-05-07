@@ -222,8 +222,6 @@ class PaymentController extends Controller
                                 $lockedPayment->quantity,
                                 $lockedPayment->leg
                             );
-                            // Cycle engine is NOT run automatically — distributor must click
-                            // "Run Cycle Engine" in the Earnings screen to trigger it.
                             $mlmEngine->runRankCheck($lockedPayment->distributor_id);
                         }
                     } catch (\Exception $e) {
@@ -464,8 +462,6 @@ class PaymentController extends Controller
                             $lockedPayment->quantity,
                             $lockedPayment->leg
                         );
-                        // Cycle engine is NOT run automatically — distributor must click
-                        // "Run Cycle Engine" in the Earnings screen to trigger it.
                         $mlmEngine->runRankCheck($lockedPayment->distributor_id);
                     }
                 } catch (\Exception $e) {

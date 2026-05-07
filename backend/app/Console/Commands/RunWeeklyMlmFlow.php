@@ -10,23 +10,9 @@ use Illuminate\Support\Facades\DB;
 
 class RunWeeklyMlmFlow extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'mlm:weekly-flow';
+    protected $signature    = 'mlm:weekly-flow';
+    protected $description  = 'Runs weekly rank checks and resets weekly earnings.';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Runs weekly rank checks and resets weekly earnings. Does NOT run the cycle engine — distributors must trigger that manually via the Earnings screen.';
-
-    /**
-     * Execute the console command.
-     */
     public function handle(MlmEngineService $mlmEngine)
     {
         $this->info('Starting Weekly MLM Flow...');
@@ -37,18 +23,15 @@ class RunWeeklyMlmFlow extends Command
         foreach ($distributors as $distributor) {
             DB::beginTransaction();
             try {
-                // 1. Run Rank Check (uses live subtree volume — no stored left/right points)
+                // Run rank check (uses live subtree volume)
                 $mlmEngine->runRankCheck($distributor->distributor_id);
 
-                // 2. Reset Weekly Earnings
+                // Reset weekly earnings
                 $wallet = Wallet::where('distributor_id', $distributor->distributor_id)->first();
                 if ($wallet) {
                     $wallet->weekly_earnings = 0;
                     $wallet->save();
                 }
-
-                // NOTE: Cycle engine is intentionally NOT run here.
-                // Distributors must click "Run Cycle Engine" in the Earnings screen.
 
                 DB::commit();
             } catch (\Exception $e) {

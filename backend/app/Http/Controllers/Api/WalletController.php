@@ -16,6 +16,8 @@ class WalletController extends Controller
     /**
      * GET /api/wallet
      * Returns wallet balance, stats (total_points from live tree walk), rank, and team info.
+     * Total points = sum of own_points for every unique distributor in the subtree,
+     * including the root distributor themselves.
      */
     public function show(Request $request)
     {
@@ -38,14 +40,11 @@ class WalletController extends Controller
             $stat->save();
         }
 
-        // Total points = live BFS walk of the entire subtree (own_points of every node).
-        // This is a permanent, ever-growing number — never deducted, never modified.
+        // Total points = live BFS walk of the entire subtree.
+        // Counts each unique distributor's own_points exactly once,
+        // including the root distributor (the account owner themselves).
         $rootNode    = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
         $totalPoints = $rootNode ? $mlm->getSubtreeVolume($rootNode->id) : $ownPoints;
-
-        // Cycle pool = same as total_points (the live tree total IS the cycle pool).
-        // The cycle engine reads this directly — no carry, no deduction.
-        $cyclePool = $totalPoints;
 
         // Team / leg data
         $directCount = 0;
@@ -87,13 +86,8 @@ class WalletController extends Controller
                 'total_earned'    => $wallet->total_earned,
             ],
             'stats' => [
-                // Personal purchase volume (e.g. 4 × golden 800pts = 3,200)
                 'own_points'   => $ownPoints,
-                // Full tree total (own + every downline node's own_points, live walk).
-                // This number only ever grows — it is never deducted.
                 'total_points' => $totalPoints,
-                // Cycle pool = same as total_points (the live tree IS the pool).
-                'cycle_pool'   => $cyclePool,
                 'rank'         => $stat->rank ?? 'CT',
             ],
             'team' => [
@@ -102,35 +96,6 @@ class WalletController extends Controller
                 'legs'         => $legs,
             ],
             'recent_commissions' => $recentPayments,
-        ]);
-    }
-
-    /**
-     * POST /api/wallet/run-cycle
-     * Manually trigger cycle engine for the authenticated distributor.
-     * This is the ONLY way the cycle engine runs — never automatic.
-     */
-    public function runCycle(Request $request, MlmEngineService $mlm)
-    {
-        $user          = $request->user();
-        $distributorId = $user->distributor_id ?? $user->id;
-
-        $result = $mlm->runCycleEngine($distributorId);
-        $mlm->runRankCheck($distributorId);
-
-        $wallet = Wallet::where('distributor_id', $distributorId)->first();
-        $stat   = Stat::where('distributor_id', $distributorId)->first();
-
-        $message = $result['cycles'] > 0
-            ? "Cycle engine ran! Earned $" . number_format($result['earnings'], 2) . " from " . $result['cycles'] . " cycle" . ($result['cycles'] > 1 ? 's' : '') . "."
-            : "No cycles completed. Need at least 600 combined points across all legs.";
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => $message,
-            'result'  => $result,
-            'wallet'  => $wallet,
-            'stats'   => $stat,
         ]);
     }
 
@@ -149,8 +114,8 @@ class WalletController extends Controller
 
     private function getHighestRankInSubtree(int $nodeId): ?string
     {
-        $ranks   = ['CT' => 0, 'MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5, 'CA' => 6, 'C_AWARD' => 7, 'AL' => 8];
-        $highest = 0;
+        $ranks       = ['CT' => 0, 'MT' => 1, 'TT' => 2, 'NTB' => 3, 'IBB' => 4, 'GEB' => 5, 'CA' => 6, 'C_AWARD' => 7, 'AL' => 8];
+        $highest     = 0;
         $highestRank = 'CT';
         $queue = [$nodeId];
         while (!empty($queue)) {

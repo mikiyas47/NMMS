@@ -14,7 +14,5 @@ class Product extends Model
         'image',
         'point',
         'referral_rate',
-        'cycle_rate',
-        'weekly_cap',
     ];
 }
