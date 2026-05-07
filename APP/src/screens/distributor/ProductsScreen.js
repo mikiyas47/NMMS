@@ -455,11 +455,14 @@ const ProductsScreen = ({ C, navigation }) => {
     getDistributorStatus().then(res => {
       setHasJoined(res?.has_joined ?? false);
       setAccountCount(res?.account_count ?? 0);
+      // Store upline_id so we can pass it as sponsor_id when joining
+      if (res?.upline_id) setUplinkId(res.upline_id);
     }).catch(() => {});
   }, []);
   const [viewMedia, setViewMedia]     = useState(null);
   const [hasJoined, setHasJoined]     = useState(false);
   const [accountCount, setAccountCount] = useState(0);
+  const [uplinkId, setUplinkId]       = useState(null); // sponsor for upgraded customers
   const [joinModal, setJoinModal]     = useState(false);
   const [joinProduct, setJoinProduct] = useState(null);
   const [joinQty, setJoinQty]         = useState(1);
@@ -521,7 +524,7 @@ const ProductsScreen = ({ C, navigation }) => {
     try {
       await joinNetwork({
         product_id: joinProduct.id,
-        sponsor_id: null,
+        sponsor_id: uplinkId || null,  // pass upline as sponsor so tree is linked correctly
         quantity: joinQty,
       });
       setJoinModal(false);
@@ -583,7 +586,7 @@ const ProductsScreen = ({ C, navigation }) => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Activate Your MLM Account</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>Purchase a package to join the network and start earning cycles</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>Purchase a package to join the network and start earning</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -598,7 +601,7 @@ const ProductsScreen = ({ C, navigation }) => {
           <CheckCircle color="#10B981" size={20} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: '#10B981', fontWeight: '800', fontSize: 13 }}>Network Active · {accountCount} Account{accountCount > 1 ? 's' : ''}</Text>
-            <Text style={{ color: '#34D399', fontSize: 11, marginTop: 1 }}>You are placed in the MLM tree and earning cycles</Text>
+            <Text style={{ color: '#34D399', fontSize: 11, marginTop: 1 }}>You are placed in the MLM tree and earning commissions</Text>
           </View>
           {accountCount < 4 && (
             <TouchableOpacity

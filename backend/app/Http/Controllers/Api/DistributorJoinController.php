@@ -34,6 +34,13 @@ class DistributorJoinController extends Controller
         $quantity  = $data['quantity'] ?? 1;
         $sponsorId = $data['sponsor_id'] ?? null;
 
+        // If no sponsor_id was provided, fall back to the distributor's upline_id.
+        // This ensures customers who upgraded to distributor are placed under the
+        // person who originally sold to them.
+        if (!$sponsorId && $user->upline_id) {
+            $sponsorId = $user->upline_id;
+        }
+
         // Check how many accounts the distributor already has
         $existingCount = Account::where('distributor_id', $distributorId)->count();
         $maxAccounts   = 4; // Max quadruple account
@@ -83,6 +90,8 @@ class DistributorJoinController extends Controller
             'has_joined'     => $accounts->count() > 0,
             'account_count'  => $accounts->count(),
             'max_accounts'   => 4,
+            'upline_id'      => $user->upline_id ?? null,
+            'is_paid'        => (bool) ($user->is_paid ?? false),
             'accounts'       => $accounts->map(fn($a) => [
                 'id'         => $a->id,
                 'product'    => $a->product?->name,
