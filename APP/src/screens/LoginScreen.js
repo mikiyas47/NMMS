@@ -34,9 +34,14 @@ const LoginScreen = ({ navigation }) => {
       const role = data.user.role;
       if (role === 'owner') {
         navigation.replace('OwnerDashboard');
+      } else if (role === 'admin') {
+        // Admins manage the system via the web portal, not the mobile app
+        Alert.alert(
+          'Wrong App',
+          'Admin accounts are managed through the web portal. Please use a browser to access the admin dashboard.',
+        );
       } else {
-        // Admin and other roles go to UserDashboard (DistributorDashboard)
-        // Note: Mobile app doesn't have a separate AdminDashboard like the web frontend
+        // Distributors land here
         navigation.replace('UserDashboard');
       }
     } catch (error) {

@@ -65,19 +65,15 @@ const DistributorOverview = ({ C }) => {
   const onRefresh = () => { setRefreshing(true); load(true); };
 
   const wallet = walletData?.wallet || { balance: 0, weekly_earnings: 0, total_earned: 0 };
-  const stats  = walletData?.stats  || { rank: 'None', own_points: 0, total_points: 0, cycle_pool: 0 };
+  const stats  = walletData?.stats  || { rank: 'None', own_points: 0, total_points: 0 };
   const team   = walletData?.team   || { direct_count: 0, total_team: 0 };
   const commissions = walletData?.recent_commissions || [];
 
-  const rank       = stats.rank && stats.rank !== 'None' ? stats.rank : 'CT';
-  const rankColor  = RANK_COLORS[rank] || '#9CA3AF';
-  const rankIcon   = RANK_ICONS[rank]  || '🌱';
-  const ownPoints  = stats.own_points   || 0;
+  const rank        = stats.rank && stats.rank !== 'None' ? stats.rank : 'CT';
+  const rankColor   = RANK_COLORS[rank] || '#9CA3AF';
+  const rankIcon    = RANK_ICONS[rank]  || '🌱';
+  const ownPoints   = stats.own_points   || 0;
   const totalPoints = stats.total_points || 0;
-
-  // Cycle pool = total_points (the live tree total IS the pool — nothing is deducted)
-  const cyclePool = stats.cycle_pool || stats.total_points || 0;
-  const cyclePct  = Math.min(100, (cyclePool / 600) * 100);
 
   const statCards = [
     { label: 'Total Points', value: totalPoints.toLocaleString(), sub: 'own + network',    icon: Star,        grad: ['#FBBF24','#F59E0B'], glow: '#FBBF24' },
@@ -125,7 +121,7 @@ const DistributorOverview = ({ C }) => {
             </View>
           </View>
 
-          {/* Total Points + Cycle Pool */}
+          {/* Total Points + Own Packages */}
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
               <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>TOTAL POINTS</Text>
@@ -134,24 +130,6 @@ const DistributorOverview = ({ C }) => {
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
               <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>OWN PACKAGES</Text>
               <Text style={{ color: '#86EFAC', fontSize: 20, fontWeight: '900', marginTop: 2 }}>{ownPoints.toLocaleString()}</Text>
-            </View>
-          </View>
-          {/* Cycle Pool Progress */}
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' }}>Cycle Pool (All Legs)</Text>
-              <Text style={{ color: '#FCD34D', fontSize: 12, fontWeight: '800' }}>
-                {cyclePool.toLocaleString()} / 600 pts
-              </Text>
-            </View>
-            <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3 }}>
-              <View style={{ height: 6, width: `${cyclePct}%`, backgroundColor: '#FCD34D', borderRadius: 3 }} />
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-              <TrendingUp color="#86EFAC" size={13} />
-              <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginLeft: 6 }}>
-                {Math.floor(cyclePool / 600)} cycle{Math.floor(cyclePool / 600) !== 1 ? 's' : ''} ready · {cyclePool % 600} pts remainder
-              </Text>
             </View>
           </View>
         </LinearGradient>

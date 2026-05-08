@@ -3,13 +3,14 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import PrivateRoute    from './components/PrivateRoute';
 import Login           from './pages/Login';
 import OwnerDashboard  from './pages/owner/OwnerDashboard';
-import AdminDashboard  from './pages/admin/AdminDashboard';
 import CustomerPay     from './pages/CustomerPay';
 
 const RoleRedirect = () => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === 'owner' ? '/owner' : '/admin'} replace />;
+  if (user.role === 'owner') return <Navigate to="/owner" replace />;
+  // Admins and any other roles are not allowed
+  return <Navigate to="/login" replace />;
 };
 
 function App() {
@@ -24,14 +25,6 @@ function App() {
             element={
               <PrivateRoute role="owner">
                 <OwnerDashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/admin/*"
-            element={
-              <PrivateRoute role="admin">
-                <AdminDashboard />
               </PrivateRoute>
             }
           />

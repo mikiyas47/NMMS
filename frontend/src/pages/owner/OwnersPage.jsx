@@ -14,6 +14,7 @@ const OwnersPage = ({ dark }) => {
   const [addingOwner, setAddingOwner] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', password: '', role: 'owner' });
   const [adding, setAdding] = useState(false);
+  const [addErrors, setAddErrors] = useState({});
 
   const fetchOwners = async () => {
     setLoading(true);
@@ -53,13 +54,35 @@ const OwnersPage = ({ dark }) => {
     } finally { setSaving(false); }
   };
 
+  const validateAdd = () => {
+    const errs = {};
+    if (!addForm.name.trim()) {
+      errs.name = 'Full name is required.';
+    } else if (!/^[A-Za-z\s]+$/.test(addForm.name.trim())) {
+      errs.name = 'Name must contain letters only, no numbers.';
+    }
+    if (!addForm.email.trim()) {
+      errs.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(addForm.email.trim())) {
+      errs.email = 'Enter a valid email (e.g. owner@example.com).';
+    }
+    if (!addForm.password) {
+      errs.password = 'Password is required.';
+    } else if (addForm.password.length < 8) {
+      errs.password = 'Password must be at least 8 characters.';
+    }
+    setAddErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const saveAdd = async () => {
-    if (!addForm.name || !addForm.email || !addForm.password) { alert('Name, Email and Password are required.'); return; }
+    if (!validateAdd()) return;
     setAdding(true);
     try {
       await client.post('/users', addForm);
       setAddingOwner(false);
       setAddForm({ name: '', email: '', phone: '', password: '', role: 'owner' });
+      setAddErrors({});
       fetchOwners();
     } catch (e) {
       alert(e.response?.data?.message || 'Failed to add owner.');
@@ -202,11 +225,11 @@ const OwnersPage = ({ dark }) => {
 
       {/* Add Modal */}
       {addingOwner && (
-        <div className="modal-overlay" onClick={() => setAddingOwner(false)}>
+        <div className="modal-overlay" onClick={() => { setAddingOwner(false); setAddErrors({}); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Add New Owner</h3>
-              <button className="icon-btn" onClick={() => setAddingOwner(false)}><X size={18} /></button>
+              <button className="icon-btn" onClick={() => { setAddingOwner(false); setAddErrors({}); }}><X size={18} /></button>
             </div>
             <div className="modal-body">
               {[['Name', 'name', 'text', 'Full name'],
@@ -221,8 +244,25 @@ const OwnersPage = ({ dark }) => {
                     className="field-input"
                     placeholder={ph}
                     value={addForm[key]}
-                    onChange={(e) => setAddForm((p) => ({ ...p, [key]: e.target.value }))}
+                    style={addErrors[key] ? { borderColor: '#EF4444', borderWidth: '1px', borderStyle: 'solid' } : {}}
+                    onChange={(e) => {
+                      let val = e.target.value;
+                      // Strip non-letter characters from name in real time
+                      if (key === 'name') val = val.replace(/[^A-Za-z\s]/g, '');
+                      setAddForm((p) => ({ ...p, [key]: val }));
+                      // Clear error once user starts correcting
+                      if (addErrors[key]) {
+                        const cleared = { ...addErrors };
+                        delete cleared[key];
+                        setAddErrors(cleared);
+                      }
+                    }}
                   />
+                  {addErrors[key] && (
+                    <span style={{ color: '#EF4444', fontSize: '0.75rem', marginTop: '4px', display: 'block' }}>
+                      {addErrors[key]}
+                    </span>
+                  )}
                 </div>
               ))}
               <div className="field-group">
@@ -237,7 +277,7 @@ const OwnersPage = ({ dark }) => {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setAddingOwner(false)}>Cancel</button>
+              <button className="btn-secondary" onClick={() => { setAddingOwner(false); setAddErrors({}); }}>Cancel</button>
               <button className="btn-primary" onClick={saveAdd} disabled={adding} id="save-add-btn">
                 {adding ? <span className="btn-spinner" /> : <><Check size={15} /> Add Owner</>}
               </button>

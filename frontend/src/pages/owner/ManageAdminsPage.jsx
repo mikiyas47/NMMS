@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ShieldCheck, Search, Edit2, Power, X, Check, AlertCircle } from 'lucide-react';
 import client from '../../api/client';
 
-const AdminsPage = () => {
+const ManageAdminsPage = () => {
   const [users,        setUsers]        = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState('');
@@ -252,4 +252,4 @@ const AdminsPage = () => {
   );
 };
 
-export default AdminsPage;
+export default ManageAdminsPage;

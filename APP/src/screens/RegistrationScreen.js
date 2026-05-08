@@ -17,28 +17,35 @@ import { User, Mail, Phone, Lock, ArrowRight, TrendingUp, ChevronLeft, Sun, Moon
 import { register as registerApi } from '../api/authService';
 import { useTheme } from '../context/ThemeContext';
 
-const Field = ({ icon: Icon, placeholder, value, onChangeText, keyboard, secure, C, showPassword, setShowPassword }) => (
-  <View
-    className="flex-row items-center rounded-xl mb-4 px-4 h-14"
-    style={{ backgroundColor: C.inputBg }}
-  >
-    <Icon color={C.muted} size={20} />
-    <TextInput
-      placeholder={placeholder}
-      placeholderTextColor={C.muted}
-      className="flex-1 ml-3 text-base"
-      style={{ color: C.text }}
-      value={value}
-      onChangeText={onChangeText}
-      keyboardType={keyboard || 'default'}
-      secureTextEntry={secure && !showPassword}
-      autoCapitalize="none"
-    />
-    {secure && (
-      <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2">
-        {showPassword ? <EyeOff color={C.muted} size={20} /> : <Eye color={C.muted} size={20} />}
-      </TouchableOpacity>
-    )}
+const Field = ({ icon: Icon, placeholder, value, onChangeText, keyboard, secure, C, showPassword, setShowPassword, error }) => (
+  <View className="mb-4">
+    <View
+      className="flex-row items-center rounded-xl px-4 h-14"
+      style={{
+        backgroundColor: C.inputBg,
+        borderWidth: error ? 1 : 0,
+        borderColor: error ? '#EF4444' : 'transparent',
+      }}
+    >
+      <Icon color={error ? '#EF4444' : C.muted} size={20} />
+      <TextInput
+        placeholder={placeholder}
+        placeholderTextColor={C.muted}
+        className="flex-1 ml-3 text-base"
+        style={{ color: C.text }}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboard || 'default'}
+        secureTextEntry={secure && !showPassword}
+        autoCapitalize="none"
+      />
+      {secure && (
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2">
+          {showPassword ? <EyeOff color={C.muted} size={20} /> : <Eye color={C.muted} size={20} />}
+        </TouchableOpacity>
+      )}
+    </View>
+    {error ? <Text className="text-xs mt-1 ml-1" style={{ color: '#EF4444' }}>{error}</Text> : null}
   </View>
 );
 
@@ -49,13 +56,64 @@ const RegistrationScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState({});
   const { isDark, toggleTheme, colors: C } = useTheme();
 
-  const handleRegister = async () => {
-    if (!name || !email || !phone || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
+  // Prevent numbers from being typed in the name field
+  const handleNameChange = (text) => {
+    const lettersOnly = text.replace(/[^A-Za-z\s]/g, '');
+    setName(lettersOnly);
+    if (lettersOnly.trim().length > 0) {
+      setErrors((prev) => ({ ...prev, name: null }));
     }
+  };
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    if (text.trim().length > 0) {
+      setErrors((prev) => ({ ...prev, email: null }));
+    }
+  };
+
+  const handlePasswordChange = (text) => {
+    setPassword(text);
+    if (text.length >= 8) {
+      setErrors((prev) => ({ ...prev, password: null }));
+    }
+  };
+
+  const validate = () => {
+    const newErrors = {};
+
+    if (!name.trim()) {
+      newErrors.name = 'Full name is required.';
+    } else if (!/^[A-Za-z\s]+$/.test(name.trim())) {
+      newErrors.name = 'Name must contain letters only.';
+    }
+
+    if (!email.trim()) {
+      newErrors.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      newErrors.email = 'Enter a valid email (e.g. user@example.com).';
+    }
+
+    if (!phone.trim()) {
+      newErrors.phone = 'Phone number is required.';
+    }
+
+    if (!password) {
+      newErrors.password = 'Password is required.';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters.';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleRegister = async () => {
+    if (!validate()) return;
+
     setLoading(true);
     try {
       await registerApi({ name, email, phone, password });
@@ -121,10 +179,10 @@ const RegistrationScreen = ({ navigation }) => {
               <View className="w-full rounded-3xl p-7 shadow-2xl" style={{ backgroundColor: C.surface }}>
                 <Text className="text-xl font-bold text-center mb-6" style={{ color: C.text }}>Create Account</Text>
 
-                <Field icon={User}  placeholder="Full Name"       value={name}     onChangeText={setName} C={C} />
-                <Field icon={Mail}  placeholder="Email Address"   value={email}    onChangeText={setEmail} keyboard="email-address" C={C} />
-                <Field icon={Phone} placeholder="Phone Number"    value={phone}    onChangeText={setPhone} keyboard="phone-pad" C={C} />
-                <Field icon={Lock}  placeholder="Create Password" value={password} onChangeText={setPassword} secure C={C} showPassword={showPassword} setShowPassword={setShowPassword} />
+                <Field icon={User}  placeholder="Full Name"       value={name}     onChangeText={handleNameChange}     C={C} error={errors.name} />
+                <Field icon={Mail}  placeholder="Email Address"   value={email}    onChangeText={handleEmailChange}    keyboard="email-address" C={C} error={errors.email} />
+                <Field icon={Phone} placeholder="Phone Number"    value={phone}    onChangeText={(t) => { setPhone(t); setErrors((p) => ({ ...p, phone: null })); }} keyboard="phone-pad" C={C} error={errors.phone} />
+                <Field icon={Lock}  placeholder="Create Password" value={password} onChangeText={handlePasswordChange} secure C={C} showPassword={showPassword} setShowPassword={setShowPassword} error={errors.password} />
 
                 <TouchableOpacity
                   className="w-full h-14 rounded-xl overflow-hidden mt-2"

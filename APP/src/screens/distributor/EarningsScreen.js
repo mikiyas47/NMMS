@@ -1,27 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Animated, ActivityIndicator, RefreshControl, Alert,
+  Animated, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  DollarSign, TrendingUp, Award, Zap, ChevronRight,
-  RefreshCw, Clock, Star, Shield, Crown, Gem, Package,
-} from 'lucide-react-native';
-import { getWallet, runCycleEngine } from '../../api/authService';
+import { DollarSign, Clock } from 'lucide-react-native';
+import { getWallet } from '../../api/authService';
 
 // ── Rank config ───────────────────────────────────────────────────────────────
 const RANK_CONFIG = {
-  None:    { label: 'Customer Trainee (CT)',      colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked / New' },
-  CT:      { label: 'Customer Trainee (CT)',      colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked / New' },
-  MT:      { label: 'Market Trainee',             colors: ['#FBBF24','#D97706'], icon: '⭐', requirement: 'All 4 legs ≥ 200 pts & 5,000 total' },
-  TT:      { label: 'Team Trainee',               colors: ['#F97316','#C2410C'], icon: '🔥', requirement: '2 MT legs & 10,000 total' },
-  NTB:     { label: 'National Team Builder',      colors: ['#34D399','#059669'], icon: '🌿', requirement: '4 TT legs & 50,000 total' },
-  IBB:     { label: 'Intl. Business Builder',     colors: ['#60A5FA','#2563EB'], icon: '💎', requirement: '4 NTB legs & 200,000 total' },
-  GEB:     { label: 'Global Empire Builder',      colors: ['#C084FC','#7E22CE'], icon: '👑', requirement: '4 IBB legs & 800,000 total' },
-  CA:      { label: 'Crown Achiever',             colors: ['#FBBF24','#D97706'], icon: '🏆', requirement: '4 GEB legs ($50K Award)' },
-  C_AWARD: { label: 'Crown Award',                colors: ['#F59E0B','#B45309'], icon: '🏅', requirement: '2+ CA legs ($100K Award)' },
-  AL:      { label: 'Alpha Legend',               colors: ['#FCD34D','#B45309'], icon: '🌟', requirement: '4 CA legs ($500K Award)' },
+  None:    { label: 'Customer Trainee (CT)',  colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked / New' },
+  CT:      { label: 'Customer Trainee (CT)',  colors: ['#4B5563','#6B7280'], icon: '🌱', requirement: 'Unranked / New' },
+  MT:      { label: 'Market Trainee',         colors: ['#FBBF24','#D97706'], icon: '⭐', requirement: 'All 4 legs ≥ 200 pts & 5,000 total' },
+  TT:      { label: 'Team Trainee',           colors: ['#F97316','#C2410C'], icon: '🔥', requirement: '2 MT legs & 10,000 total' },
+  NTB:     { label: 'National Team Builder',  colors: ['#34D399','#059669'], icon: '🌿', requirement: '4 TT legs & 50,000 total' },
+  IBB:     { label: 'Intl. Business Builder', colors: ['#60A5FA','#2563EB'], icon: '💎', requirement: '4 NTB legs & 200,000 total' },
+  GEB:     { label: 'Global Empire Builder',  colors: ['#C084FC','#7E22CE'], icon: '👑', requirement: '4 IBB legs & 800,000 total' },
+  CA:      { label: 'Crown Achiever',         colors: ['#FBBF24','#D97706'], icon: '🏆', requirement: '4 GEB legs ($50K Award)' },
+  C_AWARD: { label: 'Crown Award',            colors: ['#F59E0B','#B45309'], icon: '🏅', requirement: '2+ CA legs ($100K Award)' },
+  AL:      { label: 'Alpha Legend',           colors: ['#FCD34D','#B45309'], icon: '🌟', requirement: '4 CA legs ($500K Award)' },
 };
 
 const RANK_ORDER = ['CT','MT','TT','NTB','IBB','GEB','CA','C_AWARD','AL'];
@@ -54,23 +51,11 @@ const StatPill = ({ label, value, color, C }) => (
   </View>
 );
 
-// ── Progress bar ──────────────────────────────────────────────────────────────
-const ProgressBar = ({ pct, colors }) => (
-  <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-    <LinearGradient
-      colors={colors}
-      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-      style={{ height: '100%', width: `${Math.min(100, pct)}%`, borderRadius: 3 }}
-    />
-  </View>
-);
-
 // ─────────────────────────────────────────────────────────────────────────────
 const EarningsScreen = ({ C }) => {
   const [data, setData]             = useState(null);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [cycling, setCycling]       = useState(false);
   const [error, setError]           = useState(null);
 
   const load = useCallback(async (silent = false) => {
@@ -90,33 +75,6 @@ const EarningsScreen = ({ C }) => {
 
   useEffect(() => { load(); }, [load]);
   const onRefresh = () => { setRefreshing(true); load(true); };
-
-  const handleRunCycle = async () => {
-    Alert.alert(
-      'Run Cycle Engine',
-      'This will calculate your binary cycle earnings now. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Run Now', onPress: async () => {
-            setCycling(true);
-            try {
-              const result = await runCycleEngine();
-              await load(true);
-              const msg = result?.result?.cycles > 0
-                ? `✅ ${result.result.cycles} cycle(s) completed!\nEarned: $${parseFloat(result.result.earnings).toFixed(2)}`
-                : '⏳ Not enough points yet. Keep growing your team!';
-              Alert.alert('Cycle Engine', msg);
-            } catch (e) {
-              Alert.alert('Error', e.message || 'Cycle engine failed.');
-            } finally {
-              setCycling(false);
-            }
-          }
-        }
-      ]
-    );
-  };
 
   if (loading && !data) {
     return (
@@ -140,7 +98,7 @@ const EarningsScreen = ({ C }) => {
   }
 
   const wallet      = data?.wallet  || { balance: 0, weekly_earnings: 0, total_earned: 0 };
-  const stats       = data?.stats   || { cycle_pool: 0, rank: 'CT', own_points: 0, total_points: 0 };
+  const stats       = data?.stats   || { rank: 'CT', own_points: 0, total_points: 0 };
   const team        = data?.team    || { direct_count: 0, total_team: 0, legs: [] };
   const commissions = data?.recent_commissions || [];
 
@@ -151,13 +109,6 @@ const EarningsScreen = ({ C }) => {
   const nextRank       = RANK_ORDER[rankIdx + 1];
   const nextRankCfg    = nextRank ? RANK_CONFIG[nextRank] : null;
 
-  // ── Cycle calculation ────────────────────────────────────────────────────
-  // cycle_pool = total_points (the live tree total IS the pool — nothing is deducted)
-  const cycleAvailable = stats.cycle_pool || stats.total_points || 0;
-  const cyclesReady    = Math.floor(cycleAvailable / 600);
-  const cyclePct       = Math.min(100, (cycleAvailable / 600) * 100);
-
-  // Total points displayed = own packages + network left + right
   const totalPoints = stats.total_points || 0;
   const ownPoints   = stats.own_points   || 0;
 
@@ -201,9 +152,9 @@ const EarningsScreen = ({ C }) => {
       {/* ── Stats Row ── */}
       <FadeIn delay={60}>
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-          <StatPill label="Total Points"  value={(stats.total_points || 0).toLocaleString()} color={C.blue}   C={C} />
-          <StatPill label="Cycle Pool"    value={(stats.cycle_pool   || 0).toLocaleString()} color={C.purple} C={C} />
-          <StatPill label="Team Size"     value={team.total_team}                             color={C.green}  C={C} />
+          <StatPill label="Total Points" value={totalPoints.toLocaleString()} color={C.blue}  C={C} />
+          <StatPill label="Own Packages" value={ownPoints.toLocaleString()}   color={C.green} C={C} />
+          <StatPill label="Team Size"    value={team.total_team}              color={C.purple} C={C} />
         </View>
       </FadeIn>
 
@@ -257,71 +208,8 @@ const EarningsScreen = ({ C }) => {
         </LinearGradient>
       </FadeIn>
 
-      {/* ── Earning Cycle Engine ── */}
-      <FadeIn delay={140}>
-        <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 18, marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-            <LinearGradient colors={['#6366F1','#8B5CF6']} style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Zap color="#fff" size={18} />
-            </LinearGradient>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontWeight: '800', fontSize: 15 }}>Earning Cycle Engine</Text>
-              <Text style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>600 pts per cycle (all legs combined)</Text>
-            </View>
-            {cyclesReady > 0 && (
-              <View style={{ backgroundColor: '#10B98120', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                <Text style={{ color: '#10B981', fontWeight: '800', fontSize: 12 }}>{cyclesReady} ready</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Cycle pool bar */}
-          <View style={{ marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-              <Text style={{ color: C.muted, fontSize: 12, fontWeight: '600' }}>Total Points (Cycle Pool)</Text>
-              <Text style={{ color: C.text, fontSize: 12, fontWeight: '800' }}>
-                {cycleAvailable.toLocaleString()} <Text style={{ color: C.muted, fontWeight: '400' }}>pts</Text>
-              </Text>
-            </View>
-            <ProgressBar pct={cyclePct} colors={['#6366F1','#10B981']} />
-          </View>
-
-          {/* Cycle math summary */}
-          {cyclesReady > 0 && (
-            <View style={{ backgroundColor: '#10B98110', borderRadius: 12, padding: 12, marginBottom: 12 }}>
-              <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700', marginBottom: 4 }}>Cycle Calculation Preview</Text>
-              <Text style={{ color: C.muted, fontSize: 11 }}>
-                {cycleAvailable.toLocaleString()} pts ÷ 600 = {cyclesReady} cycle{cyclesReady > 1 ? 's' : ''}
-              </Text>
-              <Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>
-                Remainder: {cycleAvailable % 600} pts (stays in your total — not deducted)
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={handleRunCycle}
-            disabled={cycling}
-            style={{
-              backgroundColor: cyclesReady > 0 ? '#10B981' : C.inputBg,
-              borderRadius: 12, height: 44,
-              alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
-              opacity: cycling ? 0.7 : 1,
-            }}
-          >
-            {cycling
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <RefreshCw color={cyclesReady > 0 ? '#fff' : C.muted} size={16} />
-            }
-            <Text style={{ color: cyclesReady > 0 ? '#fff' : C.muted, fontWeight: '700', fontSize: 14 }}>
-              {cycling ? 'Running…' : cyclesReady > 0 ? `Collect ${cyclesReady} Cycle(s)` : 'Run Cycle Engine'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </FadeIn>
-
       {/* ── Leg Breakdown ── */}
-      <FadeIn delay={180}>
+      <FadeIn delay={140}>
         <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 18, marginBottom: 16 }}>
           <Text style={{ color: C.text, fontWeight: '800', fontSize: 15, marginBottom: 14 }}>Your 4 Legs</Text>
           {team.legs.length === 0 ? (
@@ -364,7 +252,7 @@ const EarningsScreen = ({ C }) => {
       </FadeIn>
 
       {/* ── Rank Ladder ── */}
-      <FadeIn delay={220}>
+      <FadeIn delay={180}>
         <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 18, marginBottom: 16 }}>
           <Text style={{ color: C.text, fontWeight: '800', fontSize: 15, marginBottom: 14 }}>Rank Ladder</Text>
           {RANK_ORDER.map((rank, idx) => {
@@ -400,7 +288,7 @@ const EarningsScreen = ({ C }) => {
       </FadeIn>
 
       {/* ── Recent Commissions ── */}
-      <FadeIn delay={260}>
+      <FadeIn delay={220}>
         <View style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 18, marginBottom: 16 }}>
           <Text style={{ color: C.text, fontWeight: '800', fontSize: 15, marginBottom: 14 }}>Recent Commissions</Text>
           {commissions.length === 0 ? (
