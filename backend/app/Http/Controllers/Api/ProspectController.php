@@ -38,49 +38,55 @@ class ProspectController extends Controller
             $stageCounts[$stage] = $all->where('stage', $stage)->count();
         }
 
+        $nonActive = ['Joined', 'Rejected', 'Inactive'];
+
         // Hot leads (score >= 70 and not joined/rejected)
         $hotLeads = $all->filter(fn($p) =>
-            $p->interest_score >= 70 &&
-            !in_array($p->stage, ['Joined', 'Rejected', 'Inactive'])
+            ((int)($p->interest_score ?? 0)) >= 70 &&
+            !in_array($p->stage, $nonActive)
         )->sortByDesc('interest_score')->take(5)->values();
 
         // Follow-ups due today
-        $followUpsDue = $all->filter(fn($p) =>
-            $p->next_action_date &&
-            Carbon::parse($p->next_action_date)->isToday() &&
-            !in_array($p->stage, ['Joined', 'Rejected'])
-        )->values();
+        $followUpsDue = $all->filter(function ($p) use ($today) {
+            if (!$p->next_action_date) return false;
+            try {
+                return Carbon::parse($p->next_action_date)->isSameDay($today) &&
+                       !in_array($p->stage, ['Joined', 'Rejected']);
+            } catch (\Exception $e) { return false; }
+        })->values();
 
         // Overdue follow-ups
-        $overdue = $all->filter(fn($p) =>
-            $p->next_action_date &&
-            Carbon::parse($p->next_action_date)->isPast() &&
-            !Carbon::parse($p->next_action_date)->isToday() &&
-            !in_array($p->stage, ['Joined', 'Rejected'])
-        )->values();
+        $overdue = $all->filter(function ($p) use ($today) {
+            if (!$p->next_action_date) return false;
+            try {
+                $d = Carbon::parse($p->next_action_date);
+                return $d->lt($today) && !$d->isSameDay($today) &&
+                       !in_array($p->stage, ['Joined', 'Rejected']);
+            } catch (\Exception $e) { return false; }
+        })->values();
 
         // Presentations scheduled today
-        $presentationsToday = $all->filter(fn($p) =>
-            $p->stage === 'Presentation Scheduled' &&
-            $p->next_action_date &&
-            Carbon::parse($p->next_action_date)->isToday()
-        )->values();
+        $presentationsToday = $all->filter(function ($p) use ($today) {
+            if ($p->stage !== 'Presentation Scheduled' || !$p->next_action_date) return false;
+            try { return Carbon::parse($p->next_action_date)->isSameDay($today); }
+            catch (\Exception $e) { return false; }
+        })->values();
 
         // Closing opportunities
         $closingOpps = $all->where('stage', 'Closing')->values();
 
         // Newly joined (last 7 days)
-        $newlyJoined = $all->filter(fn($p) =>
-            $p->stage === 'Joined' &&
-            $p->joined_at &&
-            Carbon::parse($p->joined_at)->gte(Carbon::now()->subDays(7))
-        )->values();
+        $newlyJoined = $all->filter(function ($p) {
+            if ($p->stage !== 'Joined' || !$p->joined_at) return false;
+            try { return Carbon::parse($p->joined_at)->gte(Carbon::now()->subDays(7)); }
+            catch (\Exception $e) { return false; }
+        })->values();
 
         // Analytics
-        $total      = $all->count();
-        $joined     = $all->where('stage', 'Joined')->count();
-        $convRate   = $total > 0 ? round(($joined / $total) * 100) : 0;
-        $avgScore   = $total > 0 ? round($all->avg('interest_score')) : 0;
+        $total    = $all->count();
+        $joined   = $all->where('stage', 'Joined')->count();
+        $convRate = $total > 0 ? round(($joined / $total) * 100) : 0;
+        $avgScore = $total > 0 ? round($all->avg('interest_score') ?? 0) : 0;
 
         return response()->json([
             'status' => 'success',
