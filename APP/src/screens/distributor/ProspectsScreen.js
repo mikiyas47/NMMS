@@ -15,6 +15,8 @@ import {
   getProspectDashboard, getProspects, createProspect,
   moveProspectStage, addProspectFollowup, addProspectClosing,
   addProspectNote, deleteProspect, updateProspect,
+  createInvitation, getPresentations, assignPresentation,
+  getProspectInvitations, getProspectAssignments,
 } from '../../api/authService';
 
 const { width } = Dimensions.get('window');
@@ -374,7 +376,15 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [showClosingModal, setShowClosingModal] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Invite form
+  const [inviteType, setInviteType] = useState('zoom');
+  const [inviteScript, setInviteScript] = useState('');
+  const [presentations, setPresentations] = useState([]);
+  const [selectedPresId, setSelectedPresId] = useState(null);
 
   // Stage move form
   const [newStage, setNewStage] = useState(prospect.stage);
@@ -455,6 +465,33 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
     finally { setSaving(false); }
   };
 
+  const handleInvite = async () => {
+    setSaving(true);
+    try {
+      const res = await createInvitation({ prospect_id: prospect.prospect_id, invitation_type: inviteType });
+      setInviteScript(res.script || '');
+      Alert.alert('Invitation Sent!', `Tracked link created.\n\nScript:\n${res.script || ''}`, [{ text: 'OK', onPress: () => setShowInviteModal(false) }]);
+      onUpdate(null);
+    } catch (e) { Alert.alert('Error', e?.message || 'Failed'); }
+    finally { setSaving(false); }
+  };
+
+  const handleAssign = async () => {
+    if (!selectedPresId) { Alert.alert('Select a presentation first.'); return; }
+    setSaving(true);
+    try {
+      const res = await assignPresentation({ presentation_id: selectedPresId, prospect_id: prospect.prospect_id });
+      Alert.alert('Presentation Assigned!', `Tracked link:\n${res.tracked_link}`, [{ text: 'OK', onPress: () => setShowAssignModal(false) }]);
+      onUpdate(null);
+    } catch (e) { Alert.alert('Error', e?.message || 'Failed'); }
+    finally { setSaving(false); }
+  };
+
+  const openAssignModal = async () => {
+    try { const r = await getPresentations(); setPresentations(r.data ?? []); } catch(e) {}
+    setShowAssignModal(true);
+  };
+
   return (
     <View style={{ flex:1 }}>
       {/* Profile header */}
@@ -509,19 +546,32 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
         </View>
       )}
 
-      {/* Action buttons */}
-      <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+      {/* Action buttons — row 1 */}
+      <View style={{ flexDirection:'row', gap:8, marginBottom:8 }}>
         {[
           { label:'Move Stage', color:'#6366F1', onPress:() => setShowStageModal(true) },
-          { label:'Follow-up', color:'#10B981', onPress:() => setShowFollowupModal(true) },
-          { label:'Close', color:'#F97316', onPress:() => setShowClosingModal(true) },
-          { label:'Note', color:'#8B5CF6', onPress:() => setShowNoteModal(true) },
+          { label:'Follow-up',  color:'#10B981', onPress:() => setShowFollowupModal(true) },
+          { label:'Close',      color:'#F97316', onPress:() => setShowClosingModal(true) },
+          { label:'Note',       color:'#8B5CF6', onPress:() => setShowNoteModal(true) },
         ].map(btn => (
           <TouchableOpacity key={btn.label} onPress={btn.onPress}
             style={{ flex:1, backgroundColor:btn.color+'18', borderRadius:12, paddingVertical:10, alignItems:'center', borderWidth:1, borderColor:btn.color+'33' }}>
             <Text style={{ color:btn.color, fontWeight:'700', fontSize:11 }}>{btn.label}</Text>
           </TouchableOpacity>
         ))}
+      </View>
+      {/* Action buttons — row 2: Invite & Assign Presentation */}
+      <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+        <TouchableOpacity onPress={() => setShowInviteModal(true)}
+          style={{ flex:1, backgroundColor:'rgba(139,92,246,0.12)', borderRadius:12, paddingVertical:10, alignItems:'center', borderWidth:1, borderColor:'rgba(139,92,246,0.3)', flexDirection:'row', justifyContent:'center', gap:6 }}>
+          <Users color="#8B5CF6" size={13} />
+          <Text style={{ color:'#8B5CF6', fontWeight:'700', fontSize:11 }}>Send Invite</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={openAssignModal}
+          style={{ flex:1, backgroundColor:'rgba(59,130,246,0.12)', borderRadius:12, paddingVertical:10, alignItems:'center', borderWidth:1, borderColor:'rgba(59,130,246,0.3)', flexDirection:'row', justifyContent:'center', gap:6 }}>
+          <Zap color="#3B82F6" size={13} />
+          <Text style={{ color:'#3B82F6', fontWeight:'700', fontSize:11 }}>Send Presentation</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -655,6 +705,64 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
       <BottomSheet visible={showNoteModal} onClose={() => setShowNoteModal(false)} title="Add Note" C={C}>
         <FormField label="Note" value={noteText} onChange={setNoteText} placeholder="Write your note..." C={C} multiline />
         <ActionBtn label="Save Note" onPress={handleNote} saving={saving} color="#8B5CF6" />
+      </BottomSheet>
+
+      {/* Invite Modal */}
+      <BottomSheet visible={showInviteModal} onClose={() => setShowInviteModal(false)} title="Send Invitation" C={C}>
+        <Text style={{ fontSize:12, color:C.muted, fontWeight:'600', marginBottom:8 }}>Invitation Type</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
+          {[
+            { key:'zoom', label:'Zoom', emoji:'💻' },
+            { key:'webinar', label:'Webinar', emoji:'🎙' },
+            { key:'hotel_event', label:'Hotel Event', emoji:'🏨' },
+            { key:'product_demo', label:'Product Demo', emoji:'📦' },
+            { key:'compensation_plan_session', label:'Comp Plan', emoji:'💰' },
+            { key:'one_on_one_call', label:'1-on-1 Call', emoji:'📞' },
+            { key:'live_stream', label:'Live Stream', emoji:'📡' },
+          ].map(t => (
+            <TouchableOpacity key={t.key} onPress={() => setInviteType(t.key)}
+              style={{ paddingHorizontal:14, paddingVertical:10, borderRadius:14, marginRight:8,
+                backgroundColor: inviteType===t.key ? '#8B5CF6' : 'transparent',
+                borderWidth:1.5, borderColor: inviteType===t.key ? '#8B5CF6' : C.border }}>
+              <Text style={{ fontSize:18, textAlign:'center' }}>{t.emoji}</Text>
+              <Text style={{ fontSize:11, fontWeight:'700', color: inviteType===t.key ? '#fff' : C.muted, marginTop:4, textAlign:'center' }}>{t.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <View style={{ backgroundColor:'rgba(139,92,246,0.08)', borderRadius:12, padding:12, marginBottom:16, borderWidth:1, borderColor:'rgba(139,92,246,0.2)' }}>
+          <Text style={{ fontSize:12, color:C.muted, marginBottom:4 }}>A personalized script will be generated and a tracked link created automatically.</Text>
+        </View>
+        <ActionBtn label="Send Invitation 📨" onPress={handleInvite} saving={saving} color="#8B5CF6" />
+      </BottomSheet>
+
+      {/* Assign Presentation Modal */}
+      <BottomSheet visible={showAssignModal} onClose={() => setShowAssignModal(false)} title="Assign Presentation" C={C}>
+        {presentations.length === 0 ? (
+          <View style={{ alignItems:'center', padding:24 }}>
+            <Text style={{ color:C.muted, fontSize:13, textAlign:'center' }}>No presentations yet. Add some in the Performance tab first.</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={{ fontSize:12, color:C.muted, fontWeight:'600', marginBottom:10 }}>Choose a presentation to send:</Text>
+            {presentations.map(p => {
+              const isSelected = selectedPresId === p.id;
+              return (
+                <TouchableOpacity key={p.id} onPress={() => setSelectedPresId(p.id)}
+                  style={{ flexDirection:'row', alignItems:'center', padding:12, borderRadius:14, marginBottom:8,
+                    backgroundColor: isSelected ? 'rgba(59,130,246,0.12)' : C.inputBg,
+                    borderWidth:1.5, borderColor: isSelected ? '#3B82F6' : C.border }}>
+                  <Text style={{ fontSize:20, marginRight:12 }}>🎬</Text>
+                  <View style={{ flex:1 }}>
+                    <Text style={{ fontSize:13, fontWeight:'700', color:C.text }}>{p.title || p.content_type}</Text>
+                    <Text style={{ fontSize:11, color:C.muted, marginTop:2 }}>{p.content_type?.replace('_',' ')}</Text>
+                  </View>
+                  {isSelected && <Text style={{ color:'#3B82F6', fontSize:18 }}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+            <ActionBtn label="Assign & Get Tracked Link 🔗" onPress={handleAssign} saving={saving} color="#3B82F6" />
+          </>
+        )}
       </BottomSheet>
     </View>
   );
