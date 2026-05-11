@@ -424,7 +424,7 @@ class MlmEngineService
     }
 
     // ─── Walk up the tree and re-check rank for every ancestor ───────────────
-    private function runRankCheckForAncestors(?Node $startNode, int $skipDistributorId): void
+    public function runRankCheckForAncestors(?Node $startNode, int $skipDistributorId): void
     {
         if (!$startNode) return;
         $current = $startNode;
