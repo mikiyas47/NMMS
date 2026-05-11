@@ -190,15 +190,28 @@ class CustomerUpgradeController extends Controller
             ], 500);
         }
 
-        // ── Step 3: Mark payment as success ──────────────────────────────────
+        // ── Step 3: Mark payment as success and pay commission ───────────────
         // Whether the distributor record was just created or already existed,
-        // the payment should now be marked as success since the customer has
-        // completed the upgrade and we have verified the tx_ref.
-        if ($payment->status !== 'success') {
+        // mark the payment as success and credit the sponsor's commission now.
+        // The webhook may never arrive on free-tier hosting, so we pay here too.
+        if ($payment->status !== 'success' || !$payment->commission_paid) {
             $payment->status           = 'success';
             $payment->webhook_verified = true;
-            $payment->commission_paid  = false; // webhook will handle commission
+            $payment->commission_paid  = true;
             $payment->save();
+
+            // Credit commission to the referring distributor's wallet
+            if ($payment->commission_amount > 0) {
+                $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
+                $sponsorWallet->balance      += $payment->commission_amount;
+                $sponsorWallet->total_earned += $payment->commission_amount;
+                $sponsorWallet->save();
+
+                Distributor::where('distributor_id', $payment->distributor_id)
+                    ->increment('income_monthly', $payment->commission_amount);
+                Distributor::where('distributor_id', $payment->distributor_id)
+                    ->increment('income_yearly', $payment->commission_amount);
+            }
         }
 
         // ── Step 4: Issue token ───────────────────────────────────────────────

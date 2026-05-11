@@ -184,7 +184,12 @@ class PaymentController extends Controller
                 ]);
 
                 if ($verified) {
-                    // Credit commission to distributor
+                    // Credit commission to distributor wallet AND income fields
+                    $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $lockedPayment->distributor_id]);
+                    $sponsorWallet->balance      += $lockedPayment->commission_amount;
+                    $sponsorWallet->total_earned += $lockedPayment->commission_amount;
+                    $sponsorWallet->save();
+
                     Distributor::where('distributor_id', $lockedPayment->distributor_id)
                         ->increment('income_monthly', $lockedPayment->commission_amount);
                     Distributor::where('distributor_id', $lockedPayment->distributor_id)
@@ -446,7 +451,12 @@ class PaymentController extends Controller
                     return; // Already fully processed
                 }
 
-                // Credit commission to distributor
+                // Credit commission to distributor wallet AND income fields
+                $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $lockedPayment->distributor_id]);
+                $sponsorWallet->balance      += $lockedPayment->commission_amount;
+                $sponsorWallet->total_earned += $lockedPayment->commission_amount;
+                $sponsorWallet->save();
+
                 Distributor::where('distributor_id', $lockedPayment->distributor_id)
                     ->increment('income_monthly', $lockedPayment->commission_amount);
                 Distributor::where('distributor_id', $lockedPayment->distributor_id)
