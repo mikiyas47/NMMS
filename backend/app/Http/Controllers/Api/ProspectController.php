@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Api;
 
@@ -18,7 +18,7 @@ class ProspectController extends Controller
         return (int)($u->distributor_id ?? $u->id);
     }
 
-    // ── Dashboard ─────────────────────────────────────────────────────────────
+    // â”€â”€ Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * GET /api/prospects/dashboard
@@ -105,7 +105,7 @@ class ProspectController extends Controller
         ]);
     }
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
+    // â”€â”€ CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** GET /api/prospects */
     public function index(Request $request)
@@ -122,9 +122,9 @@ class ProspectController extends Controller
         if ($level)  $query->where('interest_level', $level);
         if ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'ilike', "%{$search}%")
+                $q->where('name', 'like', "%{$search}%")
                   ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('email', 'ilike', "%{$search}%");
+                  ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -262,7 +262,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Prospect deleted']);
     }
 
-    // ── Stage move ────────────────────────────────────────────────────────────
+    // â”€â”€ Stage move â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** PATCH /api/prospects/{id}/stage */
     public function moveStage(Request $request, $id)
@@ -307,7 +307,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $prospect->fresh()]);
     }
 
-    // ── Follow-up ─────────────────────────────────────────────────────────────
+    // â”€â”€ Follow-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** POST /api/prospects/{id}/followups */
     public function storeFollowup(Request $request, $id)
@@ -365,7 +365,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $followup], 201);
     }
 
-    // ── Closing ───────────────────────────────────────────────────────────────
+    // â”€â”€ Closing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** POST /api/prospects/{id}/closings */
     public function storeClosing(Request $request, $id)
@@ -397,7 +397,7 @@ class ProspectController extends Controller
             $prospect->save();
         }
 
-        // If outcome is Closed/Positive → move to Joined
+        // If outcome is Closed/Positive â†’ move to Joined
         if (in_array($data['outcome'] ?? '', ['Closed', 'Positive', 'Joined'])) {
             $prospect->stage     = 'Joined';
             $prospect->status    = 'Joined';
@@ -424,7 +424,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $closing], 201);
     }
 
-    // ── Activity timeline ─────────────────────────────────────────────────────
+    // â”€â”€ Activity timeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** GET /api/prospects/{id}/activities */
     public function activities(Request $request, $id)
@@ -441,7 +441,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $activities]);
     }
 
-    // ── Note ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Note â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** POST /api/prospects/{id}/notes */
     public function addNote(Request $request, $id)
@@ -472,7 +472,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $prospect->fresh()]);
     }
 
-    // ── Convert contact to prospect ───────────────────────────────────────────
+    // â”€â”€ Convert contact to prospect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** POST /api/contacts/{id}/convert */
     public function convertContact(Request $request, $id)
@@ -507,7 +507,7 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $prospect->fresh()]);
     }
 
-    // ── Pipeline board (kanban) ───────────────────────────────────────────────
+    // â”€â”€ Pipeline board (kanban) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** GET /api/prospects/pipeline */
     public function pipeline(Request $request)
@@ -527,3 +527,4 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $board]);
     }
 }
+

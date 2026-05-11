@@ -157,7 +157,7 @@ const DashboardView = ({ data, onNavigate, C }) => {
               <Text style={{ color:'#EF4444', fontWeight:'800', fontSize:14 }}>{overdue.length} Overdue Follow-Up{overdue.length > 1 ? 's' : ''}</Text>
               <Text style={{ color:C.muted, fontSize:12, marginTop:2 }}>These prospects need immediate attention</Text>
             </View>
-            <ChevronRight color="#EF4444" size:16 />
+            <ChevronRight color="#EF4444" size={16} />
           </TouchableOpacity>
         </FadeIn>
       )}
@@ -974,3 +974,4 @@ const ProspectsScreen = ({ C }) => {
 };
 
 export default ProspectsScreen;
+
