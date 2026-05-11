@@ -43,9 +43,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
 use App\Http\Controllers\Api\ProspectController;
-// Static routes MUST be outside the {id} group to prevent wildcard collision
-Route::middleware('auth:sanctum')->get('/prospects/dashboard', [ProspectController::class, 'dashboard']);
-Route::middleware('auth:sanctum')->get('/prospects/pipeline',  [ProspectController::class, 'pipeline']);
+// Use distinct top-level paths to avoid any {id} wildcard collision
+Route::middleware('auth:sanctum')->get('/prospect-dashboard', [ProspectController::class, 'dashboard']);
+Route::middleware('auth:sanctum')->get('/prospect-pipeline',  [ProspectController::class, 'pipeline']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/prospects',           [ProspectController::class, 'index']);
@@ -231,8 +231,8 @@ Route::get('/test-engine/{email}', function ($email) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
-// Engine route MUST be registered before the {id} wildcard routes
-Route::middleware('auth:sanctum')->get('/goals/engine', [GoalController::class, 'engine']);
+// Engine route uses a distinct top-level path to avoid {id} wildcard collision
+Route::middleware('auth:sanctum')->get('/goal-engine', [GoalController::class, 'engine']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/goals', [GoalController::class, 'index']);

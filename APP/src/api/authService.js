@@ -169,7 +169,7 @@ export const createClosing = async (contactId, data) => {
 // ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
 export const getProspectDashboard = async () => {
   try {
-    const response = await apiClient.get('/prospects/dashboard');
+    const response = await apiClient.get('/prospect-dashboard');
     return response.data;
   } catch (error) {
     const detail = error.response?.data;
@@ -179,7 +179,7 @@ export const getProspectDashboard = async () => {
 };
 
 export const getProspectPipeline = async () => {
-  const response = await apiClient.get('/prospects/pipeline');
+  const response = await apiClient.get('/prospect-pipeline');
   return response.data;
 };
 
@@ -235,7 +235,7 @@ export const getProspectActivities = async (id) => {
 // ── Goals ─────────────────────────────────────────────────────────────────────
 export const getGoalEngine = async () => {
   try {
-    const response = await apiClient.get('/goals/engine');
+    const response = await apiClient.get('/goal-engine');
     return response.data;
   } catch (error) {
     const detail = error.response?.data;
