@@ -193,6 +193,16 @@ class ProspectController extends Controller
             'created_at'     => now(),
         ]);
 
+        // Performance OS hooks
+        try {
+            $perf = new \App\Http\Controllers\Api\PerformanceController();
+            $perf->markOnboardingMilestone($distId, 'first_prospect_added');
+            $perf->checkFirstTenChallenge($distId);
+            $perf->checkBadge($distId, 'pipeline_10');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Performance hook error in store: '.$e->getMessage());
+        }
+
         return response()->json(['status' => 'success', 'data' => $prospect], 201);
     }
 
