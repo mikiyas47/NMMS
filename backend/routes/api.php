@@ -40,7 +40,46 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Temporary: clear route/config cache (call once after deploy) ─────────────
+// ── Temporary: backfill wallet balances from paid commissions ────────────────
+Route::get('/backfill-wallets', function () {
+    $payments = \App\Models\Payment::where('status', 'success')
+        ->where('commission_paid', true)
+        ->get();
+
+    $credited = [];
+
+    foreach ($payments as $payment) {
+        if ($payment->commission_amount <= 0) continue;
+
+        $wallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
+
+        // Only backfill if wallet balance is less than what income_monthly shows
+        // to avoid double-crediting distributors who already have correct wallets
+        $dist = \App\Models\Distributor::where('distributor_id', $payment->distributor_id)->first();
+        if (!$dist) continue;
+
+        $credited[$payment->distributor_id] = ($credited[$payment->distributor_id] ?? 0) + $payment->commission_amount;
+    }
+
+    $updated = 0;
+    foreach ($credited as $distId => $totalCommission) {
+        $wallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $distId]);
+        // Only update if wallet is lower than total commissions earned
+        if ($wallet->total_earned < $totalCommission) {
+            $diff = $totalCommission - $wallet->total_earned;
+            $wallet->balance      += $diff;
+            $wallet->total_earned  = $totalCommission;
+            $wallet->save();
+            $updated++;
+        }
+    }
+
+    return response()->json([
+        'message'  => "Backfilled {$updated} wallets",
+        'total_distributors_with_commissions' => count($credited),
+    ]);
+});
+// ─────────────────────────────────────────────────────────────────────────────
 Route::get('/clear-cache', function () {
     \Illuminate\Support\Facades\Artisan::call('route:clear');
     \Illuminate\Support\Facades\Artisan::call('config:clear');
