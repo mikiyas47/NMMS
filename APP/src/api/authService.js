@@ -161,6 +161,17 @@ export const createClosing = async (contactId, data) => {
   return response.data;
 };
 // ── Goals ─────────────────────────────────────────────────────────────────────
+export const getGoalEngine = async () => {
+  try {
+    const response = await apiClient.get('/goals/engine');
+    return response.data;
+  } catch (error) {
+    const detail = error.response?.data;
+    console.error('Goal engine 500 detail:', JSON.stringify(detail));
+    throw error;
+  }
+};
+
 export const getGoals = async () => {
   const response = await apiClient.get('/goals');
   return response.data;

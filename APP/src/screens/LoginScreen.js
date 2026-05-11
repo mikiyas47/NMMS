@@ -32,16 +32,13 @@ const LoginScreen = ({ navigation }) => {
     try {
       const data = await loginApi(email, password);
       const role = data.user.role;
-      if (role === 'owner') {
-        navigation.replace('OwnerDashboard');
-      } else if (role === 'admin') {
-        // Admins manage the system via the web portal, not the mobile app
+      if (role === 'owner' || role === 'admin') {
         Alert.alert(
-          'Wrong App',
-          'Admin accounts are managed through the web portal. Please use a browser to access the admin dashboard.',
+          'Use the Web Portal',
+          'Owner and Admin accounts are managed through the web portal. Please use a browser to access your dashboard.',
         );
       } else {
-        // Distributors land here
+        // Only distributors can use the mobile app
         navigation.replace('UserDashboard');
       }
     } catch (error) {
