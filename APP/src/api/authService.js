@@ -118,7 +118,7 @@ export const updatePassword = async (data) => {
   }
 };
 
-// ── Contacts (Prospects) ──────────────────────────────────────────────────────
+// ── Contacts (raw contact storage) ───────────────────────────────────────────
 export const getContacts = async () => {
   const response = await apiClient.get('/contacts');
   return response.data;
@@ -136,6 +136,11 @@ export const updateContact = async (id, data) => {
 
 export const deleteContact = async (id) => {
   const response = await apiClient.delete(`/contacts/${id}`);
+  return response.data;
+};
+
+export const convertContactToProspect = async (id, data) => {
+  const response = await apiClient.post(`/contacts/${id}/convert`, data);
   return response.data;
 };
 
@@ -158,6 +163,67 @@ export const getClosings = async () => {
 
 export const createClosing = async (contactId, data) => {
   const response = await apiClient.post(`/contacts/${contactId}/closings`, data);
+  return response.data;
+};
+
+// ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
+export const getProspectDashboard = async () => {
+  const response = await apiClient.get('/prospects/dashboard');
+  return response.data;
+};
+
+export const getProspectPipeline = async () => {
+  const response = await apiClient.get('/prospects/pipeline');
+  return response.data;
+};
+
+export const getProspects = async (params = {}) => {
+  const response = await apiClient.get('/prospects', { params });
+  return response.data;
+};
+
+export const createProspect = async (data) => {
+  const response = await apiClient.post('/prospects', data);
+  return response.data;
+};
+
+export const getProspect = async (id) => {
+  const response = await apiClient.get(`/prospects/${id}`);
+  return response.data;
+};
+
+export const updateProspect = async (id, data) => {
+  const response = await apiClient.put(`/prospects/${id}`, data);
+  return response.data;
+};
+
+export const deleteProspect = async (id) => {
+  const response = await apiClient.delete(`/prospects/${id}`);
+  return response.data;
+};
+
+export const moveProspectStage = async (id, data) => {
+  const response = await apiClient.patch(`/prospects/${id}/stage`, data);
+  return response.data;
+};
+
+export const addProspectFollowup = async (id, data) => {
+  const response = await apiClient.post(`/prospects/${id}/followups`, data);
+  return response.data;
+};
+
+export const addProspectClosing = async (id, data) => {
+  const response = await apiClient.post(`/prospects/${id}/closings`, data);
+  return response.data;
+};
+
+export const addProspectNote = async (id, note) => {
+  const response = await apiClient.post(`/prospects/${id}/notes`, { note });
+  return response.data;
+};
+
+export const getProspectActivities = async (id) => {
+  const response = await apiClient.get(`/prospects/${id}/activities`);
   return response.data;
 };
 // ── Goals ─────────────────────────────────────────────────────────────────────

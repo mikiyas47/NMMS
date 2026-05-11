@@ -26,7 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/products/{product}', [\App\Http\Controllers\ProductController::class, 'destroy']);
 });
 
-// ── Contacts (Prospects / Followups / Closings) ───────────────────────────────
+// ── Contacts (raw contact storage) ───────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/contacts', [ContactController::class, 'index']);
     Route::post('/contacts', [ContactController::class, 'store']);
@@ -37,6 +37,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/contacts/{id}', [ContactController::class, 'destroy']);
     Route::post('/contacts/{id}/followups', [ContactController::class, 'storeFollowup']);
     Route::post('/contacts/{id}/closings', [ContactController::class, 'storeClosing']);
+    Route::post('/contacts/{id}/convert', [\App\Http\Controllers\Api\ProspectController::class, 'convertContact']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
+use App\Http\Controllers\Api\ProspectController;
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/prospects/dashboard', [ProspectController::class, 'dashboard']);
+    Route::get('/prospects/pipeline',  [ProspectController::class, 'pipeline']);
+    Route::get('/prospects',           [ProspectController::class, 'index']);
+    Route::post('/prospects',          [ProspectController::class, 'store']);
+    Route::get('/prospects/{id}',      [ProspectController::class, 'show']);
+    Route::put('/prospects/{id}',      [ProspectController::class, 'update']);
+    Route::delete('/prospects/{id}',   [ProspectController::class, 'destroy']);
+    Route::patch('/prospects/{id}/stage',     [ProspectController::class, 'moveStage']);
+    Route::post('/prospects/{id}/followups',  [ProspectController::class, 'storeFollowup']);
+    Route::post('/prospects/{id}/closings',   [ProspectController::class, 'storeClosing']);
+    Route::post('/prospects/{id}/notes',      [ProspectController::class, 'addNote']);
+    Route::get('/prospects/{id}/activities',  [ProspectController::class, 'activities']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
