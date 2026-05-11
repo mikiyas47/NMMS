@@ -55,12 +55,23 @@ class WalletController extends Controller
             $directCount = $rootNode->children()->count();
             $totalTeam   = $this->countSubtree($rootNode->id) - 1; // exclude self
 
+            // The root distributor's own package points count toward leg 1's volume
+            // so the display matches the rank engine's calculation.
+            $legOneBonusPoints = (int)($stat->own_points ?? 0);
+            $legIndex = 0;
+
             foreach ($rootNode->children as $child) {
+                $legVolume = $mlm->getSubtreeVolume($child->id);
+                // Add own_points to the first leg only
+                if ($legIndex === 0) {
+                    $legVolume += $legOneBonusPoints;
+                }
                 $legs[] = [
                     'leg'    => $child->leg,
-                    'points' => $mlm->getSubtreeVolume($child->id),
+                    'points' => $legVolume,
                     'rank'   => $this->getHighestRankInSubtree($child->id),
                 ];
+                $legIndex++;
             }
         }
 

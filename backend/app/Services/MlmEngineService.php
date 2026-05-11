@@ -297,6 +297,8 @@ class MlmEngineService
     // ─── Rank Engine ─────────────────────────────────────────────────────────
     // total_points = live BFS walk of the entire subtree rooted at this distributor's
     //                first node, counting each unique distributor's own_points once.
+    // The root distributor's own package (own_points) is included in total_points
+    // AND added to leg 1's volume so their main account counts toward leg qualifications.
     // MT:      ALL 4 legs ≥ 200 pts  AND total ≥ 5,000
     // TT:      2 legs have MT+       AND total ≥ 10,000
     // NTB:     4 legs have TT+       AND total ≥ 50,000
@@ -313,8 +315,13 @@ class MlmEngineService
         $node = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
         if (!$node) return;
 
-        // Total points = live walk of the entire subtree (each unique distributor counted once)
+        // Total points = live walk of the entire subtree (each unique distributor counted once).
+        // This already includes the root distributor's own own_points.
         $totalPoints = $this->getSubtreeVolume($node->id);
+
+        // The root distributor's own package points — these belong to the main account
+        // and must be counted toward leg qualifications, not just the total.
+        $ownPoints = (int)($stat->own_points ?? 0);
 
         // Per-leg subtree volumes and highest ranks
         $directLegs = Node::where('parent_id', $node->id)->get()->keyBy('leg');
@@ -327,18 +334,83 @@ class MlmEngineService
             $legRanks[$i]  = $legNode ? $this->getHighestRankInSubtree($legNode->id) : 'CT';
         }
 
+        // Add the root distributor's own package points to leg 1 so their main
+        // account is considered when evaluating per-leg volume thresholds.
+        // This ensures a distributor who has purchased their own package is not
+        // penalised by having their points excluded from leg qualification checks.
+        $legPoints[1] += $ownPoints;
+
         $currentRank = $stat->rank ?: 'CT';
         $newRank     = $currentRank;
 
+        // ── Rank progression is strictly sequential. Each rank requires the
+        //    previous rank to have been achieved first. MT is the gateway —
+        //    without it, no higher rank can be reached regardless of how many
+        //    MT+ legs exist. When a distributor finally balances all 4 legs
+        //    at ≥ 200 pts, all ranks they now qualify for are awarded in one go.
+        //
+        //    Evaluation order matters: we check from lowest to highest so that
+        //    a single event can advance through multiple ranks at once (e.g.
+        //    CT → MT → TT in one check if all conditions are met simultaneously).
+
         $legsAbove200 = count(array_filter($legPoints, fn($p) => $p >= 200));
-        if ($legsAbove200 >= 4 && $totalPoints >= 5000)                                          $newRank = 'MT';
-        if ($this->countLegsWithRank($legRanks, 'MT')  >= 2 && $totalPoints >= 10000)            $newRank = 'TT';
-        if ($this->countLegsWithRank($legRanks, 'TT')  >= 4 && $totalPoints >= 50000)            $newRank = 'NTB';
-        if ($this->countLegsWithRank($legRanks, 'NTB') >= 4 && $totalPoints >= 200000)           $newRank = 'IBB';
-        if ($this->countLegsWithRank($legRanks, 'IBB') >= 4 && $totalPoints >= 800000)           $newRank = 'GEB';
-        if ($this->countLegsWithRank($legRanks, 'GEB') >= 4)                                     $newRank = 'CA';
-        if ($this->countLegsWithRank($legRanks, 'CA')  >= 2)                                     $newRank = 'C_AWARD';
-        if ($this->countLegsWithRank($legRanks, 'CA')  >= 4)                                     $newRank = 'AL';
+
+        // CT → MT: requires ALL 4 legs ≥ 200 pts AND total ≥ 5,000
+        // This is the mandatory gateway — no higher rank without it.
+        if ($legsAbove200 >= 4 && $totalPoints >= 5000) {
+            $newRank = 'MT';
+        }
+
+        // MT → TT: only reachable if MT was already achieved (current or just set above)
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['MT']
+            && $this->countLegsWithRank($legRanks, 'MT') >= 2
+            && $totalPoints >= 10000) {
+            $newRank = 'TT';
+        }
+
+        // TT → NTB
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['TT']
+            && $this->countLegsWithRank($legRanks, 'TT') >= 4
+            && $totalPoints >= 50000) {
+            $newRank = 'NTB';
+        }
+
+        // NTB → IBB
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['NTB']
+            && $this->countLegsWithRank($legRanks, 'NTB') >= 4
+            && $totalPoints >= 200000) {
+            $newRank = 'IBB';
+        }
+
+        // IBB → GEB
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['IBB']
+            && $this->countLegsWithRank($legRanks, 'IBB') >= 4
+            && $totalPoints >= 800000) {
+            $newRank = 'GEB';
+        }
+
+        // GEB → CA
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['GEB']
+            && $this->countLegsWithRank($legRanks, 'GEB') >= 4) {
+            $newRank = 'CA';
+        }
+
+        // CA → C_AWARD
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['CA']
+            && $this->countLegsWithRank($legRanks, 'CA') >= 2) {
+            $newRank = 'C_AWARD';
+        }
+
+        // C_AWARD → AL
+        if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['C_AWARD']
+            && $this->countLegsWithRank($legRanks, 'CA') >= 4) {
+            $newRank = 'AL';
+        }
+
+        // Never demote — only advance
+        if ((self::RANK_SCORE[$newRank] ?? 0) < (self::RANK_SCORE[$currentRank] ?? 0)) {
+            $newRank = $currentRank;
+        }
 
         if ($newRank !== $currentRank) {
             $stat->rank = $newRank;

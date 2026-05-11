@@ -40,8 +40,63 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Temporary: clear route/config cache (call once after deploy) ─────────────
+Route::get('/clear-cache', function () {
+    \Illuminate\Support\Facades\Artisan::call('route:clear');
+    \Illuminate\Support\Facades\Artisan::call('config:clear');
+    \Illuminate\Support\Facades\Artisan::call('cache:clear');
+    return response()->json(['message' => 'Cache cleared', 'output' => \Illuminate\Support\Facades\Artisan::output()]);
+});
+
+// ── Temporary: test goal engine with a known distributor email ────────────────
+Route::get('/test-engine/{email}', function ($email) {
+    try {
+        $dist = \App\Models\Distributor::where('email', $email)->first();
+        if (!$dist) return response()->json(['error' => 'Distributor not found']);
+
+        $distributorId = $dist->distributor_id;
+        $stat   = \App\Models\Stat::where('distributor_id', $distributorId)->first();
+        $wallet = \App\Models\Wallet::where('distributor_id', $distributorId)->first();
+        $mlm    = new \App\Services\MlmEngineService();
+
+        $currentRank = $stat?->rank ?? 'CT';
+        $ownPoints   = (int)($stat?->own_points ?? 0);
+        $rootNode    = \App\Models\Node::where('distributor_id', $distributorId)->orderBy('id')->first();
+        $totalPoints = $rootNode ? $mlm->getSubtreeVolume($rootNode->id) : $ownPoints;
+        $directCount = $rootNode ? $rootNode->children()->count() : 0;
+
+        $weeklyRecruits = \App\Models\Distributor::where('upline_id', $distributorId)
+            ->where('created_at', '>=', now()->subDays(7))->count();
+        $weeklyEarnings = \App\Models\Payment::where('distributor_id', $distributorId)
+            ->where('status', 'success')
+            ->where('created_at', '>=', now()->subDays(7))
+            ->sum('commission_amount');
+
+        return response()->json([
+            'ok' => true,
+            'distributor_id' => $distributorId,
+            'rank' => $currentRank,
+            'own_points' => $ownPoints,
+            'total_points' => $totalPoints,
+            'direct_count' => $directCount,
+            'weekly_recruits' => $weeklyRecruits,
+            'weekly_earnings' => $weeklyEarnings,
+            'wallet_balance' => $wallet?->balance ?? 0,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file'  => $e->getFile(),
+            'line'  => $e->getLine(),
+            'trace' => collect(explode("\n", $e->getTraceAsString()))->take(8)->toArray(),
+        ], 500);
+    }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ── Goals ─────────────────────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/goals/engine', [GoalController::class, 'engine']); // must be before {id} routes
     Route::get('/goals', [GoalController::class, 'index']);
     Route::post('/goals', [GoalController::class, 'store']);
     Route::get('/goals/{id}', [GoalController::class, 'show']);
