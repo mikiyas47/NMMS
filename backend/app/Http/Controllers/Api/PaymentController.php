@@ -152,8 +152,8 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Payment not found'], 404);
         }
 
-        // Idempotency — skip if already processed
-        if ($payment->status === 'success') {
+        // Idempotency — skip only if already fully processed (commission paid)
+        if ($payment->status === 'success' && $payment->commission_paid) {
             return response()->json(['message' => 'Already processed']);
         }
 
@@ -168,8 +168,8 @@ class PaymentController extends Controller
         DB::transaction(function () use ($payment, $status, $data) {
             // Lock the row to prevent race conditions
             $lockedPayment = Payment::where('id', $payment->id)->lockForUpdate()->first();
-            if ($lockedPayment->status === 'success') {
-                return; // Already processed by another thread
+            if ($lockedPayment->status === 'success' && $lockedPayment->commission_paid) {
+                return; // Already fully processed by another thread
             }
 
             if ($status === 'success') {
@@ -442,8 +442,8 @@ class PaymentController extends Controller
             DB::transaction(function () use ($payment) {
                 // Lock the row to prevent race conditions
                 $lockedPayment = Payment::where('id', $payment->id)->lockForUpdate()->first();
-                if ($lockedPayment->status === 'success') {
-                    return; // Already processed
+                if ($lockedPayment->status === 'success' && $lockedPayment->commission_paid) {
+                    return; // Already fully processed
                 }
 
                 // Credit commission to distributor

@@ -123,14 +123,6 @@ class CustomerUpgradeController extends Controller
                     $mlm->runRankCheckForAncestors($newNode, $distributor->distributor_id);
                 }
 
-                // Mark payment as success if it was pending
-                if ($payment->status === 'pending') {
-                    $payment->status           = 'success';
-                    $payment->webhook_verified = false; // will be re-verified by webhook
-                    $payment->commission_paid  = false;
-                    $payment->save();
-                }
-
             } else {
                 // Distributor record already exists — just update the password
                 $distributor->password = Hash::make($data['password']);
@@ -155,7 +147,18 @@ class CustomerUpgradeController extends Controller
             ], 500);
         }
 
-        // ── Step 3: Issue token ───────────────────────────────────────────────
+        // ── Step 3: Mark payment as success ──────────────────────────────────
+        // Whether the distributor record was just created or already existed,
+        // the payment should now be marked as success since the customer has
+        // completed the upgrade and we have verified the tx_ref.
+        if ($payment->status !== 'success') {
+            $payment->status           = 'success';
+            $payment->webhook_verified = true;
+            $payment->commission_paid  = false; // webhook will handle commission
+            $payment->save();
+        }
+
+        // ── Step 4: Issue token ───────────────────────────────────────────────
         $token = $distributor->createToken('auth_token')->plainTextToken;
 
         return response()->json([
