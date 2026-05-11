@@ -21,17 +21,19 @@ import ProfileScreen      from './distributor/ProfileScreen';
 import ProductsScreen     from './distributor/ProductsScreen';
 import ContactsScreen     from './distributor/ContactsScreen';
 import ProspectsScreen    from './distributor/ProspectsScreen';
+import PerformanceScreen  from './distributor/PerformanceScreen';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = 270;
 
 // ─── Menu definition ──────────────────────────────────────────────────────────
 const MENU = [
-  { id: 'overview',  label: 'Overview',    icon: Home,       gradient: ['#6366F1','#818CF8'],  section: 'main' },
-  { id: 'network',   label: 'My Network',  icon: Users,      gradient: ['#10B981','#34D399'],  section: 'main' },
-  { id: 'tree',      label: 'My Tree',     icon: Network,    gradient: ['#3B82F6','#60A5FA'],  section: 'main' },
-  { id: 'contacts',  label: 'Contacts',    icon: BookUser,   gradient: ['#F59E0B','#FBBF24'],  section: 'main' },
-  { id: 'prospects', label: 'Prospects',   icon: Target,     gradient: ['#EF4444','#F87171'],  section: 'main' },
+  { id: 'overview',   label: 'Overview',    icon: Home,       gradient: ['#6366F1','#818CF8'],  section: 'main' },
+  { id: 'network',    label: 'My Network',  icon: Users,      gradient: ['#10B981','#34D399'],  section: 'main' },
+  { id: 'tree',       label: 'My Tree',     icon: Network,    gradient: ['#3B82F6','#60A5FA'],  section: 'main' },
+  { id: 'contacts',   label: 'Contacts',    icon: BookUser,   gradient: ['#F59E0B','#FBBF24'],  section: 'main' },
+  { id: 'prospects',  label: 'Prospects',   icon: Target,     gradient: ['#EF4444','#F87171'],  section: 'main' },
+  { id: 'performance',label: 'Performance', icon: Zap,        gradient: ['#8B5CF6','#A78BFA'],  section: 'main' },
   { id: 'products',  label: 'Products',    icon: ShoppingBag,gradient: ['#8B5CF6','#A78BFA'],  section: 'main' },
   { id: 'earnings',  label: 'Earnings',    icon: DollarSign, gradient: ['#EF4444','#F97316'],  section: 'finance' },
   { id: 'goals',     label: 'Goals',       icon: Target,     gradient: ['#EC4899','#F472B6'],  section: 'finance' },
@@ -110,8 +112,9 @@ const DistributorDashboard = ({ navigation }) => {
       case 'overview':  return <DistributorOverview C={C} />;
       case 'network':   return <MyNetwork C={C} />;
       case 'tree':      return <TreeScreen C={C} navigate={navigate} />;
-      case 'contacts':  return <ContactsScreen  C={C} />;
-      case 'prospects': return <ProspectsScreen C={C} />;
+      case 'contacts':   return <ContactsScreen   C={C} />;
+      case 'prospects':  return <ProspectsScreen  C={C} />;
+      case 'performance':return <PerformanceScreen C={C} />;
       case 'products':  return <ProductsScreen C={C} navigation={navigation} />;
       case 'earnings':  return <EarningsScreen C={C} />;
       case 'goals':     return <GoalsScreen C={C} />;
