@@ -524,7 +524,7 @@ const PlaybooksTab = ({ C }) => {
                   <Text style={{ color, fontSize:10, fontWeight:'700', textTransform:'uppercase' }}>{pb.category?.replace('_',' ')}</Text>
                 </View>
               </View>
-              <Text style={{ color:C.muted, fontsize={18} }}>{isOpen ? '▲' : '▼'}</Text>
+              <Text style={{ color:C.muted, fontSize:18 }}>{isOpen ? '▲' : '▼'}</Text>
             </TouchableOpacity>
             {isOpen && (
               <View style={{ borderTopWidth:1, borderColor:C.border, padding:16 }}>
