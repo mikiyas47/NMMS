@@ -166,7 +166,50 @@ export const createClosing = async (contactId, data) => {
   return response.data;
 };
 
-// ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
+// ── Performance Operating System ─────────────────────────────────────────────
+
+// Presentations
+export const getPresentations = async () => (await apiClient.get('/presentations')).data;
+export const createPresentation = async (data) => (await apiClient.post('/presentations', data)).data;
+export const updatePresentation = async (id, data) => (await apiClient.put(`/presentations/${id}`, data)).data;
+export const deletePresentation = async (id) => (await apiClient.delete(`/presentations/${id}`)).data;
+export const assignPresentation = async (data) => (await apiClient.post('/presentations/assign', data)).data;
+export const getProspectAssignments = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/assignments`)).data;
+
+// Invitations
+export const createInvitation = async (data) => (await apiClient.post('/invitations', data)).data;
+export const getProspectInvitations = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/invitations`)).data;
+export const updateInvitationStatus = async (id, status) => (await apiClient.patch(`/invitations/${id}/status`, { status })).data;
+
+// Automation
+export const getAutomationRules = async () => (await apiClient.get('/automation-rules')).data;
+export const createAutomationRule = async (data) => (await apiClient.post('/automation-rules', data)).data;
+export const toggleAutomationRule = async (id) => (await apiClient.patch(`/automation-rules/${id}/toggle`)).data;
+
+// Priority
+export const getPriorityLeads = async () => (await apiClient.get('/prospect-priority')).data;
+
+// Daily dashboard
+export const getDailyDashboard = async () => (await apiClient.get('/daily-dashboard')).data;
+export const completeTask = async (data) => (await apiClient.post('/daily-dashboard/complete', data)).data;
+
+// Behavioral intelligence
+export const getActiveRecommendations = async () => (await apiClient.get('/recommendations/active')).data;
+export const getProspectRecommendations = async (id) => (await apiClient.get(`/prospects/${id}/recommendations`)).data;
+export const markRecommendationRead = async (id) => (await apiClient.patch(`/recommendations/${id}/read`)).data;
+
+// Onboarding
+export const getOnboardingStatus = async () => (await apiClient.get('/onboarding/status')).data;
+
+// Playbooks & duplication
+export const getPlaybooks = async () => (await apiClient.get('/playbooks')).data;
+export const createPlaybook = async (data) => (await apiClient.post('/playbooks', data)).data;
+export const getScript = async (invitationType, prospectId) => (await apiClient.get('/scripts', { params: { invitation_type: invitationType, prospect_id: prospectId } })).data;
+export const getWeeklyGoals = async () => (await apiClient.get('/duplication/weekly-goals')).data;
+
+// Funnel analytics
+export const getFunnelReport = async (params = {}) => (await apiClient.get('/funnel/report', { params })).data;
+// ─────────────────────────────────────────────────────────────────────────────
 export const getProspectDashboard = async () => {
   try {
     const response = await apiClient.get('/prospect-dashboard');

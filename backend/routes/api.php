@@ -246,7 +246,53 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Payments (Chapa) ──────────────────────────────────────────────────────────
+// ── Performance Operating System ─────────────────────────────────────────────
+use App\Http\Controllers\Api\PerformanceController;
+
+// Public tracked links (no auth)
+Route::get('/p/{token}',      [PerformanceController::class, 'publicPresentationPage']);
+Route::get('/invite/{token}', [PerformanceController::class, 'publicInvitePage']);
+Route::post('/p/{token}/track',      [PerformanceController::class, 'trackPresentation']);
+Route::post('/invite/{token}/track', [PerformanceController::class, 'trackInvitation']);
+Route::post('/p/{token}/lead',       [PerformanceController::class, 'capturePublicLead']);
+Route::post('/invite/{token}/lead',  [PerformanceController::class, 'capturePublicLead']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    // Presentations
+    Route::get('/presentations',           [PerformanceController::class, 'listPresentations']);
+    Route::post('/presentations',          [PerformanceController::class, 'storePresentation']);
+    Route::put('/presentations/{id}',      [PerformanceController::class, 'updatePresentation']);
+    Route::delete('/presentations/{id}',   [PerformanceController::class, 'deletePresentation']);
+    Route::post('/presentations/assign',   [PerformanceController::class, 'assignPresentation']);
+    Route::get('/prospects/{id}/assignments', [PerformanceController::class, 'listAssignments']);
+    // Invitations
+    Route::post('/invitations',                    [PerformanceController::class, 'createInvitation']);
+    Route::get('/prospects/{id}/invitations',      [PerformanceController::class, 'listInvitations']);
+    Route::patch('/invitations/{id}/status',       [PerformanceController::class, 'updateInvitationStatus']);
+    // Automation
+    Route::get('/automation-rules',          [PerformanceController::class, 'listAutomationRules']);
+    Route::post('/automation-rules',         [PerformanceController::class, 'storeAutomationRule']);
+    Route::patch('/automation-rules/{id}/toggle', [PerformanceController::class, 'toggleAutomationRule']);
+    // Priority
+    Route::get('/prospect-priority',         [PerformanceController::class, 'priorityLeads']);
+    // Daily dashboard
+    Route::get('/daily-dashboard',           [PerformanceController::class, 'dailyDashboard']);
+    Route::post('/daily-dashboard/complete', [PerformanceController::class, 'completeTask']);
+    // Behavioral intelligence
+    Route::get('/recommendations/active',              [PerformanceController::class, 'activeRecommendations']);
+    Route::get('/prospects/{id}/recommendations',      [PerformanceController::class, 'prospectRecommendations']);
+    Route::patch('/recommendations/{id}/read',         [PerformanceController::class, 'markRecommendationRead']);
+    // Onboarding
+    Route::get('/onboarding/status',         [PerformanceController::class, 'onboardingStatus']);
+    // Playbooks & duplication
+    Route::get('/playbooks',                 [PerformanceController::class, 'listPlaybooks']);
+    Route::post('/playbooks',                [PerformanceController::class, 'storePlaybook']);
+    Route::get('/scripts',                   [PerformanceController::class, 'getScript']);
+    Route::get('/duplication/weekly-goals',  [PerformanceController::class, 'weeklyGoals']);
+    // Funnel analytics
+    Route::get('/funnel/report',             [PerformanceController::class, 'funnelReport']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\PaymentController;
 
 // Public payment routes (used by independent CustomerPayScreen and Chapa webhooks)
