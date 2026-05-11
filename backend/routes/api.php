@@ -43,9 +43,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
 use App\Http\Controllers\Api\ProspectController;
+// Static routes MUST be outside the {id} group to prevent wildcard collision
+Route::middleware('auth:sanctum')->get('/prospects/dashboard', [ProspectController::class, 'dashboard']);
+Route::middleware('auth:sanctum')->get('/prospects/pipeline',  [ProspectController::class, 'pipeline']);
+
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/prospects/dashboard', [ProspectController::class, 'dashboard']);
-    Route::get('/prospects/pipeline',  [ProspectController::class, 'pipeline']);
     Route::get('/prospects',           [ProspectController::class, 'index']);
     Route::post('/prospects',          [ProspectController::class, 'store']);
     Route::get('/prospects/{id}',      [ProspectController::class, 'show']);

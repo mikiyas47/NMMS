@@ -26,6 +26,7 @@ class ProspectController extends Controller
      */
     public function dashboard(Request $request)
     {
+        try {
         $distId = $this->distId($request);
         $today  = Carbon::today();
 
@@ -103,6 +104,15 @@ class ProspectController extends Controller
                 ],
             ],
         ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Prospect dashboard error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+                'file'    => basename($e->getFile()),
+                'line'    => $e->getLine(),
+            ], 500);
+        }
     }
 
     // â”€â”€ CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
