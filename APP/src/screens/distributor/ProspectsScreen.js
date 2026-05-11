@@ -1,9 +1,11 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Modal, RefreshControl, Alert,
   Animated, Dimensions, KeyboardAvoidingView, Platform,
+  Linking, AppState,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Target, Users, Flame, TrendingUp, Clock, CheckCircle2,
@@ -382,11 +384,8 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
 
   // Invite form
   const [inviteType, setInviteType] = useState('zoom');
-  const [inviteScript, setInviteScript] = useState('');
   const [presentations, setPresentations] = useState([]);
-  const [selectedPresId, setSelectedPresId] = useState(null);
-
-  // Stage move form
+  const [selectedPresId, setSelectedPresId] = useState(null);  // Stage move form
   const [newStage, setNewStage] = useState(prospect.stage);
   const [nextAction, setNextAction] = useState(prospect.next_action || '');
   const [nextDate, setNextDate] = useState(prospect.next_action_date ? prospect.next_action_date.toString().split('T')[0] : '');
@@ -460,28 +459,6 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
       await addProspectNote(prospect.prospect_id, noteText.trim());
       setShowNoteModal(false);
       setNoteText('');
-      onUpdate(null);
-    } catch (e) { Alert.alert('Error', e?.message || 'Failed'); }
-    finally { setSaving(false); }
-  };
-
-  const handleInvite = async () => {
-    setSaving(true);
-    try {
-      const res = await createInvitation({ prospect_id: prospect.prospect_id, invitation_type: inviteType });
-      setInviteScript(res.script || '');
-      Alert.alert('Invitation Sent!', `Tracked link created.\n\nScript:\n${res.script || ''}`, [{ text: 'OK', onPress: () => setShowInviteModal(false) }]);
-      onUpdate(null);
-    } catch (e) { Alert.alert('Error', e?.message || 'Failed'); }
-    finally { setSaving(false); }
-  };
-
-  const handleAssign = async () => {
-    if (!selectedPresId) { Alert.alert('Select a presentation first.'); return; }
-    setSaving(true);
-    try {
-      const res = await assignPresentation({ presentation_id: selectedPresId, prospect_id: prospect.prospect_id });
-      Alert.alert('Presentation Assigned!', `Tracked link:\n${res.tracked_link}`, [{ text: 'OK', onPress: () => setShowAssignModal(false) }]);
       onUpdate(null);
     } catch (e) { Alert.alert('Error', e?.message || 'Failed'); }
     finally { setSaving(false); }
@@ -707,33 +684,14 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
         <ActionBtn label="Save Note" onPress={handleNote} saving={saving} color="#8B5CF6" />
       </BottomSheet>
 
-      {/* Invite Modal */}
-      <BottomSheet visible={showInviteModal} onClose={() => setShowInviteModal(false)} title="Send Invitation" C={C}>
-        <Text style={{ fontSize:12, color:C.muted, fontWeight:'600', marginBottom:8 }}>Invitation Type</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
-          {[
-            { key:'zoom', label:'Zoom', emoji:'💻' },
-            { key:'webinar', label:'Webinar', emoji:'🎙' },
-            { key:'hotel_event', label:'Hotel Event', emoji:'🏨' },
-            { key:'product_demo', label:'Product Demo', emoji:'📦' },
-            { key:'compensation_plan_session', label:'Comp Plan', emoji:'💰' },
-            { key:'one_on_one_call', label:'1-on-1 Call', emoji:'📞' },
-            { key:'live_stream', label:'Live Stream', emoji:'📡' },
-          ].map(t => (
-            <TouchableOpacity key={t.key} onPress={() => setInviteType(t.key)}
-              style={{ paddingHorizontal:14, paddingVertical:10, borderRadius:14, marginRight:8,
-                backgroundColor: inviteType===t.key ? '#8B5CF6' : 'transparent',
-                borderWidth:1.5, borderColor: inviteType===t.key ? '#8B5CF6' : C.border }}>
-              <Text style={{ fontSize:18, textAlign:'center' }}>{t.emoji}</Text>
-              <Text style={{ fontSize:11, fontWeight:'700', color: inviteType===t.key ? '#fff' : C.muted, marginTop:4, textAlign:'center' }}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        <View style={{ backgroundColor:'rgba(139,92,246,0.08)', borderRadius:12, padding:12, marginBottom:16, borderWidth:1, borderColor:'rgba(139,92,246,0.2)' }}>
-          <Text style={{ fontSize:12, color:C.muted, marginBottom:4 }}>A personalized script will be generated and a tracked link created automatically.</Text>
-        </View>
-        <ActionBtn label="Send Invitation 📨" onPress={handleInvite} saving={saving} color="#8B5CF6" />
-      </BottomSheet>
+      {/* ══ INVITE MODAL — Full Multi-Step Flow ══ */}
+      <InviteFlowModal
+        visible={showInviteModal}
+        prospect={prospect}
+        onClose={() => setShowInviteModal(false)}
+        onSaved={() => { setShowInviteModal(false); onUpdate(null); }}
+        C={C}
+      />
 
       {/* Assign Presentation Modal */}
       <BottomSheet visible={showAssignModal} onClose={() => setShowAssignModal(false)} title="Assign Presentation" C={C}>
@@ -760,7 +718,15 @@ const ProfileView = ({ prospect, onBack, onUpdate, C }) => {
                 </TouchableOpacity>
               );
             })}
-            <ActionBtn label="Assign & Get Tracked Link 🔗" onPress={handleAssign} saving={saving} color="#3B82F6" />
+            <ActionBtn label="Assign & Get Tracked Link 🔗" onPress={async () => {
+              if (!selectedPresId) { Alert.alert('Select a presentation first.'); return; }
+              setSaving(true);
+              try {
+                const res = await assignPresentation({ presentation_id: selectedPresId, prospect_id: prospect.prospect_id });
+                Alert.alert('Presentation Assigned! 🔗', `Tracked link created.\n\nShare this link with ${prospect.name}:\n${res.tracked_link}`, [{ text: 'OK', onPress: () => { setShowAssignModal(false); onUpdate(null); } }]);
+              } catch (e) { Alert.alert('Error', e?.message || 'Failed'); }
+              finally { setSaving(false); }
+            }} saving={saving} color="#3B82F6" />
           </>
         )}
       </BottomSheet>
@@ -848,6 +814,370 @@ const AddProspectModal = ({ visible, onClose, onSaved, C }) => {
                 })}
               </View>
               <ActionBtn label="Create Prospect" onPress={handleSave} saving={saving} color="#6366F1" />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
+
+// ── InviteFlowModal — Full multi-step invitation workflow ─────────────────────
+const INVITE_SCRIPTS = [
+  { id:'s1', text:"Hey {name}! I want to share something with you that I think you'll find really interesting. Are you open to it? 😊" },
+  { id:'s2', text:"Hi {name}, can I send you a short video? It's only 5 minutes and I think it could change things for you." },
+  { id:'s3', text:"Hey {name}! Are you open to seeing a simple business idea? No pressure at all — just want to share something exciting." },
+  { id:'s4', text:"Hi {name}, I've been thinking about you. I have something I'd love to show you when you have a few minutes. When are you free?" },
+  { id:'s5', text:"Hey {name}! Quick question — are you open to earning extra income from your phone? I have something to show you." },
+];
+
+const MESSAGING_APPS = [
+  { key:'whatsapp',  label:'WhatsApp',  emoji:'🟢', scheme: (phone, msg) => `whatsapp://send?phone=${phone.replace(/\D/g,'')}&text=${encodeURIComponent(msg)}` },
+  { key:'telegram',  label:'Telegram',  emoji:'✈️',  scheme: (phone, msg) => `tg://resolve?phone=${phone.replace(/\D/g,'').replace(/^\+/,'')}` },
+  { key:'sms',       label:'SMS',       emoji:'💬', scheme: (phone, msg) => `sms:${phone}?body=${encodeURIComponent(msg)}` },
+  { key:'imo',       label:'IMO',       emoji:'📱', scheme: (phone, msg) => `imo://chat?phone=${phone.replace(/\D/g,'')}` },
+  { key:'messenger', label:'Messenger', emoji:'💙', scheme: (phone, msg) => `fb-messenger://` },
+];
+
+const CALL_OUTCOMES = [
+  { key:'success',      label:'Invitation successful', emoji:'✅', color:'#10B981' },
+  { key:'not_interested',label:'Not interested',       emoji:'❌', color:'#EF4444' },
+  { key:'call_later',   label:'Asked to call later',   emoji:'📆', color:'#F59E0B' },
+  { key:'no_answer',    label:'Did not answer',        emoji:'🔇', color:'#6B7280' },
+  { key:'wrong_number', label:'Wrong number',          emoji:'⚠️', color:'#F97316' },
+];
+
+const TEXT_OUTCOMES = [
+  { key:'delivered',     label:'Message delivered — prospect is aware', emoji:'✅', color:'#10B981' },
+  { key:'waiting',       label:'Waiting for reply',                     emoji:'⏳', color:'#F59E0B' },
+  { key:'not_interested',label:'Prospect not interested',               emoji:'❌', color:'#EF4444' },
+  { key:'not_active',    label:'Number not active',                     emoji:'📵', color:'#6B7280' },
+];
+
+const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
+  // step: 'method' | 'call_confirm' | 'calling' | 'call_outcome' | 'script_select' | 'app_select' | 'text_confirm' | 'text_outcome' | 'done'
+  const [step, setStep]             = useState('method');
+  const [selectedScript, setSelectedScript] = useState(null);
+  const [selectedApp, setSelectedApp]       = useState(null);
+  const [selectedOutcome, setSelectedOutcome] = useState(null);
+  const [saving, setSaving]         = useState(false);
+
+  const phone = prospect?.phone || '';
+  const name  = prospect?.name  || 'there';
+
+  // Auto-detect return from phone dialer
+  useEffect(() => {
+    if (step !== 'calling') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setStep('call_outcome');
+    });
+    return () => sub.remove();
+  }, [step]);
+
+  // Reset on open
+  useEffect(() => {
+    if (visible) {
+      setStep('method'); setSelectedScript(null);
+      setSelectedApp(null); setSelectedOutcome(null); setSaving(false);
+    }
+  }, [visible]);
+
+  const personalizeScript = (text) => text.replace('{name}', name.split(' ')[0]);
+
+  const handleCall = async () => {
+    const cleanPhone = phone.replace(/\s/g, '');
+    if (!cleanPhone) { Alert.alert('No phone number', 'This prospect has no phone number.'); return; }
+    try {
+      const canOpen = await Linking.canOpenURL(`tel:${cleanPhone}`);
+      if (!canOpen) { Alert.alert('Cannot make call', 'Phone calls are not supported on this device.'); return; }
+      await Linking.openURL(`tel:${cleanPhone}`);
+      setStep('calling');
+    } catch (e) { Alert.alert('Error', 'Could not open the phone dialer.'); }
+  };
+
+  const handleSendText = async () => {
+    if (!selectedApp || !selectedScript) return;
+    const cleanPhone = phone.replace(/\s/g, '');
+    const msg = personalizeScript(selectedScript.text);
+    const url = selectedApp.scheme(cleanPhone, msg);
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        // Copy to clipboard as fallback
+        await Clipboard.setStringAsync(msg);
+        Alert.alert(
+          `${selectedApp.label} not found`,
+          'The message has been copied to your clipboard. Open the app manually and paste it.',
+          [{ text: 'OK', onPress: () => setStep('text_confirm') }]
+        );
+        return;
+      }
+      await Linking.openURL(url);
+      // For Telegram — copy script since it can't pre-fill
+      if (selectedApp.key === 'telegram' || selectedApp.key === 'imo' || selectedApp.key === 'messenger') {
+        await Clipboard.setStringAsync(msg);
+        Alert.alert(
+          '📋 Script copied!',
+          `Your message has been copied. Paste it in the ${selectedApp.label} chat.`,
+          [{ text: 'Got it', onPress: () => setStep('text_confirm') }]
+        );
+      } else {
+        setStep('text_confirm');
+      }
+    } catch (e) { Alert.alert('Error', `Could not open ${selectedApp.label}.`); }
+  };
+
+  const saveOutcome = async (outcome, type) => {
+    setSaving(true);
+    try {
+      await createInvitation({
+        prospect_id:     prospect.prospect_id,
+        invitation_type: type === 'call' ? 'one_on_one_call' : 'one_on_one_call',
+        notes:           `${type === 'call' ? 'Call' : 'Text'} invitation — outcome: ${outcome}`,
+      });
+      setSelectedOutcome(outcome);
+      setStep('done');
+      setTimeout(() => { onSaved(); }, 1500);
+    } catch (e) { Alert.alert('Error', e?.message || 'Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.6)', justifyContent:'flex-end' }}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'}>
+          <View style={{ backgroundColor:C.surface, borderTopLeftRadius:28, borderTopRightRadius:28, paddingHorizontal:22, paddingTop:16, paddingBottom:44, maxHeight:'90%' }}>
+            {/* Handle */}
+            <View style={{ width:40, height:4, borderRadius:2, backgroundColor:C.border, alignSelf:'center', marginBottom:16 }} />
+
+            {/* Header */}
+            <View style={{ flexDirection:'row', alignItems:'center', marginBottom:20 }}>
+              <View style={{ width:40, height:40, borderRadius:12, backgroundColor:'rgba(139,92,246,0.15)', alignItems:'center', justifyContent:'center', marginRight:12 }}>
+                <Text style={{ fontSize:20 }}>📨</Text>
+              </View>
+              <View style={{ flex:1 }}>
+                <Text style={{ fontSize:16, fontWeight:'900', color:C.text }}>Invite {name.split(' ')[0]}</Text>
+                <Text style={{ fontSize:12, color:C.muted, marginTop:1 }}>{phone}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={{ padding:4 }}>
+                <X color={C.muted} size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+              {/* ── STEP: Choose method ── */}
+              {step === 'method' && (
+                <View>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center', marginBottom:20 }}>
+                    How do you want to invite <Text style={{ color:C.text, fontWeight:'700' }}>{name.split(' ')[0]}</Text>?
+                  </Text>
+                  <TouchableOpacity onPress={() => setStep('call_confirm')}
+                    style={{ flexDirection:'row', alignItems:'center', backgroundColor:'rgba(59,130,246,0.1)', borderRadius:18, padding:18, marginBottom:12, borderWidth:1.5, borderColor:'rgba(59,130,246,0.3)' }}>
+                    <Text style={{ fontSize:32, marginRight:16 }}>📞</Text>
+                    <View style={{ flex:1 }}>
+                      <Text style={{ fontSize:16, fontWeight:'800', color:C.text }}>Call Invitation</Text>
+                      <Text style={{ fontSize:12, color:C.muted, marginTop:3 }}>Make a live phone call — app dials automatically</Text>
+                    </View>
+                    <ChevronRight color="#3B82F6" size={20} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setStep('script_select')}
+                    style={{ flexDirection:'row', alignItems:'center', backgroundColor:'rgba(16,185,129,0.1)', borderRadius:18, padding:18, borderWidth:1.5, borderColor:'rgba(16,185,129,0.3)' }}>
+                    <Text style={{ fontSize:32, marginRight:16 }}>💬</Text>
+                    <View style={{ flex:1 }}>
+                      <Text style={{ fontSize:16, fontWeight:'800', color:C.text }}>Text / Chat Invitation</Text>
+                      <Text style={{ fontSize:12, color:C.muted, marginTop:3 }}>WhatsApp, Telegram, SMS, IMO, Messenger</Text>
+                    </View>
+                    <ChevronRight color="#10B981" size={20} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── STEP: Call confirm ── */}
+              {step === 'call_confirm' && (
+                <View style={{ alignItems:'center' }}>
+                  <View style={{ width:80, height:80, borderRadius:40, backgroundColor:'rgba(59,130,246,0.15)', alignItems:'center', justifyContent:'center', marginBottom:16 }}>
+                    <Text style={{ fontSize:40 }}>📞</Text>
+                  </View>
+                  <Text style={{ fontSize:18, fontWeight:'900', color:C.text, marginBottom:6 }}>Call {name.split(' ')[0]}</Text>
+                  <Text style={{ fontSize:14, color:C.muted, marginBottom:4 }}>{phone}</Text>
+                  <View style={{ backgroundColor:'rgba(59,130,246,0.1)', borderRadius:12, padding:12, marginBottom:24, borderWidth:1, borderColor:'rgba(59,130,246,0.2)', width:'100%' }}>
+                    <Text style={{ fontSize:12, color:'#3B82F6', fontWeight:'700', marginBottom:4 }}>📋 Reason for call</Text>
+                    <Text style={{ fontSize:13, color:C.text }}>Invitation — share a business opportunity</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCall}
+                    style={{ backgroundColor:'#3B82F6', borderRadius:16, paddingVertical:16, paddingHorizontal:40, flexDirection:'row', alignItems:'center', gap:10, marginBottom:12, width:'100%', justifyContent:'center' }}>
+                    <Text style={{ fontSize:20 }}>📞</Text>
+                    <Text style={{ color:'#fff', fontWeight:'900', fontSize:16 }}>Start Call Now</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setStep('method')} style={{ paddingVertical:10 }}>
+                    <Text style={{ color:C.muted, fontSize:13 }}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── STEP: Calling in progress ── */}
+              {step === 'calling' && (
+                <View style={{ alignItems:'center', paddingVertical:20 }}>
+                  <View style={{ width:80, height:80, borderRadius:40, backgroundColor:'rgba(59,130,246,0.15)', alignItems:'center', justifyContent:'center', marginBottom:16 }}>
+                    <Text style={{ fontSize:40 }}>📞</Text>
+                  </View>
+                  <Text style={{ fontSize:18, fontWeight:'900', color:C.text, marginBottom:8 }}>Calling {name.split(' ')[0]}…</Text>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center', marginBottom:28, lineHeight:20 }}>
+                    Return to the app once the call ends to log the outcome.
+                  </Text>
+                  <TouchableOpacity onPress={() => setStep('call_outcome')}
+                    style={{ backgroundColor:'#3B82F6', borderRadius:16, paddingVertical:14, paddingHorizontal:32, width:'100%', alignItems:'center' }}>
+                    <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Call Ended — Log Outcome</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── STEP: Call outcome ── */}
+              {step === 'call_outcome' && (
+                <View>
+                  <Text style={{ fontSize:14, fontWeight:'800', color:C.text, marginBottom:16, textAlign:'center' }}>
+                    How did the call with {name.split(' ')[0]} go?
+                  </Text>
+                  {CALL_OUTCOMES.map(o => (
+                    <TouchableOpacity key={o.key} onPress={() => saveOutcome(o.key, 'call')} disabled={saving}
+                      style={{ flexDirection:'row', alignItems:'center', backgroundColor:o.color+'12', borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor:o.color+'30' }}>
+                      <Text style={{ fontSize:22, marginRight:14 }}>{o.emoji}</Text>
+                      <Text style={{ fontSize:14, fontWeight:'700', color:C.text, flex:1 }}>{o.label}</Text>
+                      {saving && <ActivityIndicator color={o.color} size="small" />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* ── STEP: Script select ── */}
+              {step === 'script_select' && (
+                <View>
+                  <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:14 }}>Choose a script for {name.split(' ')[0]}:</Text>
+                  {INVITE_SCRIPTS.map(s => {
+                    const isSelected = selectedScript?.id === s.id;
+                    return (
+                      <TouchableOpacity key={s.id} onPress={() => setSelectedScript(s)}
+                        style={{ backgroundColor: isSelected ? 'rgba(16,185,129,0.12)' : C.inputBg, borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor: isSelected ? '#10B981' : C.border }}>
+                        <Text style={{ fontSize:13, color: isSelected ? '#10B981' : C.text, lineHeight:20, fontStyle:'italic' }}>
+                          "{personalizeScript(s.text)}"
+                        </Text>
+                        {isSelected && <Text style={{ color:'#10B981', fontSize:11, fontWeight:'700', marginTop:6 }}>✓ Selected</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity onPress={() => { if (!selectedScript) { Alert.alert('Select a script first'); return; } setStep('app_select'); }}
+                    style={{ backgroundColor:'#10B981', borderRadius:14, height:50, alignItems:'center', justifyContent:'center', marginTop:6 }}>
+                    <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Next — Choose App →</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setStep('method')} style={{ paddingVertical:10, alignItems:'center' }}>
+                    <Text style={{ color:C.muted, fontSize:13 }}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── STEP: App select ── */}
+              {step === 'app_select' && (
+                <View>
+                  {/* Script preview */}
+                  <View style={{ backgroundColor:C.inputBg, borderRadius:12, padding:12, marginBottom:16, borderWidth:1, borderColor:C.border }}>
+                    <Text style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Script to send:</Text>
+                    <Text style={{ fontSize:13, color:C.text, fontStyle:'italic', lineHeight:18 }}>"{personalizeScript(selectedScript?.text || '')}"</Text>
+                  </View>
+                  <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:12 }}>Send via:</Text>
+                  {MESSAGING_APPS.map(app => {
+                    const doSend = async () => {
+                      setSelectedApp(app);
+                      const cleanPhone = phone.replace(/\s/g, '');
+                      const msg = personalizeScript(selectedScript?.text || '');
+                      const url = app.scheme(cleanPhone, msg);
+                      try {
+                        const canOpen = await Linking.canOpenURL(url);
+                        if (!canOpen) {
+                          await Clipboard.setStringAsync(msg);
+                          Alert.alert(`${app.label} not found`, 'Message copied to clipboard. Open the app manually and paste it.', [{ text:'OK', onPress:()=>setStep('text_confirm') }]);
+                          return;
+                        }
+                        await Linking.openURL(url);
+                        if (['telegram','imo','messenger'].includes(app.key)) {
+                          await Clipboard.setStringAsync(msg);
+                          Alert.alert('📋 Script copied!', `Paste it in the ${app.label} chat.`, [{ text:'Got it', onPress:()=>setStep('text_confirm') }]);
+                        } else {
+                          setStep('text_confirm');
+                        }
+                      } catch(e) { Alert.alert('Error', `Could not open ${app.label}.`); }
+                    };
+                    return (
+                    <TouchableOpacity key={app.key} onPress={doSend}
+                      style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.inputBg, borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor:C.border }}>
+                      <Text style={{ fontSize:26, marginRight:14 }}>{app.emoji}</Text>
+                      <View style={{ flex:1 }}>
+                        <Text style={{ fontSize:14, fontWeight:'700', color:C.text }}>{app.label}</Text>
+                        <Text style={{ fontSize:11, color:C.muted, marginTop:2 }}>
+                          {['telegram','imo','messenger'].includes(app.key) ? `Opens ${app.label} — script copied to clipboard` : 'Opens app with message pre-filled'}
+                        </Text>
+                      </View>
+                      <ChevronRight color={C.muted} size={16} />
+                    </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity onPress={() => setStep('script_select')} style={{ paddingVertical:10, alignItems:'center' }}>
+                    <Text style={{ color:C.muted, fontSize:13 }}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── STEP: Text confirm ── */}
+              {step === 'text_confirm' && (
+                <View style={{ alignItems:'center' }}>
+                  <Text style={{ fontSize:32, marginBottom:12 }}>{selectedApp?.emoji}</Text>
+                  <Text style={{ fontSize:16, fontWeight:'900', color:C.text, marginBottom:8 }}>Message sent via {selectedApp?.label}</Text>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center', marginBottom:24 }}>Was the invitation delivered successfully?</Text>
+                  <View style={{ flexDirection:'row', gap:12, width:'100%' }}>
+                    <TouchableOpacity onPress={() => setStep('text_outcome')}
+                      style={{ flex:1, backgroundColor:'rgba(16,185,129,0.12)', borderRadius:14, paddingVertical:14, alignItems:'center', borderWidth:1.5, borderColor:'rgba(16,185,129,0.3)' }}>
+                      <Text style={{ fontSize:20, marginBottom:4 }}>✅</Text>
+                      <Text style={{ color:'#10B981', fontWeight:'800', fontSize:14 }}>Yes, delivered</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setStep('text_outcome')}
+                      style={{ flex:1, backgroundColor:'rgba(239,68,68,0.1)', borderRadius:14, paddingVertical:14, alignItems:'center', borderWidth:1.5, borderColor:'rgba(239,68,68,0.25)' }}>
+                      <Text style={{ fontSize:20, marginBottom:4 }}>❌</Text>
+                      <Text style={{ color:'#EF4444', fontWeight:'800', fontSize:14 }}>No, failed</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* ── STEP: Text outcome ── */}
+              {step === 'text_outcome' && (
+                <View>
+                  <Text style={{ fontSize:14, fontWeight:'800', color:C.text, marginBottom:16, textAlign:'center' }}>
+                    What was the response from {name.split(' ')[0]}?
+                  </Text>
+                  {TEXT_OUTCOMES.map(o => (
+                    <TouchableOpacity key={o.key} onPress={() => saveOutcome(o.key, 'text')} disabled={saving}
+                      style={{ flexDirection:'row', alignItems:'center', backgroundColor:o.color+'12', borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor:o.color+'30' }}>
+                      <Text style={{ fontSize:22, marginRight:14 }}>{o.emoji}</Text>
+                      <Text style={{ fontSize:14, fontWeight:'700', color:C.text, flex:1 }}>{o.label}</Text>
+                      {saving && <ActivityIndicator color={o.color} size="small" />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* ── STEP: Done ── */}
+              {step === 'done' && (
+                <View style={{ alignItems:'center', paddingVertical:24 }}>
+                  <Text style={{ fontSize:48, marginBottom:12 }}>🎉</Text>
+                  <Text style={{ fontSize:18, fontWeight:'900', color:C.text, marginBottom:8 }}>Invitation Logged!</Text>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center' }}>
+                    The outcome has been saved to {name.split(' ')[0]}'s profile and their score updated.
+                  </Text>
+                </View>
+              )}
+
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
