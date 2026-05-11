@@ -8,6 +8,7 @@ use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\Followup;
 use App\Models\ClosingAttempt;
+use App\Models\Invitation;
 use Carbon\Carbon;
 
 class ProspectController extends Controller

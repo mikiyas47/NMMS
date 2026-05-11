@@ -293,7 +293,7 @@ class PerformanceController extends Controller
         return response()->json(['status'=>'success','data'=>$rule]);
     }
 
-    private function fireAutomation(int $distId, int $prospectId, string $triggerType, array $context=[]): void {
+    public function fireAutomation(int $distId, int $prospectId, string $triggerType, array $context=[]): void {
         $rules = AutomationRule::where('distributor_id',$distId)->where('trigger_type',$triggerType)->where('is_active',true)->get();
         foreach ($rules as $rule) {
             try {
@@ -306,7 +306,7 @@ class PerformanceController extends Controller
         }
     }
 
-    private function executeAutomationAction(AutomationRule $rule, int $prospectId, int $distId, string $trigger, array $ctx): void {
+    public function executeAutomationAction(AutomationRule $rule, int $prospectId, int $distId, string $trigger, array $ctx): void {
         $prospect = Prospect::find($prospectId);
         if (!$prospect) return;
         $cfg = $rule->action_config ?? [];
@@ -336,7 +336,7 @@ class PerformanceController extends Controller
         AutomationLog::create(['rule_id'=>$rule->id,'prospect_id'=>$prospectId,'distributor_id'=>$distId,'trigger_event'=>$trigger,'action_taken'=>$rule->action_type,'details'=>$ctx,'success'=>true,'executed_at'=>now()]);
     }
 
-    private function seedDefaultAutomationRules(int $distId): void {
+    public function seedDefaultAutomationRules(int $distId): void {
         $defaults = [
             ['name'=>'High Watch → Hot','trigger_type'=>'presentation_watch_percent_reached','trigger_config'=>['watch_percent'=>80],'action_type'=>'set_interest_level','action_config'=>['level'=>'hot']],
             ['name'=>'No Response 3 Days → Reminder','trigger_type'=>'no_response_days','trigger_config'=>['days'=>3],'action_type'=>'create_followup_reminder','action_config'=>['message'=>'Follow up — no response in 3 days','days'=>1]],
