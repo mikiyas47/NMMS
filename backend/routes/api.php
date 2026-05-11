@@ -106,9 +106,11 @@ Route::get('/clear-cache', function () {
     \Illuminate\Support\Facades\Artisan::call('config:clear');
     \Illuminate\Support\Facades\Artisan::call('cache:clear');
     \Illuminate\Support\Facades\Artisan::call('view:clear');
+    \Illuminate\Support\Facades\Artisan::call('optimize:clear');
     return response()->json([
         'message' => 'All caches cleared',
         'routes_cleared' => true,
+        'output' => \Illuminate\Support\Facades\Artisan::output(),
     ]);
 });
 
