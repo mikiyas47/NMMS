@@ -141,6 +141,7 @@ Route::get('/test-prospects/{email}', function ($email) {
 });
 
 // ── Temporary: test full dashboard logic for a distributor ────────────────────
+// v2 - force redeploy
 Route::get('/test-dashboard/{email}', function ($email) {
     try {
         $dist = \App\Models\Distributor::where('email', $email)->first();
