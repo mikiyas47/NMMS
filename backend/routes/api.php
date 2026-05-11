@@ -45,7 +45,11 @@ Route::get('/clear-cache', function () {
     \Illuminate\Support\Facades\Artisan::call('route:clear');
     \Illuminate\Support\Facades\Artisan::call('config:clear');
     \Illuminate\Support\Facades\Artisan::call('cache:clear');
-    return response()->json(['message' => 'Cache cleared', 'output' => \Illuminate\Support\Facades\Artisan::output()]);
+    \Illuminate\Support\Facades\Artisan::call('view:clear');
+    return response()->json([
+        'message' => 'All caches cleared',
+        'routes_cleared' => true,
+    ]);
 });
 
 // ── Temporary: test goal engine with a known distributor email ────────────────
@@ -95,8 +99,10 @@ Route::get('/test-engine/{email}', function ($email) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
+// Engine route MUST be registered before the {id} wildcard routes
+Route::middleware('auth:sanctum')->get('/goals/engine', [GoalController::class, 'engine']);
+
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/goals/engine', [GoalController::class, 'engine']); // must be before {id} routes
     Route::get('/goals', [GoalController::class, 'index']);
     Route::post('/goals', [GoalController::class, 'store']);
     Route::get('/goals/{id}', [GoalController::class, 'show']);
