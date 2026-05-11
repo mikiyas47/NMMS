@@ -124,7 +124,7 @@ class CustomerUpgradeController extends Controller
                 }
 
             } else {
-                // Distributor record already exists — just update the password
+                // Distributor record already exists — update password and ensure tree placement
                 $distributor->password = Hash::make($data['password']);
                 $distributor->is_paid  = true;
                 if ($payment->distributor_id && !$distributor->upline_id) {
@@ -135,6 +135,49 @@ class CustomerUpgradeController extends Controller
                 // Ensure wallet and stat exist
                 Wallet::firstOrCreate(['distributor_id' => $distributor->distributor_id]);
                 Stat::firstOrCreate(['distributor_id'   => $distributor->distributor_id]);
+
+                // ── Ensure the node and account exist in the tree ──────────────
+                // The webhook may have created the distributor record but failed
+                // to place the node, or the upgrade ran before the webhook.
+                $hasAccount = Account::where('distributor_id', $distributor->distributor_id)->exists();
+
+                if (!$hasAccount) {
+                    $mlm = new \App\Services\MlmEngineService();
+                    $sponsorNode = Node::where('distributor_id', $payment->distributor_id)
+                        ->orderBy('id', 'asc')->first();
+
+                    if ($sponsorNode) {
+                        $placementNode = $mlm->findPlacementNode($sponsorNode->id);
+                        $leg = $placementNode->children()->count() + 1;
+                        if ($leg > 4) $leg = 4;
+
+                        $newNode = Node::create([
+                            'parent_id'      => $placementNode->id,
+                            'distributor_id' => $distributor->distributor_id,
+                            'leg'            => $leg,
+                        ]);
+
+                        Account::create([
+                            'distributor_id' => $distributor->distributor_id,
+                            'node_id'        => $newNode->id,
+                            'product_id'     => $payment->product_id,
+                            'sponsor_id'     => $payment->distributor_id,
+                        ]);
+
+                        // Update own_points
+                        $product = \App\Models\Product::find($payment->product_id);
+                        if ($product) {
+                            $stat = Stat::where('distributor_id', $distributor->distributor_id)->first();
+                            if ($stat) {
+                                $stat->own_points = ($stat->own_points ?? 0) + ($product->point ?? 0);
+                                $stat->save();
+                            }
+                        }
+
+                        // Run rank check for ancestors
+                        $mlm->runRankCheckForAncestors($newNode, $distributor->distributor_id);
+                    }
+                }
             }
 
             DB::commit();
