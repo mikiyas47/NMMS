@@ -168,8 +168,14 @@ export const createClosing = async (contactId, data) => {
 
 // ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
 export const getProspectDashboard = async () => {
-  const response = await apiClient.get('/prospects/dashboard');
-  return response.data;
+  try {
+    const response = await apiClient.get('/prospects/dashboard');
+    return response.data;
+  } catch (error) {
+    const detail = error.response?.data;
+    console.error('Prospect dashboard detail:', JSON.stringify(detail), 'status:', error.response?.status);
+    throw error;
+  }
 };
 
 export const getProspectPipeline = async () => {

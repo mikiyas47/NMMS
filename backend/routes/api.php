@@ -137,6 +137,50 @@ Route::get('/test-prospects/{email}', function ($email) {
         return response()->json(['error' => $e->getMessage(), 'line' => $e->getLine()], 500);
     }
 });
+
+// ── Temporary: test full dashboard logic for a distributor ────────────────────
+Route::get('/test-dashboard/{email}', function ($email) {
+    try {
+        $dist = \App\Models\Distributor::where('email', $email)->first();
+        if (!$dist) return response()->json(['error' => 'Not found']);
+        $distId = $dist->distributor_id;
+        $today  = \Carbon\Carbon::today();
+
+        $all = \App\Models\Prospect::where('distributor_id', $distId)->get();
+
+        $hotLeads = $all->filter(fn($p) =>
+            $p->interest_score >= 70 &&
+            !in_array($p->stage, ['Joined', 'Rejected', 'Inactive'])
+        )->sortByDesc('interest_score')->take(5)->values();
+
+        $overdue = $all->filter(fn($p) =>
+            $p->next_action_date &&
+            \Carbon\Carbon::parse($p->next_action_date)->isPast() &&
+            !\Carbon\Carbon::parse($p->next_action_date)->isToday() &&
+            !in_array($p->stage, ['Joined', 'Rejected'])
+        )->values();
+
+        $stageCounts = [];
+        foreach (\App\Models\Prospect::STAGES as $stage) {
+            $stageCounts[$stage] = $all->where('stage', $stage)->count();
+        }
+
+        return response()->json([
+            'ok'          => true,
+            'total'       => $all->count(),
+            'hot_leads'   => $hotLeads->count(),
+            'overdue'     => $overdue->count(),
+            'stage_counts'=> $stageCounts,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file'  => basename($e->getFile()),
+            'line'  => $e->getLine(),
+            'trace' => collect(explode("\n", $e->getTraceAsString()))->take(5)->toArray(),
+        ], 500);
+    }
+});
 // ─────────────────────────────────────────────────────────────────────────────
 Route::get('/test-engine/{email}', function ($email) {
     try {
