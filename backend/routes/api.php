@@ -110,7 +110,32 @@ Route::get('/clear-cache', function () {
     ]);
 });
 
-// ── Temporary: test goal engine with a known distributor email ────────────────
+// ── Temporary: test prospects dashboard for a distributor ────────────────────
+Route::get('/test-prospects/{email}', function ($email) {
+    try {
+        $dist = \App\Models\Distributor::where('email', $email)->first();
+        if (!$dist) return response()->json(['error' => 'Not found']);
+        $distId = $dist->distributor_id;
+
+        $all = \App\Models\Prospect::where('distributor_id', $distId)->get();
+        $stageCounts = [];
+        foreach (\App\Models\Prospect::STAGES as $stage) {
+            $stageCounts[$stage] = $all->where('stage', $stage)->count();
+        }
+
+        return response()->json([
+            'ok'           => true,
+            'distributor'  => $dist->name,
+            'total_prospects' => $all->count(),
+            'stage_counts' => $stageCounts,
+            'new_columns_exist' => \Illuminate\Support\Facades\Schema::hasColumn('prospects', 'stage'),
+            'activities_table'  => \Illuminate\Support\Facades\Schema::hasTable('prospect_activities'),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage(), 'line' => $e->getLine()], 500);
+    }
+});
+// ─────────────────────────────────────────────────────────────────────────────
 Route::get('/test-engine/{email}', function ($email) {
     try {
         $dist = \App\Models\Distributor::where('email', $email)->first();
