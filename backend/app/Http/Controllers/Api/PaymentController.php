@@ -349,17 +349,18 @@ class PaymentController extends Controller
         // General search (checks multiple fields)
         if ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('payments.product_id', 'like', "%{$search}%")
-                    ->orWhere('payments.distributor_id', 'like', "%{$search}%")
+                // Cast integer columns to text before LIKE so this works on PostgreSQL (Neon)
+                $q->whereRaw("CAST(payments.product_id AS TEXT) LIKE ?", ["%{$search}%"])
+                    ->orWhereRaw("CAST(payments.distributor_id AS TEXT) LIKE ?", ["%{$search}%"])
                     ->orWhere('payments.customer_name', 'like', "%{$search}%")
                     ->orWhere('payments.tx_ref', 'like', "%{$search}%")
                     ->orWhereHas('distributor', function ($q2) use ($search) {
                         $q2->where('name', 'like', "%{$search}%")
-                            ->orWhere('distributor_id', 'like', "%{$search}%");
+                            ->orWhereRaw("CAST(distributor_id AS TEXT) LIKE ?", ["%{$search}%"]);
                     })
                     ->orWhereHas('product', function ($q3) use ($search) {
                         $q3->where('name', 'like', "%{$search}%")
-                            ->orWhere('id', 'like', "%{$search}%");
+                            ->orWhereRaw("CAST(id AS TEXT) LIKE ?", ["%{$search}%"]);
                     });
             });
         }
