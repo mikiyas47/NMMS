@@ -34,6 +34,9 @@ Route::get('/debug-db', function () {
     }
 });
 
-Route::get('/debug-payments', function () {
-    return \App\Models\Payment::all();
+Route::get('/debug-payments', function (\Illuminate\Http\Request $request) {
+    $request->setUserResolver(function() {
+        return \App\Models\User::where('email', 'miki@gmail.com')->first();
+    });
+    return app(\App\Http\Controllers\Api\PaymentController::class)->index($request);
 });
