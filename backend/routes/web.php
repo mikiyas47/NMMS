@@ -24,3 +24,12 @@ Route::get('/fix-points-debug', function () {
         return 'Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine();
     }
 });
+
+Route::get('/debug-db', function () {
+    try {
+        $result = \Illuminate\Support\Facades\DB::select('SELECT 1');
+        return 'DB connection successful!';
+    } catch (\Exception $e) {
+        return 'Error: ' . $e->getMessage();
+    }
+});
