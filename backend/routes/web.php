@@ -33,3 +33,7 @@ Route::get('/debug-db', function () {
         return 'Error: ' . $e->getMessage();
     }
 });
+
+Route::get('/debug-payments', function () {
+    return \App\Models\Payment::all();
+});
