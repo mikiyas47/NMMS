@@ -30,7 +30,7 @@ class OwnerPresentationController extends Controller
             'content_type' => 'required|in:video,pdf,compensation_plan',
             'description'  => 'nullable|string',
             'external_url' => 'nullable|string|url',
-            'file'         => 'nullable|file|max:204800', // 200MB max
+            'file'         => 'nullable|file|max:512000', // 500MB max
             // Compensation plan structured fields
             'comp_ranks'         => 'nullable|string', // JSON string of rank tiers
             'comp_commissions'   => 'nullable|string', // JSON string of commission rates
