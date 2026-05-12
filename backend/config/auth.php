@@ -42,6 +42,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        // Sanctum guard for owners/admins (User model)
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
+        ],
+        // API guard for distributors (Distributor model)
         'api' => [
             'driver' => 'sanctum',
             'provider' => 'distributors',

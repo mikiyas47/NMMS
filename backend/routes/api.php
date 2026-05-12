@@ -256,7 +256,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/owner/presentations/{id}',[OwnerPresentationController::class, 'destroy']);
 });
 // Distributor library — all global presentations
-Route::middleware('auth:sanctum')->get('/presentations/library', [OwnerPresentationController::class, 'library']);
+Route::middleware('auth:sanctum,api')->get('/presentations/library', [OwnerPresentationController::class, 'library']);
 // ─────────────────────────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\PerformanceController;
 
@@ -313,8 +313,8 @@ Route::post('/payments/webhook', [PaymentController::class, 'webhook']);
 Route::get('/payments/verify/{txRef}', [PaymentController::class, 'verify']);
 Route::get('/payments/return', [PaymentController::class, 'returnUrl']);
 
-// Protected routes (for distributors to view their sales/commissions)
-Route::middleware('auth:sanctum')->group(function () {
+// Protected routes — accepts both owner (sanctum guard) and distributor (api guard) tokens
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/payments', [PaymentController::class, 'index']);
 });
 
