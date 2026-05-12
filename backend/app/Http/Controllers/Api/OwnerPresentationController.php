@@ -87,11 +87,9 @@ class OwnerPresentationController extends Controller
             $compPlanData = $this->parseCompPlanData($data);
         }
 
-        // Bypass NOT NULL constraint on distributor_id for global presentations
-        $dummyDistributor = \App\Models\Distributor::first();
-
+        // Global presentations have no distributor owner
         $presentation = Presentation::create([
-            'distributor_id'     => $dummyDistributor ? $dummyDistributor->distributor_id : '0', // Global presentations use a dummy ID
+            'distributor_id'     => null,
             'title'              => $data['title'],
             'content_type'       => $data['content_type'],
             'description'        => $data['description'] ?? null,
