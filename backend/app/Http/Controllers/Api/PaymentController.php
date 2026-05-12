@@ -319,11 +319,22 @@ class PaymentController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 5. SALES HISTORY — GET /api/payments  (auth:sanctum)
+    // 5. SALES HISTORY — GET /api/payments
     // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $user = $request->user();
+        // Resolve the authenticated user manually from the bearer token
+        // This supports both owner (User model) and distributor (Distributor model) tokens
+        $user = null;
+        if ($bearerToken = $request->bearerToken()) {
+            $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($bearerToken);
+            $user = $accessToken?->tokenable;
+        }
+
+        if (! $user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
         $distributorId = $request->query('distributor_id');
 
         // If the user is a distributor, force the query to only their own sales

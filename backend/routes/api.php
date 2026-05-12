@@ -313,10 +313,8 @@ Route::post('/payments/webhook', [PaymentController::class, 'webhook']);
 Route::get('/payments/verify/{txRef}', [PaymentController::class, 'verify']);
 Route::get('/payments/return', [PaymentController::class, 'returnUrl']);
 
-// Protected routes — accepts both owner (sanctum guard) and distributor (api guard) tokens
-Route::middleware('auth:sanctum,api')->group(function () {
-    Route::get('/payments', [PaymentController::class, 'index']);
-});
+// Auth is handled manually inside the controller to support both owner and distributor tokens
+Route::get('/payments', [PaymentController::class, 'index']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
