@@ -23,8 +23,6 @@ class ProductUpdateSeeder extends Seeder
                 'price'         => 7690,
                 'point'         => 100,
                 'referral_rate' => 16,
-                'cycle_rate'    => 11,
-                'weekly_cap'    => 1000,
                 'image'         => 'https://res.cloudinary.com/docvdlgiv/image/upload/v1777629973/products/eqrczwq2dnnqugmpzwgu.jpg',
             ],
             [
@@ -34,8 +32,6 @@ class ProductUpdateSeeder extends Seeder
                 'price'         => 14115,
                 'point'         => 200,
                 'referral_rate' => 17,
-                'cycle_rate'    => 12,
-                'weekly_cap'    => 2000,
                 'image'         => 'https://res.cloudinary.com/docvdlgiv/video/upload/v1777630266/products/msdk1xo9nrxszjdhaopj.mp4',
             ],
             [
@@ -45,8 +41,6 @@ class ProductUpdateSeeder extends Seeder
                 'price'         => 14115,
                 'point'         => 200,
                 'referral_rate' => 17,
-                'cycle_rate'    => 12,
-                'weekly_cap'    => 2000,
                 'image'         => 'https://res.cloudinary.com/docvdlgiv/image/upload/v1777628059/products/umordldvmu9qucua6zgl.jpg',
             ],
             [
@@ -56,8 +50,6 @@ class ProductUpdateSeeder extends Seeder
                 'price'         => 52665,
                 'point'         => 800,
                 'referral_rate' => 19,
-                'cycle_rate'    => 15,
-                'weekly_cap'    => 5000,
                 'image'         => 'https://res.cloudinary.com/docvdlgiv/video/upload/v1777629868/products/jmicmkwhn0rb3nf3kdex.mp4',
             ],
             [
@@ -67,8 +59,6 @@ class ProductUpdateSeeder extends Seeder
                 'price'         => 26965,
                 'point'         => 400,
                 'referral_rate' => 18,
-                'cycle_rate'    => 14,
-                'weekly_cap'    => 4000,
                 'image'         => 'https://res.cloudinary.com/docvdlgiv/video/upload/v1777629917/products/wmc0mc6fszehiuhc2s2t.mp4',
             ],
         ];

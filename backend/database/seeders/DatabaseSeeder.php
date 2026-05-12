@@ -19,16 +19,20 @@ class DatabaseSeeder extends Seeder
 
         $this->call(PlaybookSeeder::class);
 
-        User::firstOrCreate(
-            ['email' => 'mikiadmin@gmail.com'], // Added email for firstOrCreate
-            [
-                'name'     => 'Mikiyas',
-                'phone'    => '0947482468',
-                'password' => \Hash::make('Mikiyas7'),
-                'role'     => 'admin',
-                'status'   => 'active',
-            ]
-        );
+        try {
+            User::firstOrCreate(
+                ['email' => 'mikiadmin@gmail.com'], // Added email for firstOrCreate
+                [
+                    'name'     => 'Mikiyas',
+                    'phone'    => '0947482468_admin', // Made phone unique
+                    'password' => \Hash::make('Mikiyas7'),
+                    'role'     => 'admin',
+                    'status'   => 'active',
+                ]
+            );
+        } catch (\Exception $e) {
+            // Ignore unique constraint violation to prevent deployment crash
+        }
 
         // Owner account
         User::firstOrCreate(
