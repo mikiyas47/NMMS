@@ -169,12 +169,16 @@ export const createClosing = async (contactId, data) => {
 // ── Performance Operating System ─────────────────────────────────────────────
 
 // Presentations
-// Fetch both owner-uploaded global presentations and distributor's own presentations
-export const getPresentations = async () => (await apiClient.get('/presentations')).data;
+// Fetch owner-uploaded global presentations for the distributor library (used in Send Presentation flow)
+export const getPresentations = async () => (await apiClient.get('/presentations/library')).data;
+// Fetch the distributor's own presentations
+export const getDistributorPresentations = async () => (await apiClient.get('/presentations')).data;
 export const createPresentation = async (data) => (await apiClient.post('/presentations', data)).data;
 export const updatePresentation = async (id, data) => (await apiClient.put(`/presentations/${id}`, data)).data;
 export const deletePresentation = async (id) => (await apiClient.delete(`/presentations/${id}`)).data;
 export const assignPresentation = async (data) => (await apiClient.post('/presentations/assign', data)).data;
+export const logPresentationCallOutcome = async (data) => (await apiClient.post('/presentations/call-outcome', data)).data;
+export const getPresentationLibrary = async () => (await apiClient.get('/presentations/library')).data;
 export const getProspectAssignments = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/assignments`)).data;
 export const logPresentationCallOutcome = async (data) => (await apiClient.post('/presentations/call-outcome', data)).data;
 

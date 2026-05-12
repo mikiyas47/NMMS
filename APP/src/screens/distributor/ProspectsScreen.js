@@ -17,7 +17,7 @@ import {
   getProspectDashboard, getProspects, createProspect,
   moveProspectStage, addProspectFollowup, addProspectClosing,
   addProspectNote, deleteProspect, updateProspect,
-  createInvitation, getPresentations, assignPresentation, logPresentationCallOutcome,
+  createInvitation, getPresentations, assignPresentation, logPresentationCallOutcome, getPresentationLibrary,
   getProspectInvitations, getProspectAssignments,
 } from '../../api/authService';
 
@@ -1406,6 +1406,363 @@ const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
   );
 };
 
+
+// ── PresentationFlowModal — Call or Send presentation ─────────────────────────
+const PRESENTATION_CALL_OUTCOMES = [
+  { key:'understood',   label:'Understood Presentation',      emoji:'✅', color:'#10B981' },
+  { key:'interested',   label:'Interested',                   emoji:'🔥', color:'#EF4444' },
+  { key:'more_info',    label:'Needs More Information',       emoji:'🔍', color:'#3B82F6' },
+  { key:'think',        label:'Wants Time To Think',          emoji:'🤔', color:'#F59E0B' },
+  { key:'pricing',      label:'Asked About Pricing',          emoji:'💰', color:'#8B5CF6' },
+  { key:'business',     label:'Asked About Business Opportunity', emoji:'💼', color:'#6366F1' },
+  { key:'not_interested',label:'Not Interested',              emoji:'❌', color:'#6B7280' },
+  { key:'no_answer',    label:'Did Not Answer',               emoji:'🔇', color:'#9CA3AF' },
+];
+
+const SEND_APPS = [
+  { key:'whatsapp',  label:'WhatsApp',  emoji:'��', scheme:(phone,link)=>`whatsapp://send?phone=${phone.replace(/\D/g,'')}&text=${encodeURIComponent(link)}` },
+  { key:'telegram',  label:'Telegram',  emoji:'✈️',  scheme:(phone,link)=>`tg://resolve?phone=${phone.replace(/\D/g,'').replace(/^\+/,'')}` },
+  { key:'sms',       label:'SMS',       emoji:'💬', scheme:(phone,link)=>`sms:${phone}?body=${encodeURIComponent(link)}` },
+  { key:'imo',       label:'IMO',       emoji:'📱', scheme:(phone,link)=>`imo://chat?phone=${phone.replace(/\D/g,'')}` },
+  { key:'messenger', label:'Messenger', emoji:'💙', scheme:(phone,link)=>`fb-messenger://` },
+];
+
+const CONTENT_TYPE_META = {
+  video:             { emoji:'🎬', label:'Video',            color:'#3B82F6' },
+  pdf:               { emoji:'📄', label:'PDF',              color:'#EF4444' },
+  compensation_plan: { emoji:'💰', label:'Comp Plan',        color:'#10B981' },
+  testimonial:       { emoji:'⭐', label:'Testimonial',      color:'#F59E0B' },
+  webinar_replay:    { emoji:'🎙', label:'Webinar Replay',   color:'#8B5CF6' },
+  explainer_video:   { emoji:'▶️', label:'Explainer Video',  color:'#6366F1' },
+};
+
+// Animated Compensation Plan component for mobile
+const AnimatedCompPlan = ({ data, C }) => {
+  if (!data) return null;
+  const { ranks=[], commissions=[], requirements=[] } = data;
+  return (
+    <ScrollView showsVerticalScrollIndicator={false}>
+      <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:10, letterSpacing:0.5 }}>🏆 RANK PROGRESSION</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
+        {ranks.map((rank, i) => (
+          <View key={rank.name} style={{ alignItems:'center', marginRight:10, backgroundColor:rank.color+'18', borderRadius:12, padding:10, borderWidth:1.5, borderColor:rank.color+'44', minWidth:70 }}>
+            <Text style={{ fontWeight:'900', color:rank.color, fontSize:14 }}>{rank.name}</Text>
+            <Text style={{ fontSize:9, color:C.muted, marginTop:2, textAlign:'center' }}>{rank.label}</Text>
+            {rank.bonus && <Text style={{ fontSize:9, fontWeight:'800', color:'#10B981', marginTop:3 }}>${(rank.bonus/1000).toFixed(0)}K</Text>}
+          </View>
+        ))}
+      </ScrollView>
+      <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:10, letterSpacing:0.5 }}>💰 COMMISSIONS</Text>
+      {commissions.map((c, i) => (
+        <View key={i} style={{ backgroundColor:C.surface, borderRadius:12, padding:12, marginBottom:8, borderWidth:1, borderColor:C.border, borderLeftWidth:3, borderLeftColor:'#10B981' }}>
+          <Text style={{ fontWeight:'800', color:C.text, fontSize:13 }}>{c.type}</Text>
+          <Text style={{ fontSize:18, fontWeight:'900', color:'#10B981', marginVertical:2 }}>{c.rate}</Text>
+          <Text style={{ fontSize:11, color:C.muted }}>{c.description}</Text>
+        </View>
+      ))}
+      {requirements.length > 0 && (
+        <>
+          <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:10, marginTop:8, letterSpacing:0.5 }}>📋 REQUIREMENTS</Text>
+          {requirements.map((r, i) => (
+            <View key={i} style={{ flexDirection:'row', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderColor:C.border }}>
+              <Text style={{ width:50, fontWeight:'900', color:'#6366F1', fontSize:13 }}>{r.rank}</Text>
+              <Text style={{ flex:1, color:C.muted, fontSize:12 }}>{r.legs}</Text>
+              <Text style={{ color:C.text, fontWeight:'700', fontSize:12 }}>{r.total_pts?.toLocaleString()} pts</Text>
+            </View>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+};
+
+const PresentationFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
+  // step: 'method' | 'call_confirm' | 'calling' | 'call_outcome' | 'library' | 'comp_view' | 'app_select' | 'done'
+  const [step, setStep]                   = useState('method');
+  const [library, setLibrary]             = useState([]);
+  const [loadingLib, setLoadingLib]       = useState(false);
+  const [selectedPres, setSelectedPres]   = useState(null);
+  const [selectedApp, setSelectedApp]     = useState(null);
+  const [saving, setSaving]               = useState(false);
+  const [trackedLink, setTrackedLink]     = useState('');
+  const [viewingComp, setViewingComp]     = useState(null);
+
+  const phone = prospect?.phone || '';
+  const name  = prospect?.name  || 'Prospect';
+
+  useEffect(() => {
+    if (visible) {
+      setStep('method'); setSelectedPres(null); setSelectedApp(null);
+      setSaving(false); setTrackedLink(''); setViewingComp(null);
+    }
+  }, [visible]);
+
+  // Auto-advance from calling to outcome when user returns
+  useEffect(() => {
+    if (step !== 'calling') return;
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') setStep('call_outcome'); });
+    return () => sub.remove();
+  }, [step]);
+
+  const loadLibrary = async () => {
+    setLoadingLib(true);
+    try { const r = await getPresentationLibrary(); setLibrary(r.data ?? []); }
+    catch(e) { console.error(e); } finally { setLoadingLib(false); }
+  };
+
+  const handleCall = async () => {
+    const clean = phone.replace(/\s/g,'');
+    if (!clean) { Alert.alert('No phone number'); return; }
+    try { await Linking.openURL(`tel:${clean}`); setStep('calling'); }
+    catch(e) { Alert.alert('Error','Could not open dialer.'); }
+  };
+
+  const handleCallOutcome = async (outcome) => {
+    setSaving(true);
+    try {
+      await logPresentationCallOutcome({ prospect_id: prospect.prospect_id, outcome, notes: `Presentation call — ${outcome}` });
+      setStep('done');
+      setTimeout(() => onSaved(), 1500);
+    } catch(e) { Alert.alert('Error', e?.message || 'Failed'); }
+    finally { setSaving(false); }
+  };
+
+  const handleAssignAndSend = async (app) => {
+    if (!selectedPres) return;
+    setSaving(true);
+    try {
+      const res = await assignPresentation({ presentation_id: selectedPres.id, prospect_id: prospect.prospect_id });
+      const link = res.tracked_link || '';
+      setTrackedLink(link);
+      setSelectedApp(app);
+      // Open messaging app
+      const clean = phone.replace(/\s/g,'');
+      const msg = `Hi ${name.split(' ')[0]}! I have something important to share with you. Watch this short presentation: ${link}`;
+      const url = app.scheme(clean, msg);
+      try {
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) {
+          await Clipboard.setStringAsync(msg);
+          Alert.alert(`${app.label} not found`, 'Link copied to clipboard. Share it manually.', [{ text:'OK', onPress:()=>setStep('done') }]);
+          return;
+        }
+        await Linking.openURL(url);
+        if (['telegram','imo','messenger'].includes(app.key)) {
+          await Clipboard.setStringAsync(msg);
+          Alert.alert('📋 Link copied!', `Paste it in the ${app.label} chat.`, [{ text:'Got it', onPress:()=>setStep('done') }]);
+        } else {
+          setStep('done');
+          setTimeout(() => onSaved(), 1500);
+        }
+      } catch(e) { Alert.alert('Error', `Could not open ${app.label}.`); }
+    } catch(e) { Alert.alert('Error', e?.message || 'Failed to assign presentation'); }
+    finally { setSaving(false); }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.6)', justifyContent:'flex-end' }}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'}>
+          <View style={{ backgroundColor:C.surface, borderTopLeftRadius:28, borderTopRightRadius:28, paddingHorizontal:22, paddingTop:16, paddingBottom:44, maxHeight:'92%' }}>
+            <View style={{ width:40, height:4, borderRadius:2, backgroundColor:C.border, alignSelf:'center', marginBottom:16 }} />
+            {/* Header */}
+            <View style={{ flexDirection:'row', alignItems:'center', marginBottom:20 }}>
+              <View style={{ width:40, height:40, borderRadius:12, backgroundColor:'rgba(59,130,246,0.15)', alignItems:'center', justifyContent:'center', marginRight:12 }}>
+                <Text style={{ fontSize:20 }}>🎬</Text>
+              </View>
+              <View style={{ flex:1 }}>
+                <Text style={{ fontSize:16, fontWeight:'900', color:C.text }}>Present to {name.split(' ')[0]}</Text>
+                <Text style={{ fontSize:12, color:C.muted, marginTop:1 }}>{phone}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose}><X color={C.muted} size={20} /></TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+              {/* ── Choose method ── */}
+              {step === 'method' && (
+                <View>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center', marginBottom:20 }}>How do you want to present?</Text>
+                  <TouchableOpacity onPress={() => setStep('call_confirm')}
+                    style={{ flexDirection:'row', alignItems:'center', backgroundColor:'rgba(59,130,246,0.1)', borderRadius:18, padding:18, marginBottom:12, borderWidth:1.5, borderColor:'rgba(59,130,246,0.3)' }}>
+                    <Text style={{ fontSize:32, marginRight:16 }}>📞</Text>
+                    <View style={{ flex:1 }}>
+                      <Text style={{ fontSize:16, fontWeight:'800', color:C.text }}>Call Presentation</Text>
+                      <Text style={{ fontSize:12, color:C.muted, marginTop:3 }}>Present live over the phone — app dials automatically</Text>
+                    </View>
+                    <ChevronRight color="#3B82F6" size={20} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { loadLibrary(); setStep('library'); }}
+                    style={{ flexDirection:'row', alignItems:'center', backgroundColor:'rgba(99,102,241,0.1)', borderRadius:18, padding:18, borderWidth:1.5, borderColor:'rgba(99,102,241,0.3)' }}>
+                    <Text style={{ fontSize:32, marginRight:16 }}>📤</Text>
+                    <View style={{ flex:1 }}>
+                      <Text style={{ fontSize:16, fontWeight:'800', color:C.text }}>Send Presentation</Text>
+                      <Text style={{ fontSize:12, color:C.muted, marginTop:3 }}>Send video, PDF, or comp plan via WhatsApp, Telegram, SMS...</Text>
+                    </View>
+                    <ChevronRight color="#6366F1" size={20} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── Call confirm ── */}
+              {step === 'call_confirm' && (
+                <View style={{ alignItems:'center' }}>
+                  <View style={{ width:80, height:80, borderRadius:40, backgroundColor:'rgba(59,130,246,0.15)', alignItems:'center', justifyContent:'center', marginBottom:16 }}>
+                    <Text style={{ fontSize:40 }}>📞</Text>
+                  </View>
+                  <Text style={{ fontSize:18, fontWeight:'900', color:C.text, marginBottom:6 }}>Call {name.split(' ')[0]}</Text>
+                  <Text style={{ fontSize:14, color:C.muted, marginBottom:20 }}>{phone}</Text>
+                  <View style={{ backgroundColor:'rgba(59,130,246,0.1)', borderRadius:12, padding:12, marginBottom:24, borderWidth:1, borderColor:'rgba(59,130,246,0.2)', width:'100%' }}>
+                    <Text style={{ fontSize:12, color:'#3B82F6', fontWeight:'700', marginBottom:4 }}>📋 Purpose</Text>
+                    <Text style={{ fontSize:13, color:C.text }}>Business Presentation — share the opportunity</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCall}
+                    style={{ backgroundColor:'#3B82F6', borderRadius:16, paddingVertical:16, width:'100%', alignItems:'center', flexDirection:'row', justifyContent:'center', gap:10, marginBottom:12 }}>
+                    <Text style={{ fontSize:20 }}>📞</Text>
+                    <Text style={{ color:'#fff', fontWeight:'900', fontSize:16 }}>Start Call Now</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setStep('method')} style={{ paddingVertical:10 }}>
+                    <Text style={{ color:C.muted, fontSize:13 }}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── Calling ── */}
+              {step === 'calling' && (
+                <View style={{ alignItems:'center', paddingVertical:20 }}>
+                  <Text style={{ fontSize:40, marginBottom:16 }}>📞</Text>
+                  <Text style={{ fontSize:18, fontWeight:'900', color:C.text, marginBottom:8 }}>Presenting to {name.split(' ')[0]}…</Text>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center', marginBottom:28, lineHeight:20 }}>Return to the app when the call ends to log the outcome.</Text>
+                  <TouchableOpacity onPress={() => setStep('call_outcome')}
+                    style={{ backgroundColor:'#3B82F6', borderRadius:16, paddingVertical:14, width:'100%', alignItems:'center' }}>
+                    <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Call Ended — Log Outcome</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── Call outcome ── */}
+              {step === 'call_outcome' && (
+                <View>
+                  <Text style={{ fontSize:14, fontWeight:'800', color:C.text, marginBottom:16, textAlign:'center' }}>Presentation Outcome</Text>
+                  {PRESENTATION_CALL_OUTCOMES.map(o => (
+                    <TouchableOpacity key={o.key} onPress={() => handleCallOutcome(o.key)} disabled={saving}
+                      style={{ flexDirection:'row', alignItems:'center', backgroundColor:o.color+'12', borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor:o.color+'30' }}>
+                      <Text style={{ fontSize:22, marginRight:14 }}>{o.emoji}</Text>
+                      <Text style={{ fontSize:14, fontWeight:'700', color:C.text, flex:1 }}>{o.label}</Text>
+                      {saving && <ActivityIndicator color={o.color} size="small" />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* ── Library ── */}
+              {step === 'library' && (
+                <View>
+                  <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:14 }}>Choose a presentation to send:</Text>
+                  {loadingLib ? (
+                    <ActivityIndicator color={C.accent} style={{ marginTop:20 }} />
+                  ) : library.length === 0 ? (
+                    <View style={{ alignItems:'center', padding:32 }}>
+                      <Text style={{ color:C.muted, fontSize:13, textAlign:'center' }}>No presentations in the library yet. Ask your owner to upload content.</Text>
+                    </View>
+                  ) : library.map(p => {
+                    const meta = CONTENT_TYPE_META[p.content_type] || { emoji:'📁', label:p.content_type, color:'#6366F1' };
+                    const isSelected = selectedPres?.id === p.id;
+                    return (
+                      <TouchableOpacity key={p.id} onPress={() => setSelectedPres(p)}
+                        style={{ flexDirection:'row', alignItems:'center', backgroundColor: isSelected ? meta.color+'18' : C.inputBg, borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor: isSelected ? meta.color : C.border }}>
+                        <Text style={{ fontSize:26, marginRight:12 }}>{meta.emoji}</Text>
+                        <View style={{ flex:1 }}>
+                          <Text style={{ fontSize:14, fontWeight:'700', color:C.text }}>{p.title}</Text>
+                          <Text style={{ fontSize:11, color:C.muted, marginTop:2 }}>{meta.label}</Text>
+                        </View>
+                        {p.content_type === 'compensation_plan' && p.comp_plan_data && (
+                          <TouchableOpacity onPress={() => setViewingComp(p)}
+                            style={{ backgroundColor:meta.color+'20', paddingHorizontal:8, paddingVertical:4, borderRadius:8, marginRight:8 }}>
+                            <Text style={{ color:meta.color, fontSize:10, fontWeight:'800' }}>Preview</Text>
+                          </TouchableOpacity>
+                        )}
+                        {isSelected && <Text style={{ color:meta.color, fontSize:18 }}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {selectedPres && (
+                    <TouchableOpacity onPress={() => setStep('app_select')}
+                      style={{ backgroundColor:'#6366F1', borderRadius:14, height:50, alignItems:'center', justifyContent:'center', marginTop:8 }}>
+                      <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Next — Choose App →</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => setStep('method')} style={{ paddingVertical:10, alignItems:'center' }}>
+                    <Text style={{ color:C.muted, fontSize:13 }}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── Comp plan preview ── */}
+              {viewingComp && (
+                <View>
+                  <View style={{ flexDirection:'row', alignItems:'center', marginBottom:14 }}>
+                    <TouchableOpacity onPress={() => setViewingComp(null)} style={{ marginRight:12 }}>
+                      <Text style={{ color:C.accent, fontSize:13 }}>← Back</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize:15, fontWeight:'800', color:C.text, flex:1 }}>{viewingComp.title}</Text>
+                  </View>
+                  <AnimatedCompPlan data={viewingComp.comp_plan_data} C={C} />
+                </View>
+              )}
+
+              {/* ── App select ── */}
+              {step === 'app_select' && !viewingComp && (
+                <View>
+                  <View style={{ backgroundColor:C.inputBg, borderRadius:12, padding:12, marginBottom:16, borderWidth:1, borderColor:C.border }}>
+                    <Text style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Sending:</Text>
+                    <Text style={{ fontSize:14, fontWeight:'700', color:C.text }}>{CONTENT_TYPE_META[selectedPres?.content_type]?.emoji} {selectedPres?.title}</Text>
+                    <Text style={{ fontSize:11, color:C.muted, marginTop:4 }}>A unique tracking link will be generated so you can see if {name.split(' ')[0]} watched it.</Text>
+                  </View>
+                  <Text style={{ fontSize:13, fontWeight:'800', color:C.text, marginBottom:12 }}>Send via:</Text>
+                  {SEND_APPS.map(app => (
+                    <TouchableOpacity key={app.key} onPress={() => handleAssignAndSend(app)} disabled={saving}
+                      style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.inputBg, borderRadius:14, padding:14, marginBottom:10, borderWidth:1.5, borderColor:C.border }}>
+                      <Text style={{ fontSize:26, marginRight:14 }}>{app.emoji}</Text>
+                      <View style={{ flex:1 }}>
+                        <Text style={{ fontSize:14, fontWeight:'700', color:C.text }}>{app.label}</Text>
+                        <Text style={{ fontSize:11, color:C.muted, marginTop:2 }}>
+                          {['telegram','imo','messenger'].includes(app.key) ? 'Opens app — link copied to clipboard' : 'Opens app with link pre-filled'}
+                        </Text>
+                      </View>
+                      {saving ? <ActivityIndicator color={C.accent} size="small" /> : <ChevronRight color={C.muted} size={16} />}
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity onPress={() => setStep('library')} style={{ paddingVertical:10, alignItems:'center' }}>
+                    <Text style={{ color:C.muted, fontSize:13 }}>← Back</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── Done ── */}
+              {step === 'done' && (
+                <View style={{ alignItems:'center', paddingVertical:24 }}>
+                  <Text style={{ fontSize:48, marginBottom:12 }}>🎉</Text>
+                  <Text style={{ fontSize:18, fontWeight:'900', color:C.text, marginBottom:8 }}>
+                    {trackedLink ? 'Presentation Sent!' : 'Outcome Logged!'}
+                  </Text>
+                  <Text style={{ fontSize:13, color:C.muted, textAlign:'center', lineHeight:20 }}>
+                    {trackedLink
+                      ? `The system will notify you when ${name.split(' ')[0]} opens and watches the content.`
+                      : `The outcome has been saved to ${name.split(' ')[0]}'s profile.`}
+                  </Text>
+                </View>
+              )}
+
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+};
 // ── Shared sub-components ─────────────────────────────────────────────────────
 const FormField = ({ label, value, onChange, placeholder, C, multiline }) => (
   <View style={{ marginBottom:14 }}>

@@ -323,26 +323,30 @@ class PaymentController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        // Resolve the authenticated user manually from the bearer token
-        // This supports both owner (User model) and distributor (Distributor model) tokens
-        $user = null;
-        if ($bearerToken = $request->bearerToken()) {
+        // Resolve the authenticated user — supports both owner (User) and distributor tokens
+        $user = $request->user();
+        if (!$user && $bearerToken = $request->bearerToken()) {
             $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($bearerToken);
             $user = $accessToken?->tokenable;
         }
 
-        if (! $user) {
+        if (!$user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
         $distributorId = $request->query('distributor_id');
 
-        // If the user is a distributor, force the query to only their own sales
-        if ($user && $user->role === 'distributor') {
+        // Distributors can only see their own sales
+        if ($user && method_exists($user, 'getRoleAttribute') && $user->role === 'distributor') {
             $distributorId = $user->distributor_id ?? $user->id;
         }
+        // Owners and admins see all sales (no forced filter)
 
-        $query = Payment::with(['product', 'distributor']);
+        $query = Payment::with(['product']);
+
+        // Safely load distributor — use leftJoin approach to avoid missing FK errors
+        $query->leftJoin('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
+              ->select('payments.*', 'distributors.name as distributor_name_join');
 
         // Filter by distributor_id
         if ($distributorId) {
@@ -360,27 +364,20 @@ class PaymentController extends Controller
         // General search (checks multiple fields)
         if ($search) {
             $query->where(function ($q) use ($search) {
-                // Cast integer columns to text before LIKE so this works on PostgreSQL (Neon)
                 $q->whereRaw("CAST(payments.product_id AS TEXT) LIKE ?", ["%{$search}%"])
                     ->orWhereRaw("CAST(payments.distributor_id AS TEXT) LIKE ?", ["%{$search}%"])
                     ->orWhere('payments.customer_name', 'like', "%{$search}%")
                     ->orWhere('payments.tx_ref', 'like', "%{$search}%")
-                    ->orWhereHas('distributor', function ($q2) use ($search) {
-                        $q2->where('name', 'like', "%{$search}%")
-                            ->orWhereRaw("CAST(distributor_id AS TEXT) LIKE ?", ["%{$search}%"]);
-                    })
+                    ->orWhere('distributors.name', 'like', "%{$search}%")
                     ->orWhereHas('product', function ($q3) use ($search) {
-                        $q3->where('name', 'like', "%{$search}%")
-                            ->orWhereRaw("CAST(id AS TEXT) LIKE ?", ["%{$search}%"]);
+                        $q3->where('name', 'like', "%{$search}%");
                     });
             });
         }
 
         // Specific distributor name filter
         if ($distributorName) {
-            $query->whereHas('distributor', function ($q) use ($distributorName) {
-                $q->where('name', 'like', "%{$distributorName}%");
-            });
+            $query->where('distributors.name', 'like', "%{$distributorName}%");
         }
 
         // Specific product ID filter
@@ -406,17 +403,17 @@ class PaymentController extends Controller
 
         $paginator->getCollection()->transform(function ($p) {
             return [
-                'id' => $p->id,
-                'tx_ref' => $p->tx_ref,
-                'product' => $p->product?->name,
-                'quantity' => $p->quantity,
-                'amount' => $p->amount,
-                'commission' => $p->commission_amount,
-                'customer_name' => $p->customer_name,
-                'customer_email' => $p->customer_email,
-                'distributor_name' => $p->distributor?->name ?? 'Unknown',
-                'status' => $p->status,
-                'created_at' => $p->created_at,
+                'id'               => $p->id,
+                'tx_ref'           => $p->tx_ref,
+                'product'          => $p->product?->name,
+                'quantity'         => $p->quantity,
+                'amount'           => $p->amount,
+                'commission'       => $p->commission_amount,
+                'customer_name'    => $p->customer_name,
+                'customer_email'   => $p->customer_email,
+                'distributor_name' => $p->distributor_name_join ?? $p->distributor?->name ?? 'Unknown',
+                'status'           => $p->status,
+                'created_at'       => $p->created_at,
             ];
         });
 
