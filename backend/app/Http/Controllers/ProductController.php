@@ -40,6 +40,10 @@ class ProductController extends Controller
             ]);
 
             $validatedData['point'] = $validatedData['point'] ?? 0;
+            // Normalize category to title-case (e.g. 'yellow' → 'Yellow')
+            if (!empty($validatedData['category'])) {
+                $validatedData['category'] = ucfirst(strtolower($validatedData['category']));
+            }
 
             // ── Handle file upload ────────────────────────────────────
             if ($request->hasFile('image')) {
@@ -102,6 +106,10 @@ class ProductController extends Controller
 
             if (isset($validatedData['point']) && $validatedData['point'] === null) {
                 $validatedData['point'] = 0;
+            }
+            // Normalize category to title-case
+            if (!empty($validatedData['category'])) {
+                $validatedData['category'] = ucfirst(strtolower($validatedData['category']));
             }
 
             // ── Handle file upload ────────────────────────────────────

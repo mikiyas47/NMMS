@@ -15,6 +15,8 @@ const PRODUCT_TIERS = [
 ];
 
 const CATEGORIES = PRODUCT_TIERS.map(t => t.category);
+// Normalize any casing from DB to title-case to match PRODUCT_TIERS
+const toTitleCase = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
 
 const isVideoUrl = (url) => {
   if (!url) return false;
@@ -30,16 +32,17 @@ const isVideoUrl = (url) => {
 
 const secureUrl = (url) => {
   if (!url) return null;
-  // Ensure HTTPS for all URLs
+  // Ensure HTTPS
   let secure = url.replace(/^http:\/\//i, 'https://');
-  
-  // For Cloudinary URLs, they should already be HTTPS
-  // But we add resource_type=video hint for better browser detection
-  if (secure.includes('res.cloudinary.com') && secure.includes('/video/')) {
-    // Ensure video URLs have proper format
-    return secure;
+
+  if (secure.includes('res.cloudinary.com')) {
+    if (secure.includes('/video/upload/')) return secure; // leave video URLs alone
+    // For images (including SVG), inject f_auto,q_auto so Cloudinary serves optimized WebP/PNG
+    if (secure.includes('/image/upload/') && !secure.includes('f_auto')) {
+      secure = secure.replace('/image/upload/', '/image/upload/f_auto,q_auto/');
+    }
   }
-  
+
   return secure;
 };
 
@@ -138,7 +141,8 @@ const AddProductPage = () => {
       imagePreview: secureUrl(p.image),
       isVideo: isVideoUrl(p.image),
     });
-    setSelCat(p.category); setShowList(false);
+    // Normalize DB category (may be lowercase) to title-case so PRODUCT_TIERS lookup works
+    setSelCat(toTitleCase(p.category)); setShowList(false);
   };
 
   const handleDelete = async (p) => {
