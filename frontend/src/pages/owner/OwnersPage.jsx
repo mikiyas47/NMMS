@@ -5,6 +5,7 @@ import client from '../../api/client';
 const OwnersPage = ({ dark }) => {
   const [users,        setUsers]        = useState([]);
   const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
   const [search,       setSearch]       = useState('');
   const [editingOwner, setEditingOwner] = useState(null);
   const [editForm,     setEditForm]     = useState({ name: '', email: '', phone: '' });
@@ -18,10 +19,14 @@ const OwnersPage = ({ dark }) => {
 
   const fetchOwners = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await client.get('/all-users');
       setUsers(res.data.filter((u) => u.role === 'owner'));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError(e.response?.data?.message || e.message || 'Failed to load owners. Check your connection.');
+    }
     finally { setLoading(false); }
   };
 
@@ -128,6 +133,12 @@ const OwnersPage = ({ dark }) => {
       {/* List */}
       {loading ? (
         <div className="spinner-wrap"><div className="spinner" /></div>
+      ) : error ? (
+        <div className="empty-state" style={{ color: '#EF4444' }}>
+          <AlertCircle size={48} color="#EF4444" />
+          <p>{error}</p>
+          <button className="btn-primary" style={{ marginTop: '1rem' }} onClick={fetchOwners}>Retry</button>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <AlertCircle size={48} />

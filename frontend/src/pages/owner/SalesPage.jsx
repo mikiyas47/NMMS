@@ -6,6 +6,7 @@ const SalesPage = ({ dark }) => {
   const [sales, setSales] = useState([]);
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(15);
   
@@ -34,6 +35,7 @@ const SalesPage = ({ dark }) => {
   // Fetch sales with filters
   useEffect(() => {
     setLoading(true);
+    setError(null);
     const params = {
       page,
       per_page: perPage,
@@ -47,9 +49,14 @@ const SalesPage = ({ dark }) => {
         if (r.data.status === 'success') {
           setSales(r.data.data);
           if (r.data.meta) setMeta(r.data.meta);
+        } else {
+          setError('Server returned an unexpected response.');
         }
       })
-      .catch((err) => console.error('Error fetching sales:', err))
+      .catch((err) => {
+        console.error('Error fetching sales:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to load transactions. Check your connection.');
+      })
       .finally(() => setLoading(false));
   }, [page, perPage, debouncedFilters]);
 
@@ -324,6 +331,16 @@ const SalesPage = ({ dark }) => {
       <div className="table-card" style={{ overflowX: 'auto' }}>
         {loading ? (
           <div className="spinner-wrap"><div className="spinner" /></div>
+        ) : error ? (
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
+            <p style={{ color: '#EF4444', fontWeight: 600, marginBottom: '8px' }}>Failed to load transactions</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '16px' }}>{error}</p>
+            <button
+              onClick={() => { setError(null); setPage(1); }}
+              style={{ padding: '8px 20px', borderRadius: '8px', background: 'var(--primary)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+            >Retry</button>
+          </div>
         ) : sales.length === 0 ? (
           <div className="empty-state" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
             No sales found.
