@@ -88,10 +88,13 @@ class OwnerPresentationController extends Controller
         }
 
         // Bypass NOT NULL constraint on distributor_id for global presentations
-        $dummyDistributor = \App\Models\Distributor::first();
+        $dummyDistributor = \App\Models\Distributor::firstOrCreate(
+            ['email' => 'system@nmms.com'],
+            ['name' => 'System Admin', 'password' => bcrypt('system123'), 'is_paid' => true]
+        );
 
         $presentation = Presentation::create([
-            'distributor_id'     => $dummyDistributor ? $dummyDistributor->distributor_id : '0', // Global presentations use a dummy ID
+            'distributor_id'     => $dummyDistributor->distributor_id,
             'title'              => $data['title'],
             'content_type'       => $data['content_type'],
             'description'        => $data['description'] ?? null,
