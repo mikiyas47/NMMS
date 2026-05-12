@@ -30,7 +30,7 @@ class OwnerPresentationController extends Controller
             'content_type' => 'required|in:video,pdf,compensation_plan',
             'description'  => 'nullable|string',
             'external_url' => 'nullable|string|url',
-            'file'         => 'nullable|file|max:512000', // 500MB max
+            'file'         => 'nullable|file|max:204800', // 200MB max
             // Compensation plan structured fields
             'comp_ranks'         => 'nullable|string', // JSON string of rank tiers
             'comp_commissions'   => 'nullable|string', // JSON string of commission rates
@@ -88,13 +88,10 @@ class OwnerPresentationController extends Controller
         }
 
         // Bypass NOT NULL constraint on distributor_id for global presentations
-        $dummyDistributor = \App\Models\Distributor::firstOrCreate(
-            ['email' => 'system@nmms.com'],
-            ['name' => 'System Admin', 'password' => bcrypt('system123'), 'is_paid' => true]
-        );
+        $dummyDistributor = \App\Models\Distributor::first();
 
         $presentation = Presentation::create([
-            'distributor_id'     => $dummyDistributor->distributor_id,
+            'distributor_id'     => $dummyDistributor ? $dummyDistributor->distributor_id : '0', // Global presentations use a dummy ID
             'title'              => $data['title'],
             'content_type'       => $data['content_type'],
             'description'        => $data['description'] ?? null,

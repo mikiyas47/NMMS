@@ -11,6 +11,11 @@ Route::get('/fix-points', function () {
     return 'Points recalculated successfully! ' . \Illuminate\Support\Facades\Artisan::output();
 });
 
+Route::get('/migrate', function () {
+    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+    return 'Migrated successfully! ' . \Illuminate\Support\Facades\Artisan::output();
+});
+
 Route::get('/fix-points-debug', function () {
     try {
         \Illuminate\Support\Facades\Artisan::call('mlm:fix-points');
