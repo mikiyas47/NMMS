@@ -17,8 +17,10 @@ import {
   AppState,
   Share,
 } from 'react-native';
-import { ShoppingCart, Search, X, Package, RefreshCw, AlertCircle,
-  CheckCircle, Share2, ExternalLink, CreditCard, Zap, Users } from 'lucide-react-native';
+import {
+  ShoppingCart, Search, X, Package, RefreshCw, AlertCircle,
+  CheckCircle, Share2, ExternalLink, CreditCard, Zap, Users
+} from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getProducts, getUser, joinNetwork, getDistributorStatus, getMyTree } from '../../api/authService';
 
@@ -31,7 +33,7 @@ const CARD_WIDTH = (width - 48) / 2; // 2 columns with 16px side padding & 16px 
 const toHttps = (url) => {
   if (!url) return null;
   let secure = url.replace(/^http:\/\//, 'https://');
-  
+
   // Validate that it's a proper URL
   try {
     new URL(secure);
@@ -44,12 +46,12 @@ const toHttps = (url) => {
 
 // ─── Category pill colours ────────────────────────────────────────────────────
 const CATEGORY_COLORS = {
-  default:  { bg: '#6366F1', light: 'rgba(99,102,241,0.12)' },
-  health:   { bg: '#10B981', light: 'rgba(16,185,129,0.12)' },
-  beauty:   { bg: '#EC4899', light: 'rgba(236,72,153,0.12)' },
+  default: { bg: '#6366F1', light: 'rgba(99,102,241,0.12)' },
+  health: { bg: '#10B981', light: 'rgba(16,185,129,0.12)' },
+  beauty: { bg: '#EC4899', light: 'rgba(236,72,153,0.12)' },
   wellness: { bg: '#8B5CF6', light: 'rgba(139,92,246,0.12)' },
-  nutrition:{ bg: '#F59E0B', light: 'rgba(245,158,11,0.12)' },
-  fitness:  { bg: '#3B82F6', light: 'rgba(59,130,246,0.12)' },
+  nutrition: { bg: '#F59E0B', light: 'rgba(245,158,11,0.12)' },
+  fitness: { bg: '#3B82F6', light: 'rgba(59,130,246,0.12)' },
 };
 
 const getCategoryColor = (category = '') => {
@@ -60,7 +62,7 @@ const getCategoryColor = (category = '') => {
 // ─── Video Player Components ──────────────────────────────────────────────────
 const ProductVideo = ({ uri }) => {
   const [error, setError] = useState(null);
-  
+
   const player = useVideoPlayer(uri, p => {
     p.loop = true;
     p.muted = true;
@@ -80,7 +82,7 @@ const ProductVideo = ({ uri }) => {
 
   if (error) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: '#000' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
         <Text style={{ color: '#EF4444', fontSize: 12 }}>Video unavailable</Text>
       </View>
     );
@@ -104,7 +106,7 @@ const ProductVideo = ({ uri }) => {
 
 const ModalVideo = ({ uri }) => {
   const [error, setError] = useState(null);
-  
+
   const player = useVideoPlayer(uri, p => {
     p.loop = true;
     p.muted = false;
@@ -124,7 +126,7 @@ const ModalVideo = ({ uri }) => {
 
   if (error) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: '#000' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
         <Text style={{ color: '#EF4444', fontSize: 14 }}>Video failed to load</Text>
       </View>
     );
@@ -147,20 +149,20 @@ const ModalVideo = ({ uri }) => {
 // ─── Single Product Card ──────────────────────────────────────────────────────
 const ProductCard = ({ item, onSell, onViewMedia, C }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const catColor  = getCategoryColor(item.category);
-  const imageUri  = toHttps(item.image);
-  const isVideo   =
+  const catColor = getCategoryColor(item.category);
+  const imageUri = toHttps(item.image);
+  const isVideo =
     imageUri &&
     (imageUri.endsWith('.mp4') ||
-     imageUri.endsWith('.mov') ||
-     imageUri.endsWith('.avi') ||
-     imageUri.endsWith('.mkv'));
+      imageUri.endsWith('.mov') ||
+      imageUri.endsWith('.avi') ||
+      imageUri.endsWith('.mkv'));
 
-  const handlePressIn  = () => Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
-  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1,    useNativeDriver: true, speed: 30 }).start();
+  const handlePressIn = () => Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 30 }).start();
+  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 30 }).start();
 
   return (
-    <Animated.View style={{ transform:[{ scale: scaleAnim }], width: CARD_WIDTH, marginBottom: 14 }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: CARD_WIDTH, marginBottom: 14 }}>
       <View
         style={{
           borderRadius: 22, overflow: 'hidden',
@@ -172,69 +174,69 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
         }}
       >
         {/* ── Image Frame 3:4 ── */}
-        <TouchableOpacity 
+        <TouchableOpacity
           activeOpacity={0.9}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           onPress={() => onViewMedia(item)}
-          style={{ width: '100%', aspectRatio: 3/4, backgroundColor: C.inputBg }}
+          style={{ width: '100%', aspectRatio: 3 / 4, backgroundColor: C.inputBg }}
         >
           {imageUri && !isVideo ? (
-            <Image source={{ uri: imageUri }} style={{ width:'100%', height:'100%' }} resizeMode="cover" />
+            <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           ) : imageUri && isVideo ? (
             <ProductVideo uri={imageUri} />
           ) : (
-            <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor:catColor.bg+'18' }}>
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: catColor.bg + '18' }}>
               <Package color={catColor.bg} size={44} />
             </View>
           )}
 
           {/* Category badge */}
           {item.category ? (
-            <View style={{ position:'absolute', top:10, left:10, paddingHorizontal:9, paddingVertical:4, borderRadius:20, backgroundColor:catColor.bg }}>
-              <Text style={{ color:'#fff', fontSize:9, fontWeight:'700', letterSpacing:0.5 }}>{item.category.toUpperCase()}</Text>
+            <View style={{ position: 'absolute', top: 10, left: 10, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, backgroundColor: catColor.bg }}>
+              <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{item.category.toUpperCase()}</Text>
             </View>
           ) : null}
 
           {/* Gradient bottom fade */}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.45)']}
-            style={{ position:'absolute', bottom:0, left:0, right:0, height:50 }}
+            style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50 }}
           />
 
           {/* Price on image */}
-          <View style={{ position:'absolute', bottom:8, left:10 }}>
-            <Text style={{ color:'#fff', fontSize:15, fontWeight:'900' }}>{parseFloat(item.price).toLocaleString()} ETB</Text>
+          <View style={{ position: 'absolute', bottom: 8, left: 10 }}>
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '900' }}>{parseFloat(item.price).toLocaleString()} ETB</Text>
           </View>
 
           {/* Points badge */}
           {item.point ? (
-            <View style={{ position:'absolute', bottom:8, right:10, backgroundColor:'rgba(0,0,0,0.6)', paddingHorizontal:8, paddingVertical:4, borderRadius:12, flexDirection:'row', alignItems:'center' }}>
-              <Text style={{ color:'#F59E0B', fontSize:10, fontWeight:'700', marginRight:4 }}>★</Text>
-              <Text style={{ color:'#fff', fontSize:10, fontWeight:'700' }}>{item.point} pts</Text>
+            <View style={{ position: 'absolute', bottom: 8, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ color: '#F59E0B', fontSize: 10, fontWeight: '700', marginRight: 4 }}>★</Text>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{item.point} pts</Text>
             </View>
           ) : null}
         </TouchableOpacity>
 
         {/* ── Info ── */}
-        <TouchableOpacity 
-          activeOpacity={1} 
+        <TouchableOpacity
+          activeOpacity={1}
           onPress={() => onSell(item)}
           style={{ padding: 12 }}
         >
-          <Text numberOfLines={2} style={{ fontSize:12, fontWeight:'700', color:C.text, marginBottom:6, lineHeight:17 }}>
+          <Text numberOfLines={2} style={{ fontSize: 12, fontWeight: '700', color: C.text, marginBottom: 6, lineHeight: 17 }}>
             {item.name}
           </Text>
 
           {/* Share Payment Link button */}
-          <TouchableOpacity onPress={() => onSell(item)} style={{ borderRadius:12, overflow:'hidden' }}>
+          <TouchableOpacity onPress={() => onSell(item)} style={{ borderRadius: 12, overflow: 'hidden' }}>
             <LinearGradient
               colors={['#4338CA', '#6366F1']}
-              start={[0,0]} end={[1,0]}
-              style={{ paddingVertical:9, flexDirection:'row', justifyContent:'center', alignItems:'center' }}
+              start={[0, 0]} end={[1, 0]}
+              style={{ paddingVertical: 9, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
             >
               <Share2 color="#fff" size={12} />
-              <Text style={{ color:'#fff', fontWeight:'700', fontSize:11, marginLeft:5, letterSpacing:0.5 }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11, marginLeft: 5, letterSpacing: 0.5 }}>
                 SHARE LINK
               </Text>
             </LinearGradient>
@@ -248,7 +250,7 @@ const ProductCard = ({ item, onSell, onViewMedia, C }) => {
 // ─── Share Payment Modal ───────────────────────────────────────────────────────
 const ShareModal = ({ product, distributorId, accountCount, navigation, onClose, onBuyMore, C }) => {
   const slideAnim = useRef(new Animated.Value(400)).current;
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const [selectedLeg, setSelectedLeg] = useState(1);
   const [treeData, setTreeData] = useState(null);
@@ -256,16 +258,16 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
   useEffect(() => {
     Animated.parallel([
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 6 }),
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
     ]).start();
 
-    getMyTree().then(res => setTreeData(res?.tree || null)).catch(() => {});
+    getMyTree().then(res => setTreeData(res?.tree || null)).catch(() => { });
   }, []);
 
   const close = () => {
     Animated.parallel([
       Animated.spring(slideAnim, { toValue: 400, useNativeDriver: true }),
-      Animated.timing(fadeAnim,  { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start(onClose);
   };
 
@@ -307,7 +309,7 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
 
   return (
     <Modal transparent animationType="none" onRequestClose={close}>
-      <Animated.View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.65)', justifyContent:'flex-end', opacity: fadeAnim }}>
+      <Animated.View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end', opacity: fadeAnim }}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={close} />
         <Animated.View style={{
           transform: [{ translateY: slideAnim }],
@@ -316,53 +318,57 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
           paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8,
           borderTopWidth: 1, borderColor: C.border,
         }}>
-          <View style={{ width:40, height:4, borderRadius:2, backgroundColor:C.border, alignSelf:'center', marginBottom:20 }} />
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
 
           {/* Header */}
-          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:20 }}>
-            <LinearGradient colors={['#4338CA','#6366F1']} style={{ width:44, height:44, borderRadius:14, alignItems:'center', justifyContent:'center', marginRight:12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+            <LinearGradient colors={['#4338CA', '#6366F1']} style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
               <Share2 color="#fff" size={20} />
             </LinearGradient>
-            <View style={{ flex:1 }}>
-              <Text style={{ fontSize:18, fontWeight:'800', color:C.text }}>Send Payment Link</Text>
-              <Text style={{ fontSize:12, color:C.muted, marginTop:1 }}>Customer pays directly — you earn commission</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>Send Payment Link</Text>
+              <Text style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>Customer pays directly — you earn commission</Text>
             </View>
-            <TouchableOpacity onPress={close} style={{ width:34, height:34, borderRadius:10, backgroundColor:C.inputBg, alignItems:'center', justifyContent:'center' }}>
+            <TouchableOpacity onPress={close} style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: C.inputBg, alignItems: 'center', justifyContent: 'center' }}>
               <X color={C.muted} size={18} />
             </TouchableOpacity>
           </View>
 
           {/* Product card */}
-          <View style={{ flexDirection:'row', backgroundColor:C.inputBg, borderRadius:16, padding:14, marginBottom:20, alignItems:'center' }}>
-            <View style={{ width:54, height:68, borderRadius:12, overflow:'hidden', backgroundColor:C.border, marginRight:14 }}>
+          <View style={{ flexDirection: 'row', backgroundColor: C.inputBg, borderRadius: 16, padding: 14, marginBottom: 20, alignItems: 'center' }}>
+            <View style={{ width: 54, height: 68, borderRadius: 12, overflow: 'hidden', backgroundColor: C.border, marginRight: 14 }}>
               {product?.image
-                ? <Image source={{ uri: toHttps(product.image) }} style={{ width:'100%', height:'100%' }} resizeMode="cover" />
-                : <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}><Package color={C.muted} size={22} /></View>}
+                ? <Image source={{ uri: toHttps(product.image) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Package color={C.muted} size={22} /></View>}
             </View>
-            <View style={{ flex:1 }}>
-              <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:4 }} numberOfLines={2}>{product?.name}</Text>
-              <View style={{ alignSelf:'flex-start', paddingHorizontal:8, paddingVertical:2, borderRadius:20, backgroundColor:catColor.light, marginBottom:6 }}>
-                <Text style={{ color:catColor.bg, fontSize:10, fontWeight:'700' }}>{product?.category}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 4 }} numberOfLines={2}>{product?.name}</Text>
+              <View style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20, backgroundColor: catColor.light, marginBottom: 6 }}>
+                <Text style={{ color: catColor.bg, fontSize: 10, fontWeight: '700' }}>{product?.category}</Text>
               </View>
-              <Text style={{ fontSize:13, color:'#6366F1', fontWeight:'800' }}>ETB {parseFloat(product?.price ?? 0).toFixed(2)}</Text>
+              <Text style={{ fontSize: 13, color: '#6366F1', fontWeight: '800' }}>ETB {parseFloat(product?.price ?? 0).toFixed(2)}</Text>
             </View>
           </View>
 
           {/* Commission preview */}
-          <View style={{ backgroundColor:'rgba(16,185,129,0.08)', borderRadius:14, padding:14, marginBottom:16,
-            borderWidth:1, borderColor:'rgba(16,185,129,0.2)', flexDirection:'row', alignItems:'center' }}>
-            <View style={{ width:36, height:36, borderRadius:10, backgroundColor:'rgba(16,185,129,0.15)',
-              alignItems:'center', justifyContent:'center', marginRight:12 }}>
+          <View style={{
+            backgroundColor: 'rgba(16,185,129,0.08)', borderRadius: 14, padding: 14, marginBottom: 16,
+            borderWidth: 1, borderColor: 'rgba(16,185,129,0.2)', flexDirection: 'row', alignItems: 'center'
+          }}>
+            <View style={{
+              width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.15)',
+              alignItems: 'center', justifyContent: 'center', marginRight: 12
+            }}>
               <CreditCard color="#10B981" size={18} />
             </View>
             <View>
-              <Text style={{ color:C.muted, fontSize:11 }}>Your commission (10%)</Text>
-              <Text style={{ color:'#10B981', fontWeight:'900', fontSize:17 }}>
+              <Text style={{ color: C.muted, fontSize: 11 }}>Your commission (10%)</Text>
+              <Text style={{ color: '#10B981', fontWeight: '900', fontSize: 17 }}>
                 ETB {(parseFloat(product?.price ?? 0) * 0.10).toFixed(2)}
               </Text>
             </View>
-            <View style={{ flex:1 }} />
-            <Text style={{ color:C.muted, fontSize:10, textAlign:'right' }}>Credited{`\n`}automatically</Text>
+            <View style={{ flex: 1 }} />
+            <Text style={{ color: C.muted, fontSize: 10, textAlign: 'right' }}>Credited{`\n`}automatically</Text>
           </View>
 
           {/* Leg Selection */}
@@ -411,22 +417,24 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
           )}
 
           {/* Action buttons */}
-          <TouchableOpacity onPress={handleShareLink} style={{ borderRadius:16, overflow:'hidden', marginBottom:12 }}>
-            <LinearGradient colors={['#4338CA','#6366F1']} start={[0,0]} end={[1,0]}
-              style={{ paddingVertical:16, flexDirection:'row', alignItems:'center', justifyContent:'center' }}>
+          <TouchableOpacity onPress={handleShareLink} style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}>
+            <LinearGradient colors={['#4338CA', '#6366F1']} start={[0, 0]} end={[1, 0]}
+              style={{ paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
               <Share2 color="#fff" size={18} />
-              <Text style={{ color:'#fff', fontWeight:'800', fontSize:15, marginLeft:10 }}>Share Payment Link</Text>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 10 }}>Share Payment Link</Text>
             </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleOpenDirect}
-            style={{ borderRadius:16, paddingVertical:15, flexDirection:'row', alignItems:'center',
-              justifyContent:'center', backgroundColor:C.inputBg, borderWidth:1, borderColor:C.border }}>
+            style={{
+              borderRadius: 16, paddingVertical: 15, flexDirection: 'row', alignItems: 'center',
+              justifyContent: 'center', backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.border
+            }}>
             <ExternalLink color={C.accent} size={18} />
-            <Text style={{ color:C.text, fontWeight:'700', fontSize:15, marginLeft:10 }}>Open Checkout Now</Text>
+            <Text style={{ color: C.text, fontWeight: '700', fontSize: 15, marginLeft: 10 }}>Open Checkout Now</Text>
           </TouchableOpacity>
 
-          <Text style={{ color:C.muted, fontSize:11, textAlign:'center', marginTop:14, lineHeight:16 }}>
+          <Text style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginTop: 14, lineHeight: 16 }}>
             🔒 Price is locked by the system.{`\n`}You cannot modify it.
           </Text>
         </Animated.View>
@@ -437,14 +445,14 @@ const ShareModal = ({ product, distributorId, accountCount, navigation, onClose,
 
 // ─── Main ProductsScreen ──────────────────────────────────────────────────────
 const ProductsScreen = ({ C, navigation }) => {
-  const [products, setProducts]       = useState([]);
-  const [filtered, setFiltered]       = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [refreshing, setRefreshing]   = useState(false);
-  const [error, setError]             = useState(null);
-  const [search, setSearch]           = useState('');
+  const [products, setProducts] = useState([]);
+  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [sellTarget, setSellTarget]   = useState(null);
+  const [sellTarget, setSellTarget] = useState(null);
   const [distributorId, setDistributorId] = useState(null);
 
   // Load current distributor id + join status
@@ -457,16 +465,16 @@ const ProductsScreen = ({ C, navigation }) => {
       setAccountCount(res?.account_count ?? 0);
       // Store upline_id so we can pass it as sponsor_id when joining
       if (res?.upline_id) setUplinkId(res.upline_id);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
-  const [viewMedia, setViewMedia]     = useState(null);
-  const [hasJoined, setHasJoined]     = useState(false);
+  const [viewMedia, setViewMedia] = useState(null);
+  const [hasJoined, setHasJoined] = useState(false);
   const [accountCount, setAccountCount] = useState(0);
-  const [uplinkId, setUplinkId]       = useState(null); // sponsor for upgraded customers
-  const [joinModal, setJoinModal]     = useState(false);
+  const [uplinkId, setUplinkId] = useState(null); // sponsor for upgraded customers
+  const [joinModal, setJoinModal] = useState(false);
   const [joinProduct, setJoinProduct] = useState(null);
-  const [joinQty, setJoinQty]         = useState(1);
-  const [joining, setJoining]         = useState(false);
+  const [joinQty, setJoinQty] = useState(1);
+  const [joining, setJoining] = useState(false);
   const appState = useRef(AppState.currentState);
 
   // ── Fetch from API ──────────────────────────────────────────────────────────
@@ -533,7 +541,7 @@ const ProductsScreen = ({ C, navigation }) => {
       Alert.alert(
         '🎉 Welcome to the Network!',
         `You joined with ${joinQty} account${joinQty > 1 ? 's' : ''}. Your node${joinQty > 1 ? 's have' : ' has'} been placed in the tree.`,
-        [{ text: 'View Tree', onPress: () => {} }, { text: 'OK' }]
+        [{ text: 'View Tree', onPress: () => { } }, { text: 'OK' }]
       );
     } catch (e) {
       Alert.alert('Join Failed', e.message || 'Could not join the network. Please try again.');
@@ -549,24 +557,24 @@ const ProductsScreen = ({ C, navigation }) => {
     <View style={{ marginBottom: 4 }}>
       {/* ── Hero Banner ── */}
       <LinearGradient
-        colors={['#312E81','#4338CA','#6366F1']}
-        start={{ x:0, y:0 }} end={{ x:1, y:1 }}
-        style={{ borderRadius:24, padding:20, marginBottom:16, overflow:'hidden' }}
+        colors={['#312E81', '#4338CA', '#6366F1']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 24, padding: 20, marginBottom: 16, overflow: 'hidden' }}
       >
-        <View style={{ position:'absolute', right:-30, top:-30, width:120, height:120, borderRadius:60, backgroundColor:'rgba(255,255,255,0.06)' }} />
-        <View style={{ position:'absolute', left:60, bottom:-20, width:80, height:80, borderRadius:40, backgroundColor:'rgba(255,255,255,0.04)' }} />
-        <Text style={{ color:'rgba(255,255,255,0.65)', fontSize:12, fontWeight:'600', letterSpacing:1 }}>PRODUCT CATALOG</Text>
-        <Text style={{ color:'#fff', fontSize:24, fontWeight:'800', marginTop:4, marginBottom:14 }}>
+        <View style={{ position: 'absolute', right: -30, top: -30, width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+        <View style={{ position: 'absolute', left: 60, bottom: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.04)' }} />
+        <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>PRODUCT CATALOG</Text>
+        <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 4, marginBottom: 14 }}>
           {products.length} item{products.length !== 1 ? 's' : ''} available
         </Text>
-        <View style={{ flexDirection:'row', gap:10 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
           {[
-            { label:'Categories', value: categories.length - 1 },
-            { label:'Total Points', value: products.reduce((sum, p) => sum + (p.point || 0), 0) },
-          ].map((s,i) => (
-            <View key={i} style={{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:12, padding:10, alignItems:'center' }}>
-              <Text style={{ color:'#fff', fontWeight:'900', fontSize:18 }}>{s.value}</Text>
-              <Text style={{ color:'rgba(255,255,255,0.65)', fontSize:10, marginTop:2 }}>{s.label}</Text>
+            { label: 'Categories', value: categories.length - 1 },
+            { label: 'Total Points', value: products.reduce((sum, p) => sum + (p.point || 0), 0) },
+          ].map((s, i) => (
+            <View key={i} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{s.value}</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>{s.label}</Text>
             </View>
           ))}
         </View>
@@ -616,13 +624,13 @@ const ProductsScreen = ({ C, navigation }) => {
 
       {/* Search bar */}
       <View style={{
-        flexDirection:'row', alignItems:'center',
-        backgroundColor: C.inputBg, borderRadius:16, paddingHorizontal:14, marginBottom:14,
-        borderWidth:1, borderColor: search ? '#6366F1' : C.border, height:50,
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: C.inputBg, borderRadius: 16, paddingHorizontal: 14, marginBottom: 14,
+        borderWidth: 1, borderColor: search ? '#6366F1' : C.border, height: 50,
       }}>
         <Search color={search ? '#6366F1' : C.muted} size={18} />
         <TextInput
-          style={{ flex:1, marginLeft:10, fontSize:14, color:C.text }}
+          style={{ flex: 1, marginLeft: 10, fontSize: 14, color: C.text }}
           placeholder="Search products..."
           placeholderTextColor={C.muted}
           value={search}
@@ -634,7 +642,7 @@ const ProductsScreen = ({ C, navigation }) => {
       </View>
 
       {/* Category pills */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }} contentContainerStyle={{ paddingRight:4 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ paddingRight: 4 }}>
         {categories.map(cat => {
           const isActive = activeCategory === cat;
           const cc = getCategoryColor(cat);
@@ -643,12 +651,12 @@ const ProductsScreen = ({ C, navigation }) => {
               key={cat}
               onPress={() => setActiveCategory(cat)}
               style={{
-                paddingHorizontal:16, paddingVertical:8, borderRadius:20, marginRight:8,
+                paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8,
                 backgroundColor: isActive ? cc.bg : C.inputBg,
-                borderWidth:1, borderColor: isActive ? cc.bg : C.border,
+                borderWidth: 1, borderColor: isActive ? cc.bg : C.border,
               }}
             >
-              <Text style={{ fontSize:12, fontWeight:'700', color: isActive ? '#fff' : C.muted }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : C.muted }}>
                 {cat === 'All' ? '🛍 All' : cat}
               </Text>
             </TouchableOpacity>
@@ -657,7 +665,7 @@ const ProductsScreen = ({ C, navigation }) => {
       </ScrollView>
 
       {!loading && (
-        <Text style={{ fontSize:12, color:C.muted, marginBottom:10 }}>
+        <Text style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
           {filtered.length} result{filtered.length !== 1 ? 's' : ''}
         </Text>
       )}
@@ -906,7 +914,7 @@ const ProductsScreen = ({ C, navigation }) => {
             <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }} onPress={() => setViewMedia(null)}>
               <X color="#fff" size={32} />
             </TouchableOpacity>
-            
+
             <View style={{ width: width, height: width * 1.5, alignItems: 'center', justifyContent: 'center' }}>
               {(() => {
                 const uri = toHttps(viewMedia.image);

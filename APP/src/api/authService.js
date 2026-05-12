@@ -20,7 +20,7 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     // Detect FormData in React Native (can be _parts or FormData instance)
     const isFormData =
       config.data instanceof FormData ||
@@ -30,7 +30,7 @@ apiClient.interceptors.request.use(
       // Let the browser/RN set the correct multipart boundary automatically
       delete config.headers['Content-Type'];
     }
-    
+
     return config;
   },
   (error) => {
@@ -169,12 +169,16 @@ export const createClosing = async (contactId, data) => {
 // ── Performance Operating System ─────────────────────────────────────────────
 
 // Presentations
-export const getPresentations = async () => (await apiClient.get('/presentations')).data;
+// Fetch owner-uploaded global presentations for the distributor library (used in Send Presentation flow)
+export const getPresentations = async () => (await apiClient.get('/presentations/library')).data;
+// Fetch the distributor's own presentations
+export const getDistributorPresentations = async () => (await apiClient.get('/presentations')).data;
 export const createPresentation = async (data) => (await apiClient.post('/presentations', data)).data;
 export const updatePresentation = async (id, data) => (await apiClient.put(`/presentations/${id}`, data)).data;
 export const deletePresentation = async (id) => (await apiClient.delete(`/presentations/${id}`)).data;
 export const assignPresentation = async (data) => (await apiClient.post('/presentations/assign', data)).data;
 export const getProspectAssignments = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/assignments`)).data;
+export const logPresentationCallOutcome = async (data) => (await apiClient.post('/presentations/call-outcome', data)).data;
 
 // Invitations
 export const createInvitation = async (data) => (await apiClient.post('/invitations', data)).data;
@@ -331,14 +335,14 @@ export const initiatePayment = async (data) => {
   } catch (error) {
     const errData = error.response?.data;
     let errorMsg = errData?.message ?? 'Payment initiation failed';
-    
+
     // If it's a Laravel validation error, it might have an 'errors' object
     if (errData?.errors && typeof errData.errors === 'object') {
       const firstError = Object.values(errData.errors)[0];
       if (Array.isArray(firstError)) errorMsg = firstError[0];
       else if (typeof firstError === 'string') errorMsg = firstError;
     }
-    
+
     // If Chapa or another service returns an object in 'message'
     if (typeof errorMsg === 'object') {
       errorMsg = JSON.stringify(errorMsg);

@@ -246,7 +246,18 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Performance Operating System ─────────────────────────────────────────────
+// ── Owner Presentation Upload ─────────────────────────────────────────────────
+use App\Http\Controllers\Api\OwnerPresentationController;
+// Owner-only routes (protected by auth:sanctum — owner role checked in controller)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/owner/presentations',        [OwnerPresentationController::class, 'index']);
+    Route::post('/owner/presentations',       [OwnerPresentationController::class, 'store']);
+    Route::put('/owner/presentations/{id}',   [OwnerPresentationController::class, 'update']);
+    Route::delete('/owner/presentations/{id}',[OwnerPresentationController::class, 'destroy']);
+});
+// Distributor library — all global presentations
+Route::middleware('auth:sanctum')->get('/presentations/library', [OwnerPresentationController::class, 'library']);
+// ─────────────────────────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\PerformanceController;
 
 // Public tracked links (no auth)
@@ -264,6 +275,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/presentations/{id}',      [PerformanceController::class, 'updatePresentation']);
     Route::delete('/presentations/{id}',   [PerformanceController::class, 'deletePresentation']);
     Route::post('/presentations/assign',   [PerformanceController::class, 'assignPresentation']);
+    Route::post('/presentations/call-outcome', [PerformanceController::class, 'logPresentationCallOutcome']);
     Route::get('/prospects/{id}/assignments', [PerformanceController::class, 'listAssignments']);
     // Invitations
     Route::post('/invitations',                    [PerformanceController::class, 'createInvitation']);

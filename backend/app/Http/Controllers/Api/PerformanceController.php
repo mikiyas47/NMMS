@@ -33,7 +33,11 @@ class PerformanceController extends Controller
 
     public function listPresentations(Request $r) {
         $id = $this->distId($r);
-        $items = Presentation::where('distributor_id',$id)->orderByDesc('created_at')->get();
+        // Include the distributor's own presentations AND global owner-uploaded ones
+        $items = Presentation::where(function($q) use ($id) {
+            $q->where('distributor_id', $id)
+              ->orWhere('is_global', true);
+        })->where('is_active', true)->orderByDesc('created_at')->get();
         return response()->json(['status'=>'success','data'=>$items]);
     }
 
@@ -103,6 +107,46 @@ class PerformanceController extends Controller
         $this->incrementWeeklyGoal($distId,'presentations_actual');
         $link = config('app.url').'/p/'.$token;
         return response()->json(['status'=>'success','data'=>$assignment,'tracked_link'=>$link],201);
+    }
+
+    // Log a call-based presentation outcome
+    public function logPresentationCallOutcome(Request $r) {
+        $distId = $this->distId($r);
+        $data = $r->validate([
+            'prospect_id' => 'required|exists:prospects,prospect_id',
+            'outcome'     => 'required|string|max:100',
+            'notes'       => 'nullable|string',
+        ]);
+        $prospect = Prospect::where('prospect_id',$data['prospect_id'])->where('distributor_id',$distId)->firstOrFail();
+
+        // Log activity
+        ProspectActivity::create([
+            'prospect_id'    => $data['prospect_id'],
+            'distributor_id' => $distId,
+            'activity_type'  => 'presentation',
+            'title'          => 'Presentation call — '.$data['outcome'],
+            'description'    => $data['notes'] ?? '',
+            'meta'           => ['outcome' => $data['outcome'], 'method' => 'call'],
+            'created_at'     => now(),
+        ]);
+
+        // Auto-advance stage based on outcome
+        $positiveOutcomes = ['Understood Presentation','Interested','Asked About Pricing','Asked About Business Opportunity'];
+        if (in_array($data['outcome'], $positiveOutcomes)) {
+            if (!in_array($prospect->stage, ['Closing','Joined'])) {
+                $prospect->stage  = 'Follow-Up Needed';
+                $prospect->status = 'Follow-Up Needed';
+                $prospect->save();
+            }
+            // Boost interest score
+            $prospect->interest_score = min(100, ($prospect->interest_score ?? 0) + 20);
+            $prospect->save();
+        }
+
+        $this->recomputePriority($data['prospect_id'], $distId);
+        $this->fireAutomation($distId, $data['prospect_id'], 'stage_changed', ['outcome' => $data['outcome']]);
+
+        return response()->json(['status' => 'success', 'message' => 'Outcome logged']);
     }
 
     public function listAssignments(Request $r, $prospectId) {
