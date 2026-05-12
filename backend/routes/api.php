@@ -318,40 +318,6 @@ Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/payments', [PaymentController::class, 'index']);
 });
 
-// ── Temporary diagnostic: debug payments & presentations 500 (REMOVE AFTER FIX) ──
-Route::get('/debug-payments-error', function () {
-    $results = [];
-    try {
-        $payments = \App\Models\Payment::with(['product', 'distributor'])->limit(3)->get();
-        $results['payments'] = ['ok' => true, 'count' => $payments->count()];
-    } catch (\Throwable $e) {
-        $results['payments'] = [
-            'ok'      => false,
-            'error'   => $e->getMessage(),
-            'file'    => basename($e->getFile()),
-            'line'    => $e->getLine(),
-        ];
-    }
-    try {
-        $pres = \App\Models\Presentation::where('is_global', true)->limit(3)->get();
-        $results['presentations'] = ['ok' => true, 'count' => $pres->count()];
-    } catch (\Throwable $e) {
-        $results['presentations'] = [
-            'ok'    => false,
-            'error' => $e->getMessage(),
-            'file'  => basename($e->getFile()),
-            'line'  => $e->getLine(),
-        ];
-    }
-    try {
-        // Test basic paginate
-        $pag = \App\Models\Payment::paginate(5);
-        $results['payments_paginate'] = ['ok' => true, 'total' => $pag->total()];
-    } catch (\Throwable $e) {
-        $results['payments_paginate'] = ['ok' => false, 'error' => $e->getMessage()];
-    }
-    return response()->json($results);
-});
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
