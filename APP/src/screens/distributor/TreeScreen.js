@@ -181,6 +181,9 @@ const TreeScreen = ({ C, navigate }) => {
       if (status === 404) {
         // Distributor hasn't joined the network yet — not an error
         setNotJoined(true);
+      } else if (status === 401) {
+        console.log('Tree error: Unauthorized (401)');
+        setError('Your session has expired or is invalid. Please log out and log in again.');
       } else {
         console.log('Tree error:', err.message);
         setError(err.message || 'Failed to load tree.');

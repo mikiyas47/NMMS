@@ -5,12 +5,34 @@ const API_BASE_URL = 'https://nmms-backend.onrender.com/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000, // 30 s — allows Render's free-tier cold start to complete
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
   },
+  transformResponse: [function (data) {
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data);
+      } catch (e) {
+        // Try to handle concatenated JSON strings (e.g., from Laravel errors appended to response)
+        const match = data.match(/^(\{.*?\})(?=\{|$)/);
+        if (match) {
+          try {
+            return JSON.parse(match[1]);
+          } catch (e2) {}
+        }
+        
+        try {
+          const arrayStr = '[' + data.replace(/\}\{/g, '},{') + ']';
+          const arr = JSON.parse(arrayStr);
+          return arr[0];
+        } catch (e3) {}
+        return data;
+      }
+    }
+    return data;
+  }],
 });
 
 // Add request interceptor to attach auth token
@@ -18,9 +40,13 @@ apiClient.interceptors.request.use(
   async (config) => {
     const token = await AsyncStorage.getItem('authToken');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      if (config.headers && typeof config.headers.set === 'function') {
+        config.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
-
+    
     // Detect FormData in React Native (can be _parts or FormData instance)
     const isFormData =
       config.data instanceof FormData ||
@@ -29,6 +55,13 @@ apiClient.interceptors.request.use(
     if (isFormData) {
       // Let the browser/RN set the correct multipart boundary automatically
       delete config.headers['Content-Type'];
+    }
+
+    console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`);
+    if (token) {
+       console.log(`[API Token] length: ${token.length}, starts with: ${token.substring(0, 5)}...`);
+    } else {
+       console.log(`[API Token] No token found in AsyncStorage!`);
     }
 
     return config;
@@ -41,21 +74,31 @@ apiClient.interceptors.request.use(
 export const login = async (email, password) => {
   try {
     const response = await apiClient.post('/login', { email, password });
-    // Store the auth token
     if (response.data.access_token) {
       await AsyncStorage.setItem('authToken', response.data.access_token);
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
     }
     return response.data;
   } catch (error) {
-    throw error.response ? error.response.data : new Error('Network Error');
+    if (error.response) {
+      // Server replied with a non-2xx status
+      const data = error.response.data;
+      const msg =
+        data?.message ||
+        (data?.errors ? Object.values(data.errors).flat()[0] : null) ||
+        'Login failed. Please check your credentials.';
+      throw new Error(msg);
+    }
+    // No response — server is unreachable (sleeping on Render, no internet, etc.)
+    throw new Error(
+      'Cannot reach the server. The server may be starting up — please wait 30 seconds and try again.'
+    );
   }
 };
 
 export const register = async (userData) => {
   try {
     const response = await apiClient.post('/register', userData);
-    // Store the auth token
     if (response.data.access_token) {
       await AsyncStorage.setItem('authToken', response.data.access_token);
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
@@ -72,7 +115,6 @@ export const logout = async () => {
   } catch (error) {
     console.log('Logout error:', error);
   } finally {
-    // Clear stored tokens
     await AsyncStorage.removeItem('authToken');
     await AsyncStorage.removeItem('user');
   }
@@ -80,10 +122,7 @@ export const logout = async () => {
 
 export const getProducts = async () => {
   try {
-    // Append a timestamp to bust any HTTP cache layer
-    const response = await apiClient.get('/products', {
-      params: { _t: Date.now() },
-    });
+    const response = await apiClient.get('/products');
     return response.data;
   } catch (error) {
     throw error.response ? error.response.data : new Error('Network Error');
@@ -109,66 +148,24 @@ export const getUser = async () => {
   }
 };
 
-export const updatePassword = async (data) => {
-  try {
-    const response = await apiClient.put('/profile/password', data);
-    return response.data;
-  } catch (error) {
-    throw error.response ? error.response.data : new Error('Network Error');
-  }
-};
+// ── Prospects ─────────────────────────────────────────────────────────────────
+export const getProspectDashboard = async () => (await apiClient.get('/prospects/dashboard')).data;
+export const getProspects = async (params) => (await apiClient.get('/prospects', { params })).data;
+export const createProspect = async (data) => (await apiClient.post('/prospects', data)).data;
+export const updateProspect = async (id, data) => (await apiClient.put(`/prospects/${id}`, data)).data;
+export const deleteProspect = async (id) => (await apiClient.delete(`/prospects/${id}`)).data;
+export const moveProspectStage = async (id, stage) => (await apiClient.patch(`/prospects/${id}/stage`, { stage })).data;
+export const addProspectFollowup = async (id, data) => (await apiClient.post(`/prospects/${id}/followups`, data)).data;
+export const addProspectClosing = async (id, data) => (await apiClient.post(`/prospects/${id}/closings`, data)).data;
+export const addProspectNote = async (id, data) => (await apiClient.post(`/prospects/${id}/notes`, data)).data;
 
-// ── Contacts (raw contact storage) ───────────────────────────────────────────
-export const getContacts = async () => {
-  const response = await apiClient.get('/contacts');
-  return response.data;
-};
+// ── Followups & Closings ──────────────────────────────────────────────────────
+export const getFollowups = async (params) => (await apiClient.get('/contacts/followups', { params })).data;
+export const createFollowup = async (prospectId, data) => (await apiClient.post(`/contacts/${prospectId}/followups`, data)).data;
+export const getClosings = async (params) => (await apiClient.get('/contacts/closings', { params })).data;
+export const createClosing = async (prospectId, data) => (await apiClient.post(`/contacts/${prospectId}/closings`, data)).data;
 
-export const createContact = async (data) => {
-  const response = await apiClient.post('/contacts', data);
-  return response.data;
-};
-
-export const updateContact = async (id, data) => {
-  const response = await apiClient.put(`/contacts/${id}`, data);
-  return response.data;
-};
-
-export const deleteContact = async (id) => {
-  const response = await apiClient.delete(`/contacts/${id}`);
-  return response.data;
-};
-
-export const convertContactToProspect = async (id, data) => {
-  const response = await apiClient.post(`/contacts/${id}/convert`, data);
-  return response.data;
-};
-
-// ── Follow-ups ────────────────────────────────────────────────────────────────
-export const getFollowups = async () => {
-  const response = await apiClient.get('/contacts/followups');
-  return response.data;
-};
-
-export const createFollowup = async (contactId, data) => {
-  const response = await apiClient.post(`/contacts/${contactId}/followups`, data);
-  return response.data;
-};
-
-// ── Closing Attempts ──────────────────────────────────────────────────────────
-export const getClosings = async () => {
-  const response = await apiClient.get('/contacts/closings');
-  return response.data;
-};
-
-export const createClosing = async (contactId, data) => {
-  const response = await apiClient.post(`/contacts/${contactId}/closings`, data);
-  return response.data;
-};
-
-// ── Performance Operating System ─────────────────────────────────────────────
-
-// Presentations
+// ── Presentations ─────────────────────────────────────────────────────────────
 // Fetch owner-uploaded global presentations for the distributor library (used in Send Presentation flow)
 export const getPresentations = async () => (await apiClient.get('/presentations/library')).data;
 // Fetch the distributor's own presentations
@@ -180,186 +177,61 @@ export const assignPresentation = async (data) => (await apiClient.post('/presen
 export const logPresentationCallOutcome = async (data) => (await apiClient.post('/presentations/call-outcome', data)).data;
 export const getPresentationLibrary = async () => (await apiClient.get('/presentations/library')).data;
 export const getProspectAssignments = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/assignments`)).data;
-export const logPresentationCallOutcome = async (data) => (await apiClient.post('/presentations/call-outcome', data)).data;
 
-// Invitations
+// ── Invitations ───────────────────────────────────────────────────────────────
 export const createInvitation = async (data) => (await apiClient.post('/invitations', data)).data;
 export const getProspectInvitations = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/invitations`)).data;
 export const updateInvitationStatus = async (id, status) => (await apiClient.patch(`/invitations/${id}/status`, { status })).data;
+export const getScript = async (invitationType, prospectId) => (await apiClient.get('/scripts', { params: { invitation_type: invitationType, prospect_id: prospectId } })).data;
 
-// Automation
+// ── Automation ────────────────────────────────────────────────────────────────
 export const getAutomationRules = async () => (await apiClient.get('/automation-rules')).data;
 export const createAutomationRule = async (data) => (await apiClient.post('/automation-rules', data)).data;
 export const toggleAutomationRule = async (id) => (await apiClient.patch(`/automation-rules/${id}/toggle`)).data;
 
-// Priority
+// ── Priority ──────────────────────────────────────────────────────────────────
 export const getPriorityLeads = async () => (await apiClient.get('/prospect-priority')).data;
+export const updateProspectPriority = async (id, data) => (await apiClient.patch(`/prospects/${id}/priority`, data)).data;
 
-// Daily dashboard
+// ── Goals ─────────────────────────────────────────────────────────────────────
+export const getGoals = async () => (await apiClient.get('/goals')).data;
+export const createGoal = async (data) => (await apiClient.post('/goals', data)).data;
+export const updateGoal = async (id, data) => (await apiClient.put(`/goals/${id}`, data)).data;
+export const deleteGoal = async (id) => (await apiClient.delete(`/goals/${id}`)).data;
+export const updateGoalProgress = async (id, progress) => (await apiClient.patch(`/goals/${id}/progress`, { progress })).data;
+
+// ── Contacts ──────────────────────────────────────────────────────────────────
+export const getContacts = async (params) => (await apiClient.get('/contacts', { params })).data;
+export const createContact = async (data) => (await apiClient.post('/contacts', data)).data;
+export const updateContact = async (id, data) => (await apiClient.put(`/contacts/${id}`, data)).data;
+export const deleteContact = async (id) => (await apiClient.delete(`/contacts/${id}`)).data;
+export const importContacts = async (data) => (await apiClient.post('/contacts/import', data)).data;
+export const getContactActivities = async (id) => (await apiClient.get(`/contacts/${id}/activities`)).data;
+export const addContactActivity = async (id, data) => (await apiClient.post(`/contacts/${id}/activities`, data)).data;
+export const convertContactToProspect = async (id, data) => (await apiClient.post(`/contacts/${id}/convert`, data)).data;
+
+// ── Analytics / Performance ───────────────────────────────────────────────────
+export const getPerformanceStats = async (params) => (await apiClient.get('/performance', { params })).data;
+export const getNetworkStats = async () => (await apiClient.get('/network/stats')).data;
+export const getRankHistory = async () => (await apiClient.get('/rank/history')).data;
 export const getDailyDashboard = async () => (await apiClient.get('/daily-dashboard')).data;
 export const completeTask = async (data) => (await apiClient.post('/daily-dashboard/complete', data)).data;
-
-// Behavioral intelligence
 export const getActiveRecommendations = async () => (await apiClient.get('/recommendations/active')).data;
-export const getProspectRecommendations = async (id) => (await apiClient.get(`/prospects/${id}/recommendations`)).data;
 export const markRecommendationRead = async (id) => (await apiClient.patch(`/recommendations/${id}/read`)).data;
-
-// Onboarding
+export const getFunnelReport = async () => (await apiClient.get('/funnel/report')).data;
+export const getWeeklyGoals = async () => (await apiClient.get('/duplication/weekly-goals')).data;
+export const getPlaybooks = async () => (await apiClient.get('/playbooks')).data;
 export const getOnboardingStatus = async () => (await apiClient.get('/onboarding/status')).data;
 
-// Playbooks & duplication
-export const getPlaybooks = async () => (await apiClient.get('/playbooks')).data;
-export const createPlaybook = async (data) => (await apiClient.post('/playbooks', data)).data;
-export const getScript = async (invitationType, prospectId) => (await apiClient.get('/scripts', { params: { invitation_type: invitationType, prospect_id: prospectId } })).data;
-export const getWeeklyGoals = async () => (await apiClient.get('/duplication/weekly-goals')).data;
 
-// Funnel analytics
-export const getFunnelReport = async (params = {}) => (await apiClient.get('/funnel/report', { params })).data;
-// ─────────────────────────────────────────────────────────────────────────────
-export const getProspectDashboard = async () => {
+// ── Earnings ──────────────────────────────────────────────────────────────────
+export const getEarnings = async (params) => (await apiClient.get('/earnings', { params })).data;
+export const getEarningsSummary = async () => (await apiClient.get('/earnings/summary')).data;
+
+// ── Payments / Sales ──────────────────────────────────────────────────────────
+export const initiatePayment = async (paymentData) => {
   try {
-    const response = await apiClient.get('/prospect-dashboard');
-    return response.data;
-  } catch (error) {
-    const detail = error.response?.data;
-    console.error('Prospect dashboard detail:', JSON.stringify(detail), 'status:', error.response?.status);
-    throw error;
-  }
-};
-
-export const getProspectPipeline = async () => {
-  const response = await apiClient.get('/prospect-pipeline');
-  return response.data;
-};
-
-export const getProspects = async (params = {}) => {
-  const response = await apiClient.get('/prospects', { params });
-  return response.data;
-};
-
-export const createProspect = async (data) => {
-  const response = await apiClient.post('/prospects', data);
-  return response.data;
-};
-
-export const getProspect = async (id) => {
-  const response = await apiClient.get(`/prospects/${id}`);
-  return response.data;
-};
-
-export const updateProspect = async (id, data) => {
-  const response = await apiClient.put(`/prospects/${id}`, data);
-  return response.data;
-};
-
-export const deleteProspect = async (id) => {
-  const response = await apiClient.delete(`/prospects/${id}`);
-  return response.data;
-};
-
-export const moveProspectStage = async (id, data) => {
-  const response = await apiClient.patch(`/prospects/${id}/stage`, data);
-  return response.data;
-};
-
-export const addProspectFollowup = async (id, data) => {
-  const response = await apiClient.post(`/prospects/${id}/followups`, data);
-  return response.data;
-};
-
-export const addProspectClosing = async (id, data) => {
-  const response = await apiClient.post(`/prospects/${id}/closings`, data);
-  return response.data;
-};
-
-export const addProspectNote = async (id, note) => {
-  const response = await apiClient.post(`/prospects/${id}/notes`, { note });
-  return response.data;
-};
-
-export const getProspectActivities = async (id) => {
-  const response = await apiClient.get(`/prospects/${id}/activities`);
-  return response.data;
-};
-// ── Goals ─────────────────────────────────────────────────────────────────────
-export const getGoalEngine = async () => {
-  try {
-    const response = await apiClient.get('/goal-engine');
-    return response.data;
-  } catch (error) {
-    const detail = error.response?.data;
-    console.error('Goal engine 500 detail:', JSON.stringify(detail));
-    throw error;
-  }
-};
-
-export const getGoals = async () => {
-  const response = await apiClient.get('/goals');
-  return response.data;
-};
-
-export const createGoal = async (data) => {
-  const response = await apiClient.post('/goals', data);
-  return response.data;
-};
-
-export const updateGoal = async (id, data) => {
-  const response = await apiClient.put(`/goals/${id}`, data);
-  return response.data;
-};
-
-export const deleteGoal = async (id) => {
-  const response = await apiClient.delete(`/goals/${id}`);
-  return response.data;
-};
-
-export const logGoalActivity = async (goalId, data) => {
-  const response = await apiClient.post(`/goals/${goalId}/activities`, data);
-  return response.data;
-};
-
-export const addGoalMilestone = async (goalId, targetValue) => {
-  const response = await apiClient.post(`/goals/${goalId}/milestones`, { target_value: targetValue });
-  return response.data;
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Payments ──────────────────────────────────────────────────────────────────
-
-/**
- * Initiate a Chapa payment.
- * Backend locks price, creates tx_ref, calls Chapa and returns checkout URL.
- */
-export const initiatePayment = async (data) => {
-  try {
-    const response = await apiClient.post('/payments/initiate', data);
-    return response.data;
-  } catch (error) {
-    const errData = error.response?.data;
-    let errorMsg = errData?.message ?? 'Payment initiation failed';
-
-    // If it's a Laravel validation error, it might have an 'errors' object
-    if (errData?.errors && typeof errData.errors === 'object') {
-      const firstError = Object.values(errData.errors)[0];
-      if (Array.isArray(firstError)) errorMsg = firstError[0];
-      else if (typeof firstError === 'string') errorMsg = firstError;
-    }
-
-    // If Chapa or another service returns an object in 'message'
-    if (typeof errorMsg === 'object') {
-      errorMsg = JSON.stringify(errorMsg);
-    }
-
-    throw new Error(errorMsg);
-  }
-};
-
-/**
- * Poll backend to check if a payment has been confirmed via Chapa webhook.
- */
-export const verifyPayment = async (txRef) => {
-  try {
-    const response = await apiClient.get(`/payments/verify/${txRef}`);
+    const response = await apiClient.post('/payments/initiate', paymentData);
     return response.data;
   } catch (error) {
     throw error.response ? error.response.data : new Error('Network Error');
@@ -380,7 +252,6 @@ export const getSalesHistory = async (distributorId) => {
     throw error.response ? error.response.data : new Error('Network Error');
   }
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ── MLM Wallet & Stats ────────────────────────────────────────────────────────
 export const getWallet = async () => {
@@ -388,7 +259,7 @@ export const getWallet = async () => {
   return response.data;
 };
 
-// ── Customer → Distributor Upgrade ───────────────────────────────────────────
+// ── Customer → Distributor Upgrade ────────────────────────────────────────────
 /**
  * Called after a successful customer payment when the customer chooses to
  * become a distributor. Sets their real password and activates their account.
@@ -402,7 +273,6 @@ export const upgradeToDistributor = async ({ email, password, password_confirmat
       password_confirmation,
       tx_ref,
     });
-    // Auto-store token so they are logged in right away
     if (response.data.access_token) {
       await AsyncStorage.setItem('authToken', response.data.access_token);
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
@@ -444,6 +314,7 @@ export const getSubtreeData = async (nodeId) => {
   const response = await apiClient.get(`/tree/${nodeId}`);
   return response.data;
 };
+
 // ── Distributor MLM Join ──────────────────────────────────────────────────────
 /**
  * Join the MLM network by purchasing a product package.
@@ -458,6 +329,5 @@ export const getDistributorStatus = async () => {
   const response = await apiClient.get('/distributor/status');
   return response.data;
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default apiClient;

@@ -18,6 +18,9 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         $this->call(PlaybookSeeder::class);
+
+        User::firstOrCreate(
+            ['email' => 'mikiadmin@gmail.com'], // Added email for firstOrCreate
             [
                 'name'     => 'Mikiyas',
                 'phone'    => '0947482468',

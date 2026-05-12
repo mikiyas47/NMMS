@@ -13,21 +13,21 @@ Route::get('/all-users', [AuthController::class, 'index']);
 Route::post('/users', [AuthController::class, 'storeUser']);
 Route::put('/users/{id}', [AuthController::class, 'update']);
 Route::patch('/users/{id}/status', [AuthController::class, 'toggleStatus']);
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/profile/password', [AuthController::class, 'updatePassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
 Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index']);
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
     Route::put('/products/{product}', [\App\Http\Controllers\ProductController::class, 'update']);
     Route::delete('/products/{product}', [\App\Http\Controllers\ProductController::class, 'destroy']);
 });
 
 // ── Contacts (raw contact storage) ───────────────────────────────────────────
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/contacts', [ContactController::class, 'index']);
     Route::post('/contacts', [ContactController::class, 'store']);
     Route::get('/contacts/followups', [ContactController::class, 'followups']);
@@ -44,10 +44,10 @@ Route::middleware('auth:sanctum')->group(function () {
 // ── Prospects (pipeline CRM) ──────────────────────────────────────────────────
 use App\Http\Controllers\Api\ProspectController;
 // Use distinct top-level paths to avoid any {id} wildcard collision
-Route::middleware('auth:sanctum')->get('/prospect-dashboard', [ProspectController::class, 'dashboard']);
-Route::middleware('auth:sanctum')->get('/prospect-pipeline',  [ProspectController::class, 'pipeline']);
+Route::middleware('auth:sanctum,api')->get('/prospect-dashboard', [ProspectController::class, 'dashboard']);
+Route::middleware('auth:sanctum,api')->get('/prospect-pipeline',  [ProspectController::class, 'pipeline']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/prospects',           [ProspectController::class, 'index']);
     Route::post('/prospects',          [ProspectController::class, 'store']);
     Route::get('/prospects/{id}',      [ProspectController::class, 'show']);
@@ -232,9 +232,9 @@ Route::get('/test-engine/{email}', function ($email) {
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
 // Engine route uses a distinct top-level path to avoid {id} wildcard collision
-Route::middleware('auth:sanctum')->get('/goal-engine', [GoalController::class, 'engine']);
+Route::middleware('auth:sanctum,api')->get('/goal-engine', [GoalController::class, 'engine']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/goals', [GoalController::class, 'index']);
     Route::post('/goals', [GoalController::class, 'store']);
     Route::get('/goals/{id}', [GoalController::class, 'show']);
@@ -268,7 +268,7 @@ Route::post('/invite/{token}/track', [PerformanceController::class, 'trackInvita
 Route::post('/p/{token}/lead',       [PerformanceController::class, 'capturePublicLead']);
 Route::post('/invite/{token}/lead',  [PerformanceController::class, 'capturePublicLead']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     // Presentations
     Route::get('/presentations',           [PerformanceController::class, 'listPresentations']);
     Route::post('/presentations',          [PerformanceController::class, 'storePresentation']);
@@ -321,7 +321,7 @@ Route::get('/payments', [PaymentController::class, 'index']);
 
 // ── Tree ──────────────────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\TreeController;
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/tree', [TreeController::class, 'myTree']);
     Route::get('/tree/{nodeId}', [TreeController::class, 'getSubtree']);
 });
@@ -329,14 +329,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ── Wallet & MLM Stats ────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\WalletController;
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::get('/wallet', [WalletController::class, 'show']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Distributor Join (MLM Network Enrollment) ─────────────────────────────────
 use App\Http\Controllers\Api\DistributorJoinController;
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/distributor/join', [DistributorJoinController::class, 'join']);
     Route::get('/distributor/status', [DistributorJoinController::class, 'status']);
 });
