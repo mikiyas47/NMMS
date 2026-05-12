@@ -169,10 +169,8 @@ export const createClosing = async (contactId, data) => {
 // ── Performance Operating System ─────────────────────────────────────────────
 
 // Presentations
-// Fetch owner-uploaded global presentations for the distributor library (used in Send Presentation flow)
-export const getPresentations = async () => (await apiClient.get('/presentations/library')).data;
-// Fetch the distributor's own presentations
-export const getDistributorPresentations = async () => (await apiClient.get('/presentations')).data;
+// Fetch both owner-uploaded global presentations and distributor's own presentations
+export const getPresentations = async () => (await apiClient.get('/presentations')).data;
 export const createPresentation = async (data) => (await apiClient.post('/presentations', data)).data;
 export const updatePresentation = async (id, data) => (await apiClient.put(`/presentations/${id}`, data)).data;
 export const deletePresentation = async (id) => (await apiClient.delete(`/presentations/${id}`)).data;
