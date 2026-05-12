@@ -105,7 +105,7 @@ class PerformanceController extends Controller
         $this->markOnboardingMilestone($distId,'first_presentation_assigned');
         // Weekly goal
         $this->incrementWeeklyGoal($distId,'presentations_actual');
-        $link = config('app.url').'/p/'.$token;
+        $link = config('app.url').'/api/p/'.$token;
         return response()->json(['status'=>'success','data'=>$assignment,'tracked_link'=>$link],201);
     }
 
@@ -258,7 +258,7 @@ class PerformanceController extends Controller
         $this->markOnboardingMilestone($distId,'first_invite_sent');
         $this->checkBadge($distId,'first_invite');
         $this->incrementWeeklyGoal($distId,'invitations_actual');
-        $link = config('app.url').'/invite/'.$token;
+        $link = config('app.url').'/api/invite/'.$token;
         return response()->json(['status'=>'success','data'=>$invitation,'tracked_link'=>$link,'script'=>$script],201);
     }
 
@@ -752,7 +752,14 @@ class PerformanceController extends Controller
         $distributor = Distributor::where('distributor_id',$assignment->distributor_id)->first();
         $prospect    = Prospect::find($assignment->prospect_id);
         EngagementEvent::create(['distributor_id'=>$assignment->distributor_id,'prospect_id'=>$assignment->prospect_id,'token'=>$token,'event_type'=>'page_visit','source_type'=>'presentation','source_id'=>$assignment->id,'visitor_ip'=>$r->ip(),'user_agent'=>$r->userAgent()]);
-        return response()->json(['status'=>'success','page_type'=>'presentation','distributor_name'=>$distributor?->name,'prospect_name'=>$prospect?->name,'presentation'=>$assignment->presentation,'assignment_status'=>$assignment->status]);
+        
+        $url = $assignment->presentation->file_url ?? $assignment->presentation->external_url;
+        
+        if ($r->expectsJson() || !$url) {
+            return response()->json(['status'=>'success','page_type'=>'presentation','distributor_name'=>$distributor?->name,'prospect_name'=>$prospect?->name,'presentation'=>$assignment->presentation,'assignment_status'=>$assignment->status]);
+        }
+        
+        return redirect($url);
     }
 
     public function capturePublicLead(Request $r, $token) {
