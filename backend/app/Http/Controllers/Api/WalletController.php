@@ -112,13 +112,16 @@ class WalletController extends Controller
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private function countSubtree(int $nodeId): int
+    private function countSubtree(int $nodeId, array &$visited = []): int
     {
+        if (in_array($nodeId, $visited)) return 0;
+        $visited[] = $nodeId;
+
         $node = Node::with('children')->find($nodeId);
         if (!$node) return 0;
         $count = 1;
         foreach ($node->children as $child) {
-            $count += $this->countSubtree($child->id);
+            $count += $this->countSubtree($child->id, $visited);
         }
         return $count;
     }
@@ -129,16 +132,26 @@ class WalletController extends Controller
         $highest     = 0;
         $highestRank = 'CT';
         $queue = [$nodeId];
+        $visited = [];
+        
         while (!empty($queue)) {
             $currId   = array_shift($queue);
+            if (in_array($currId, $visited)) continue;
+            $visited[] = $currId;
+            
             $currNode = Node::with('children')->find($currId);
             if (!$currNode) continue;
+            
             $stat = Stat::where('distributor_id', $currNode->distributor_id)->first();
             if ($stat && $stat->rank && isset($ranks[$stat->rank]) && $ranks[$stat->rank] > $highest) {
                 $highest     = $ranks[$stat->rank];
                 $highestRank = $stat->rank;
             }
-            foreach ($currNode->children as $child) $queue[] = $child->id;
+            foreach ($currNode->children as $child) {
+                if (!in_array($child->id, $visited)) {
+                    $queue[] = $child->id;
+                }
+            }
         }
         return $highestRank;
     }

@@ -22,12 +22,17 @@ class MlmEngineService
     public function findPlacementNode($startNodeId)
     {
         $queue = [$startNodeId];
+        $visited = [];
         while (!empty($queue)) {
             $currentId = array_shift($queue);
+            if (in_array($currentId, $visited)) continue;
+            $visited[] = $currentId;
             $node = Node::with('children')->find($currentId);
             if (!$node) continue;
             if ($node->children->count() < 4) return $node;
-            foreach ($node->children as $child) $queue[] = $child->id;
+            foreach ($node->children as $child) {
+                if (!in_array($child->id, $visited)) $queue[] = $child->id;
+            }
         }
         return null;
     }
@@ -494,9 +499,13 @@ class MlmEngineService
         $total   = 0;
         $counted = []; // prevent double-counting distributors with multiple nodes
         $queue   = [$nodeId];
+        $visited = [];
 
         while (!empty($queue)) {
             $currId = array_shift($queue);
+            if (in_array($currId, $visited)) continue;
+            $visited[] = $currId;
+            
             $node   = Node::with('children')->find($currId);
             if (!$node) continue;
 
@@ -508,7 +517,9 @@ class MlmEngineService
                 $counted[$distId] = true;
             }
 
-            foreach ($node->children as $child) $queue[] = $child->id;
+            foreach ($node->children as $child) {
+                if (!in_array($child->id, $visited)) $queue[] = $child->id;
+            }
         }
 
         return $total;
@@ -519,8 +530,12 @@ class MlmEngineService
         $highest     = 0;
         $highestRank = 'CT';
         $queue = [$nodeId];
+        $visited = [];
         while (!empty($queue)) {
             $currId = array_shift($queue);
+            if (in_array($currId, $visited)) continue;
+            $visited[] = $currId;
+            
             $node   = Node::with('children')->find($currId);
             if (!$node) continue;
             $stat = Stat::where('distributor_id', $node->distributor_id)->first();
@@ -528,7 +543,9 @@ class MlmEngineService
                 $highest     = self::RANK_SCORE[$stat->rank];
                 $highestRank = $stat->rank;
             }
-            foreach ($node->children as $child) $queue[] = $child->id;
+            foreach ($node->children as $child) {
+                if (!in_array($child->id, $visited)) $queue[] = $child->id;
+            }
         }
         return $highestRank;
     }
