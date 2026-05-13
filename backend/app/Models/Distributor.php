@@ -34,6 +34,7 @@ class Distributor extends Authenticatable
         'income_weekly',
         'income_yearly',
         'is_paid',
+        'status',
         'join_date',
     ];
 
