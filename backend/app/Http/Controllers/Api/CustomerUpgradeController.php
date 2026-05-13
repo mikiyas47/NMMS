@@ -79,6 +79,7 @@ class CustomerUpgradeController extends Controller
                     'password'  => Hash::make($data['password']),
                     'upline_id' => $payment->distributor_id,
                     'is_paid'   => true,
+                    'status'    => 'active',
                     'join_date' => now(),
                 ]);
 
@@ -127,6 +128,7 @@ class CustomerUpgradeController extends Controller
                 // Distributor record already exists — update password and ensure tree placement
                 $distributor->password = Hash::make($data['password']);
                 $distributor->is_paid  = true;
+                $distributor->status   = 'active';
                 if ($payment->distributor_id && !$distributor->upline_id) {
                     $distributor->upline_id = $payment->distributor_id;
                 }
@@ -180,7 +182,42 @@ class CustomerUpgradeController extends Controller
                 }
             }
 
+            // ── Step 3: Mark payment as success and pay commission ───────────────
+            // Whether the distributor record was just created or already existed,
+            // mark the payment as success and credit the sponsor's commission now.
+            // The webhook may never arrive on free-tier hosting, so we pay here too.
+            if ($payment->status !== 'success' || !$payment->commission_paid) {
+                $payment->status           = 'success';
+                $payment->webhook_verified = true;
+                $payment->commission_paid  = true;
+                $payment->save();
+
+                // Credit commission to the referring distributor's wallet
+                if ($payment->commission_amount > 0 && $payment->distributor_id) {
+                    $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
+                    $sponsorWallet->balance      += $payment->commission_amount;
+                    $sponsorWallet->total_earned += $payment->commission_amount;
+                    $sponsorWallet->save();
+
+                    Distributor::where('distributor_id', $payment->distributor_id)
+                        ->increment('income_monthly', $payment->commission_amount);
+                    Distributor::where('distributor_id', $payment->distributor_id)
+                        ->increment('income_yearly', $payment->commission_amount);
+                }
+            }
+
+            // ── Step 4: Issue token ───────────────────────────────────────────────
+            $token = $distributor->createToken('auth_token')->plainTextToken;
+
             DB::commit();
+
+            return response()->json([
+                'status'       => 'success',
+                'message'      => 'Welcome! Your distributor account is now active.',
+                'access_token' => $token,
+                'token_type'   => 'Bearer',
+                'user'         => $distributor,
+            ]);
         } catch (\Throwable $e) {
             DB::rollBack();
             \Illuminate\Support\Facades\Log::error('Customer upgrade error: ' . $e->getMessage());
@@ -189,41 +226,6 @@ class CustomerUpgradeController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
-
-        // ── Step 3: Mark payment as success and pay commission ───────────────
-        // Whether the distributor record was just created or already existed,
-        // mark the payment as success and credit the sponsor's commission now.
-        // The webhook may never arrive on free-tier hosting, so we pay here too.
-        if ($payment->status !== 'success' || !$payment->commission_paid) {
-            $payment->status           = 'success';
-            $payment->webhook_verified = true;
-            $payment->commission_paid  = true;
-            $payment->save();
-
-            // Credit commission to the referring distributor's wallet
-            if ($payment->commission_amount > 0) {
-                $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
-                $sponsorWallet->balance      += $payment->commission_amount;
-                $sponsorWallet->total_earned += $payment->commission_amount;
-                $sponsorWallet->save();
-
-                Distributor::where('distributor_id', $payment->distributor_id)
-                    ->increment('income_monthly', $payment->commission_amount);
-                Distributor::where('distributor_id', $payment->distributor_id)
-                    ->increment('income_yearly', $payment->commission_amount);
-            }
-        }
-
-        // ── Step 4: Issue token ───────────────────────────────────────────────
-        $token = $distributor->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'status'       => 'success',
-            'message'      => 'Welcome! Your distributor account is now active.',
-            'access_token' => $token,
-            'token_type'   => 'Bearer',
-            'user'         => $distributor,
-        ]);
     }
 
     /**

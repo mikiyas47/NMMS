@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   Animated, ActivityIndicator, Dimensions, Modal
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Network, ZoomIn, ZoomOut, Maximize, User, Zap } from 'lucide-react-native';
 import { getMyTree, getSubtreeData } from '../../api/authService';
@@ -53,10 +54,14 @@ const TreeNode = ({ node, isRoot = false, C, onNodeClick }) => {
           <User color="#fff" size={24} />
         </LinearGradient>
         <View style={{ backgroundColor: C.surface, marginTop: -10, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: C.border }}>
-          <Text style={{ color: C.text, fontSize: 10, fontWeight: '800' }}>{node.distributor_name}</Text>
+          <Text style={{ color: node.status === 'inactive' ? C.muted : C.text, fontSize: 10, fontWeight: '800' }}>
+            {node.distributor_name} {node.status === 'inactive' && '(Customer)'}
+          </Text>
         </View>
         <Text style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>Own: {node.product_points || 0} PTS</Text>
-        <Text style={{ color: rankColors[0], fontSize: 9, fontWeight: '700' }}>{node.rank}</Text>
+        <Text style={{ color: node.status === 'inactive' ? C.muted : rankColors[0], fontSize: 9, fontWeight: '700' }}>
+          {node.status === 'inactive' ? 'Inactive' : node.rank}
+        </Text>
       </TouchableOpacity>
 
       {/* Children Container (Show 4 legs if children exist OR if it's the end of the loaded tree with no more to load) */}
@@ -121,13 +126,15 @@ const NodeInfoModal = ({ visible, node, onClose, C }) => {
           
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
             <LinearGradient
-              colors={RANK_COLORS[node.rank] || RANK_COLORS.None}
+              colors={node.status === 'inactive' ? RANK_COLORS.None : (RANK_COLORS[node.rank] || RANK_COLORS.None)}
               style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}
             >
               <User color="#fff" size={28} />
             </LinearGradient>
             <Text style={{ color: C.text, fontSize: 18, fontWeight: '800' }}>{node.distributor_name}</Text>
-            <Text style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>{node.rank} Rank</Text>
+            <Text style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
+              {node.status === 'inactive' ? 'Inactive Customer' : `${node.rank} Rank`}
+            </Text>
           </View>
 
           <View style={{ gap: 12, marginBottom: 24 }}>
@@ -165,9 +172,11 @@ const TreeScreen = ({ C, navigate }) => {
   const [scale, setScale] = useState(1);
   const [selectedNode, setSelectedNode] = useState(null);
 
-  useEffect(() => {
-    fetchTree();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchTree();
+    }, [])
+  );
 
   const fetchTree = async () => {
     try {

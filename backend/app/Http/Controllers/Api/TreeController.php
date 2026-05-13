@@ -83,6 +83,7 @@ class TreeController extends Controller
             'distributor_id'   => $node->distributor_id,
             'leg'              => $node->leg,
             'rank'             => $stat->rank ?? 'None',
+            'status'           => $node->distributor->status ?? 'inactive',
             // own_points = this distributor's personal package points only
             'product_points'   => $productPoints,
             'own_points'       => $stat->own_points ?? $productPoints,
