@@ -896,3 +896,44 @@ Route::get('/test-join/{email}', function ($email) {
         ], 500);
     }
 });
+
+// Check for circular references in nodes table
+Route::get('/check-tree-integrity', function () {
+    $nodes = \App\Models\Node::all();
+    $issues = [];
+    foreach ($nodes as $node) {
+        if ($node->parent_id === $node->id) {
+            $issues[] = "Self-reference: node {$node->id}";
+        }
+        if ($node->parent_id) {
+            $parent = \App\Models\Node::find($node->parent_id);
+            if (!$parent) {
+                $issues[] = "Orphan: node {$node->id} references missing parent {$node->parent_id}";
+            }
+        }
+    }
+    // Check for cycles using DFS
+    $nodeMap = $nodes->keyBy('id');
+    $cycles = [];
+    foreach ($nodes as $startNode) {
+        $visited = [];
+        $current = $startNode;
+        $path = [];
+        while ($current && $current->parent_id) {
+            if (in_array($current->id, $visited)) {
+                $cycles[] = "Cycle detected involving node {$current->id}, path: " . implode('->', $path);
+                break;
+            }
+            $visited[] = $current->id;
+            $path[] = $current->id;
+            $current = $nodeMap->get($current->parent_id);
+            if (count($path) > 100) { $cycles[] = "Deep chain from node {$startNode->id}"; break; }
+        }
+    }
+    return response()->json([
+        'total_nodes' => $nodes->count(),
+        'issues'      => $issues,
+        'cycles'      => array_unique($cycles),
+        'root_nodes'  => $nodes->whereNull('parent_id')->pluck('id'),
+    ]);
+});
