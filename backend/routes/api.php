@@ -62,6 +62,19 @@ Route::middleware('auth:sanctum,api')->group(function () {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Temporary: backfill wallet balances from paid commissions ────────────────
+Route::get('/cleanup-duplicates', function () {
+    \App\Models\Account::whereIn('id', [84, 85])->delete();
+    \App\Models\Node::whereIn('id', [84, 85])->delete();
+    
+    $stat = \App\Models\Stat::where('distributor_id', 41)->first();
+    if ($stat) {
+        $stat->own_points = 800; // Reset to 1 account worth of points
+        $stat->save();
+    }
+    
+    return response()->json(['message' => 'Cleaned up duplicate accounts 84 and 85']);
+});
+
 Route::get('/backfill-wallets', function () {
     $payments = \App\Models\Payment::where('status', 'success')
         ->where('commission_paid', true)

@@ -58,7 +58,7 @@ class MlmEngineService
     {
         DB::beginTransaction();
         try {
-            $distributor = Distributor::findOrFail($distributorId);
+            $distributor = Distributor::where('distributor_id', $distributorId)->lockForUpdate()->firstOrFail();
             $product     = Product::findOrFail($productId);
 
             Wallet::firstOrCreate(['distributor_id' => $distributorId]);

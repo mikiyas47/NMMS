@@ -354,23 +354,52 @@ export const getSubtreeData = async (nodeId) => {
 /**
  * Join the MLM network by purchasing a product package.
  * quantity: 1=single, 2=double, 3=triple, 4=quadruple (more legs)
+ *
+ * Uses a longer timeout (120s) because the tree placement + commission
+ * calculation is heavy and Render free-tier cold starts can be slow.
+ *
+ * IMPORTANT: Do NOT retry on timeout — the server may have processed the
+ * request successfully even though the client timed out. Retrying would
+ * create duplicate accounts/nodes.
  */
 export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
+  const payload = { product_id, sponsor_id, quantity };
+  console.log('[joinNetwork] Requesting with:', payload);
+
   try {
-    console.log('[joinNetwork] Requesting with:', { product_id, sponsor_id, quantity });
-    const response = await apiClient.post('/distributor/join', { product_id, sponsor_id, quantity });
+    const response = await apiClient.post('/distributor/join', payload, {
+      timeout: 120000, // 120s — generous for cold starts + heavy tree processing
+    });
     console.log('[joinNetwork] Success:', response.data?.status);
     return response.data;
   } catch (error) {
-    console.log('[joinNetwork] Error:', error.message, error.response?.status, error.response?.data);
-    // Surface the actual server error message, not the generic axios 'Network Error'
+    console.log('[joinNetwork] Error:', error.message, error.code, error.response?.status, error.response?.data);
+
+    // If it was a timeout or network error (no server response), check if the
+    // join actually succeeded on the server before reporting failure.
+    if (!error.response) {
+      console.log('[joinNetwork] No server response — checking if join succeeded anyway...');
+      try {
+        const statusRes = await apiClient.get('/distributor/status', { timeout: 30000 });
+        if (statusRes.data?.has_joined && statusRes.data?.account_count > 0) {
+          console.log('[joinNetwork] Server confirmed join succeeded despite timeout!', statusRes.data);
+          return {
+            status: 'success',
+            message: `Successfully joined with ${statusRes.data.account_count} account(s).`,
+            accounts: statusRes.data.accounts || [],
+          };
+        }
+      } catch (checkErr) {
+        console.log('[joinNetwork] Status check also failed:', checkErr.message);
+      }
+      throw new Error('The server is taking too long to respond. Please check the Tree screen — your account may have been created. If not, try again in a minute.');
+    }
+
+    // Server responded with an error — surface the real message
     if (error.response?.data?.message) {
       throw new Error(error.response.data.message);
     }
-    if (error.code === 'ECONNABORTED') {
-      throw new Error('Request timed out. The server may be starting up — please try again in 30 seconds.');
-    }
-    throw new Error(error.message || 'Could not connect to the server. Check your internet connection.');
+    throw new Error(error.message || 'Could not connect to the server.');
   }
 };
 
