@@ -140,7 +140,10 @@ class MlmEngineService
                 $nodes[] = $newNode;
             }
 
-            // ── Commission on own purchase ────────────────────────────────────
+            // Mark distributor as paid now that they have at least one account
+            DB::table('distributors')
+                ->where('distributor_id', $distributorId)
+                ->update(['is_paid' => true, 'updated_at' => now()]);
             $ownAccounts = Account::where('distributor_id', $distributorId)->with('product')->get();
             $selfRate    = 10;
             foreach ($ownAccounts as $acc) {

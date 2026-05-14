@@ -89,16 +89,22 @@ class DistributorJoinController extends Controller
                     'created_at' => $a->created_at,
                 ]);
 
+            // Reload the distributor to get fresh is_paid value
+            $user->refresh();
+
             Log::info('DistributorJoin: Join complete', [
                 'distributor_id'   => $distributorId,
                 'quantity'         => $quantity,
                 'total_accounts'   => $accounts->count(),
+                'is_paid'          => $user->is_paid,
             ]);
 
             return response()->json([
                 'status'   => 'success',
                 'message'  => "Successfully joined with {$quantity} account" . ($quantity > 1 ? 's' : '') . '.',
                 'accounts' => $accounts,
+                'is_paid'  => (bool) $user->is_paid,
+                'account_count' => $accounts->count(),
             ]);
         } catch (\Exception $e) {
             Log::error('DistributorJoin: Failed', [

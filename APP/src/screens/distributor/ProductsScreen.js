@@ -533,7 +533,6 @@ const ProductsScreen = ({ C, navigation }) => {
     setJoining(true);
     setJoinStatus('connecting');
 
-    // After 10s with no response, the server is cold-starting — tell the user
     const warmupTimer = setTimeout(() => {
       setJoinStatus('processing');
     }, 10000);
@@ -545,10 +544,16 @@ const ProductsScreen = ({ C, navigation }) => {
         quantity: joinQty,
       });
       clearTimeout(warmupTimer);
+
+      // Refresh user in AsyncStorage so is_paid and status are up to date
+      try {
+        const { refreshUserFromServer } = require('../../api/authService');
+        await refreshUserFromServer();
+      } catch (_) {}
+
       setJoinModal(false);
       setHasJoined(true);
-      // Use account_count from server response if available, otherwise add locally
-      const newCount = result?.accounts?.length ?? joinQty;
+      const newCount = result?.account_count ?? result?.accounts?.length ?? joinQty;
       setAccountCount(newCount);
       Alert.alert(
         '🎉 Welcome to the Network!',

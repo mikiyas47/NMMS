@@ -851,3 +851,19 @@ Route::delete('/test-cleanup/{email}', function ($email) {
     $dist->delete();
     return response()->json(['message' => "Deleted distributor $email"]);
 });
+
+// Fix is_paid for all distributors who have accounts but is_paid=false
+Route::get('/fix-is-paid', function () {
+    $fixed = 0;
+    $dists = \App\Models\Distributor::where('is_paid', false)->get();
+    foreach ($dists as $d) {
+        $hasAccount = \App\Models\Account::where('distributor_id', $d->distributor_id)->exists();
+        if ($hasAccount) {
+            \Illuminate\Support\Facades\DB::table('distributors')
+                ->where('distributor_id', $d->distributor_id)
+                ->update(['is_paid' => true, 'updated_at' => now()]);
+            $fixed++;
+        }
+    }
+    return response()->json(['fixed' => $fixed, 'message' => "Set is_paid=true for $fixed distributors who have accounts"]);
+});
