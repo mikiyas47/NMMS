@@ -126,6 +126,13 @@ class CustomerUpgradeController extends Controller
 
             } else {
                 // Distributor record already exists — update password and ensure tree placement
+                \Illuminate\Support\Facades\Log::info('Upgrading existing distributor', [
+                    'distributor_id' => $distributor->distributor_id,
+                    'email'          => $email,
+                    'old_status'     => $distributor->status,
+                    'old_is_paid'    => $distributor->is_paid,
+                ]);
+
                 $distributor->password = Hash::make($data['password']);
                 $distributor->is_paid  = true;
                 $distributor->status   = 'active';
@@ -133,6 +140,12 @@ class CustomerUpgradeController extends Controller
                     $distributor->upline_id = $payment->distributor_id;
                 }
                 $distributor->save();
+
+                \Illuminate\Support\Facades\Log::info('Distributor upgraded successfully', [
+                    'distributor_id' => $distributor->distributor_id,
+                    'new_status'     => $distributor->status,
+                    'new_is_paid'    => $distributor->is_paid,
+                ]);
 
                 // Ensure wallet and stat exist
                 Wallet::firstOrCreate(['distributor_id' => $distributor->distributor_id]);
@@ -207,6 +220,16 @@ class CustomerUpgradeController extends Controller
             }
 
             // ── Step 4: Issue token ───────────────────────────────────────────────
+            // Refresh the distributor model to ensure we have the latest data
+            $distributor->refresh();
+
+            \Illuminate\Support\Facades\Log::info('Distributor activation complete', [
+                'distributor_id' => $distributor->distributor_id,
+                'email'          => $distributor->email,
+                'status'         => $distributor->status,
+                'is_paid'        => $distributor->is_paid,
+            ]);
+
             $token = $distributor->createToken('auth_token')->plainTextToken;
 
             DB::commit();
@@ -220,10 +243,15 @@ class CustomerUpgradeController extends Controller
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
-            \Illuminate\Support\Facades\Log::error('Customer upgrade error: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('Customer upgrade error', [
+                'email'     => $email,
+                'tx_ref'    => $data['tx_ref'],
+                'message'   => $e->getMessage(),
+                'trace'     => $e->getTraceAsString(),
+            ]);
             return response()->json([
-                'message' => 'Account creation failed. Please try again.',
-                'error'   => $e->getMessage(),
+                'message' => 'Account activation failed. Please try again or contact support.',
+                'error'   => config('app.debug') ? $e->getMessage() : 'An error occurred during activation.',
             ], 500);
         }
     }

@@ -24,17 +24,8 @@ return new class extends Migration {
             $table->unsignedBigInteger('upline_id')->nullable();
             $table->foreign('upline_id')->references('distributor_id')->on('distributors')->onDelete('set null');
 
-            // Rank progression levels
-            $table->enum('rank', [
-                'CT',   // Customer Trainee
-                'MT',   // Market Trainee
-                'TT',   // Team Trainee
-                'NTB',  // National Team Builder
-                'IBB',  // International Business Builder
-                'GEB',  // Global Empire Builder
-                'CA',   // Crown Achiever
-                'AL',   // Alpha Legend
-            ])->default('CT');
+            // Rank progression levels (using string instead of enum for SQLite compatibility)
+            $table->string('rank', 20)->default('CT');
 
             // Income breakdown (stored in ETB or local currency)
             $table->decimal('income_monthly', 12, 2)->default(0.00);  // Monthly income

@@ -213,6 +213,8 @@ class MlmEngineService
                     'phone'     => $customerPhone,
                     'password'  => bcrypt($tempPassword),
                     'upline_id' => $distributorId,   // link to sponsor from day one
+                    'status'    => 'inactive',       // inactive until they set password
+                    'is_paid'   => false,            // not paid until they upgrade
                     'join_date' => now(),
                 ]
             );
