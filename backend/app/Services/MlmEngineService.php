@@ -20,30 +20,36 @@ class MlmEngineService
 
     // ─── BFS placement ───────────────────────────────────────────────────────
     // Finds the first node in the subtree (BFS order) that has fewer than 4 children.
-    // Uses a single query per level to avoid N+1 queries on large trees.
+    // Loads ALL nodes in one query and does BFS in memory — no N+1 queries.
     public function findPlacementNode($startNodeId)
     {
-        $visited = [];
+        // Load all nodes in the entire tree in one query
+        $allNodes = Node::all()->keyBy('id');
+
+        // Build a children map: parent_id => [child_ids]
+        $childrenMap = [];
+        foreach ($allNodes as $node) {
+            if ($node->parent_id !== null) {
+                $childrenMap[$node->parent_id][] = $node->id;
+            }
+        }
+
+        // BFS from startNodeId
         $queue   = [$startNodeId];
-        $maxIterations = 500; // safety limit — prevents infinite loops on corrupt trees
-        $iterations = 0;
+        $visited = [];
 
-        while (!empty($queue) && $iterations < $maxIterations) {
-            $iterations++;
+        while (!empty($queue)) {
             $currentId = array_shift($queue);
-            if (in_array($currentId, $visited)) continue;
-            $visited[] = $currentId;
+            if (isset($visited[$currentId])) continue;
+            $visited[$currentId] = true;
 
-            // Count children with a single query instead of loading the full model
-            $childCount = Node::where('parent_id', $currentId)->count();
+            $childCount = count($childrenMap[$currentId] ?? []);
             if ($childCount < 4) {
-                return Node::find($currentId);
+                return $allNodes->get($currentId);
             }
 
-            // Add children to queue
-            $childIds = Node::where('parent_id', $currentId)->pluck('id')->toArray();
-            foreach ($childIds as $childId) {
-                if (!in_array($childId, $visited)) {
+            foreach (($childrenMap[$currentId] ?? []) as $childId) {
+                if (!isset($visited[$childId])) {
                     $queue[] = $childId;
                 }
             }
@@ -501,32 +507,38 @@ class MlmEngineService
     // ─── Subtree volume (BFS, each distributor counted once) ─────────────────
     public function getSubtreeVolume(int $nodeId): int
     {
+        // Load all nodes and stats in bulk — no N+1 queries
+        $allNodes   = Node::all()->keyBy('id');
+        $allStats   = Stat::all()->keyBy('distributor_id');
+        $childrenMap = [];
+        foreach ($allNodes as $node) {
+            if ($node->parent_id !== null) {
+                $childrenMap[$node->parent_id][] = $node->id;
+            }
+        }
+
         $total   = 0;
         $counted = [];
         $queue   = [$nodeId];
         $visited = [];
-        $maxIterations = 1000;
-        $iterations = 0;
 
-        while (!empty($queue) && $iterations < $maxIterations) {
-            $iterations++;
+        while (!empty($queue)) {
             $currId = array_shift($queue);
-            if (in_array($currId, $visited)) continue;
-            $visited[] = $currId;
+            if (isset($visited[$currId])) continue;
+            $visited[$currId] = true;
 
-            $node = Node::find($currId);
+            $node = $allNodes->get($currId);
             if (!$node) continue;
 
             $distId = (int) $node->distributor_id;
             if (!isset($counted[$distId])) {
-                $stat = Stat::where('distributor_id', $distId)->first();
+                $stat = $allStats->get($distId);
                 if ($stat) $total += (int)($stat->own_points ?? 0);
                 $counted[$distId] = true;
             }
 
-            $childIds = Node::where('parent_id', $currId)->pluck('id')->toArray();
-            foreach ($childIds as $childId) {
-                if (!in_array($childId, $visited)) $queue[] = $childId;
+            foreach (($childrenMap[$currId] ?? []) as $childId) {
+                if (!isset($visited[$childId])) $queue[] = $childId;
             }
         }
 
@@ -535,31 +547,36 @@ class MlmEngineService
 
     private function getHighestRankInSubtree(int $nodeId): string
     {
+        $allNodes    = Node::all()->keyBy('id');
+        $allStats    = Stat::all()->keyBy('distributor_id');
+        $childrenMap = [];
+        foreach ($allNodes as $node) {
+            if ($node->parent_id !== null) {
+                $childrenMap[$node->parent_id][] = $node->id;
+            }
+        }
+
         $highest     = 0;
         $highestRank = 'CT';
         $queue       = [$nodeId];
         $visited     = [];
-        $maxIterations = 1000;
-        $iterations = 0;
 
-        while (!empty($queue) && $iterations < $maxIterations) {
-            $iterations++;
+        while (!empty($queue)) {
             $currId = array_shift($queue);
-            if (in_array($currId, $visited)) continue;
-            $visited[] = $currId;
+            if (isset($visited[$currId])) continue;
+            $visited[$currId] = true;
 
-            $node = Node::find($currId);
+            $node = $allNodes->get($currId);
             if (!$node) continue;
-            $stat = Stat::where('distributor_id', $node->distributor_id)->first();
+            $stat = $allStats->get($node->distributor_id);
             if ($stat && $stat->rank && isset(self::RANK_SCORE[$stat->rank])
                 && self::RANK_SCORE[$stat->rank] > $highest) {
                 $highest     = self::RANK_SCORE[$stat->rank];
                 $highestRank = $stat->rank;
             }
 
-            $childIds = Node::where('parent_id', $currId)->pluck('id')->toArray();
-            foreach ($childIds as $childId) {
-                if (!in_array($childId, $visited)) $queue[] = $childId;
+            foreach (($childrenMap[$currId] ?? []) as $childId) {
+                if (!isset($visited[$childId])) $queue[] = $childId;
             }
         }
         return $highestRank;
