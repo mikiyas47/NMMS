@@ -325,9 +325,23 @@ export const upgradeToDistributor = async ({ email, password, password_confirmat
 };
 
 /**
- * Check whether a customer email already has an active distributor account.
- * Used to skip the upgrade prompt for returning distributors.
+ * Called when the customer taps "No thanks, stay as customer" after a
+ * successful Chapa payment. Ensures the node is created in the tree
+ * with status=inactive even if the Chapa webhook never fired.
  */
+export const stayAsCustomer = async ({ tx_ref, customer_email }) => {
+  try {
+    const response = await apiClient.post('/payments/stay-as-customer', {
+      tx_ref,
+      customer_email,
+    });
+    return response.data;
+  } catch (error) {
+    // Non-fatal — log but don't throw. The webhook may have already handled it.
+    console.log('[stayAsCustomer] Error (non-fatal):', error.message);
+    return { status: 'error', message: error.message };
+  }
+};
 export const checkCustomerStatus = async (email, txRef) => {
   try {
     const response = await apiClient.get('/customer/status', {

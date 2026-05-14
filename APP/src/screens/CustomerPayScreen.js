@@ -22,7 +22,7 @@ import {
 } from 'lucide-react-native';
 import {
   getProducts, initiatePayment, verifyPayment, getUser,
-  upgradeToDistributor, checkCustomerStatus, joinNetwork, getDistributorStatus,
+  upgradeToDistributor, checkCustomerStatus, joinNetwork, getDistributorStatus, stayAsCustomer,
 } from '../api/authService';
 
 const { width, height } = Dimensions.get('window');
@@ -630,7 +630,13 @@ const SuccessScreen = ({
         customerName={customerName}
         customerEmail={customerEmail}
         txRef={txRef}
-        onStay={() => setShowUpgrade(false)}
+        onStay={() => {
+          setShowUpgrade(false);
+          // Ensure the customer node is created in the tree even if webhook didn't fire
+          stayAsCustomer({ tx_ref: txRef, customer_email: customerEmail })
+            .then(() => console.log('[onStay] Customer registered in tree'))
+            .catch(e => console.log('[onStay] stayAsCustomer error:', e.message));
+        }}
         onUpgraded={handleUpgraded}
       />
     </LinearGradient>

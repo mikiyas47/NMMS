@@ -287,7 +287,104 @@ class PaymentController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 4. RETURN URL — GET /api/payments/return?tx_ref=...
+    // 4. STAY AS CUSTOMER — POST /api/payments/stay-as-customer
+    //    Called when the customer taps "No thanks, stay as customer" after
+    //    a successful Chapa payment. Ensures the node is created in the tree
+    //    with status=inactive (customer) even if the webhook never fired.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function stayAsCustomer(Request $request)
+    {
+        $data = $request->validate([
+            'tx_ref'         => 'required|string',
+            'customer_email' => 'required|email',
+        ]);
+
+        $payment = Payment::where('tx_ref', $data['tx_ref'])->first();
+
+        if (!$payment) {
+            return response()->json(['message' => 'Payment not found.'], 404);
+        }
+
+        // Verify email matches
+        if (strtolower(trim($payment->customer_email)) !== strtolower(trim($data['customer_email']))) {
+            return response()->json(['message' => 'Email does not match payment record.'], 422);
+        }
+
+        // Accept pending or success — pending means webhook hasn't fired yet
+        if (!in_array($payment->status, ['success', 'pending'])) {
+            return response()->json(['message' => 'Payment was not completed.'], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment = Payment::where('tx_ref', $data['tx_ref'])->lockForUpdate()->first();
+
+            // Idempotency — if already processed, just return success
+            if ($payment->status === 'success' && $payment->commission_paid) {
+                $dist = \App\Models\Distributor::whereRaw('LOWER(TRIM(email)) = ?', [
+                    strtolower(trim($payment->customer_email))
+                ])->first();
+                DB::commit();
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Already processed.',
+                    'node_created' => \App\Models\Account::where('distributor_id', $dist?->distributor_id)->exists(),
+                ]);
+            }
+
+            $mlm = app(\App\Services\MlmEngineService::class);
+
+            // Create the customer distributor record (inactive) and place in tree
+            $mlm->processCustomerPurchase(
+                $payment->distributor_id,
+                $payment->product_id,
+                $payment->customer_name,
+                $payment->customer_email,
+                $payment->customer_phone,
+                $payment->quantity,
+                $payment->leg
+            );
+
+            // Mark payment as success and credit commission to sponsor
+            DB::table('payments')->where('id', $payment->id)->update([
+                'status'          => 'success',
+                'commission_paid' => true,
+                'updated_at'      => now(),
+            ]);
+
+            if ($payment->commission_amount > 0 && $payment->distributor_id) {
+                $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
+                $sponsorWallet->balance      += $payment->commission_amount;
+                $sponsorWallet->total_earned += $payment->commission_amount;
+                $sponsorWallet->save();
+                \App\Models\Distributor::where('distributor_id', $payment->distributor_id)
+                    ->increment('income_monthly', $payment->commission_amount);
+                \App\Models\Distributor::where('distributor_id', $payment->distributor_id)
+                    ->increment('income_yearly', $payment->commission_amount);
+            }
+
+            $mlm->runRankCheck($payment->distributor_id);
+
+            DB::commit();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Customer registered in the network.',
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('stayAsCustomer error', [
+                'tx_ref'  => $data['tx_ref'],
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+            ]);
+            return response()->json(['message' => 'Failed to register customer: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 5. RETURN URL — GET /api/payments/return?tx_ref=...
     //    Browser redirect after Chapa checkout page.
     //    This is called by the WebView when Chapa redirects back.
     //    We do NOT re-verify with Chapa here — the webhook handles that.

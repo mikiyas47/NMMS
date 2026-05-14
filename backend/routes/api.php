@@ -331,6 +331,7 @@ use App\Http\Controllers\Api\PaymentController;
 // Public payment routes (used by independent CustomerPayScreen and Chapa webhooks)
 Route::post('/payments/initiate', [PaymentController::class, 'initiate']);
 Route::post('/payments/webhook', [PaymentController::class, 'webhook']);
+Route::post('/payments/stay-as-customer', [PaymentController::class, 'stayAsCustomer']);
 Route::get('/payments/verify/{txRef}', [PaymentController::class, 'verify']);
 Route::get('/payments/return', [PaymentController::class, 'returnUrl']);
 
