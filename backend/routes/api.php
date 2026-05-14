@@ -794,12 +794,29 @@ Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
         $sponsorNode = \App\Models\Node::where('distributor_id', $p->distributor_id)->orderBy('id')->first();
         $nodeCreated = null;
         if ($sponsorNode) {
-            $mlm       = new \App\Services\MlmEngineService();
-            $placement = $mlm->findPlacementNode($sponsorNode->id);
-            if ($placement) {
-                $legNum = min($placement->children()->count() + 1, 4);
+            $mlm          = new \App\Services\MlmEngineService();
+            $preferredLeg = $p->leg ?? null;
+            $placementNode = null;
+            $legNum        = null;
+
+            if ($preferredLeg) {
+                $existingLegChild = \App\Models\Node::where('parent_id', $sponsorNode->id)
+                    ->where('leg', $preferredLeg)->first();
+                if ($existingLegChild) {
+                    $placementNode = $mlm->findPlacementNode($existingLegChild->id);
+                    $legNum        = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                } else {
+                    $placementNode = $sponsorNode;
+                    $legNum        = $preferredLeg;
+                }
+            } else {
+                $placementNode = $mlm->findPlacementNode($sponsorNode->id);
+                $legNum        = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+            }
+
+            if ($placementNode) {
                 $newNode = \App\Models\Node::create([
-                    'parent_id'      => $placement->id,
+                    'parent_id'      => $placementNode->id,
                     'distributor_id' => $dist->distributor_id,
                     'leg'            => $legNum,
                 ]);
