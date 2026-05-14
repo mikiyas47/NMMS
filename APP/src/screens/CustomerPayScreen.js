@@ -421,34 +421,73 @@ const UpgradeModal = ({ visible, customerName, customerEmail, txRef, onStay, onU
 // Shown after payment is confirmed. Includes the upgrade prompt for non-self-purchases.
 const SuccessScreen = ({
   txRef, amount, product, customerName, customerEmail,
-  isSelfPurchase, navigation, onNewCheckout,
+  isSelfPurchase, productId, distributorId, navigation, onNewCheckout,
 }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [alreadyDist, setAlreadyDist] = useState(false);
+  const [joiningNetwork, setJoiningNetwork] = useState(false);
+  const [joinDone, setJoinDone] = useState(false);
+  const [joinError, setJoinError] = useState(null);
+  const joinCalledRef = useRef(false);
 
   useEffect(() => {
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
 
-    // Check if this customer is already an active distributor
-    if (!isSelfPurchase && customerEmail) {
-      checkCustomerStatus(customerEmail, txRef).then(res => {
-        if (res.is_distributor) setAlreadyDist(true);
-      });
+    if (isSelfPurchase) {
+      // For self-purchases, call /distributor/join directly to register the node.
+      // Don't rely on the webhook — it may be slow or detect isSelfPurchase incorrectly.
+      if (!joinCalledRef.current) {
+        joinCalledRef.current = true;
+        setJoiningNetwork(true);
+        import('../../api/authService').then(({ joinNetwork, getDistributorStatus }) => {
+          // First get the upline_id from status
+          getDistributorStatus()
+            .then(statusRes => {
+              return joinNetwork({
+                product_id: productId,
+                sponsor_id: statusRes?.upline_id ?? null,
+                quantity: 1,
+              });
+            })
+            .then(() => {
+              setJoinDone(true);
+              setJoiningNetwork(false);
+            })
+            .catch(err => {
+              console.log('[SuccessScreen] joinNetwork error:', err.message);
+              // Check if it already succeeded (duplicate call protection)
+              getDistributorStatus()
+                .then(s => {
+                  if (s?.has_joined) {
+                    setJoinDone(true);
+                  } else {
+                    setJoinError(err.message);
+                  }
+                })
+                .catch(() => setJoinError(err.message))
+                .finally(() => setJoiningNetwork(false));
+            });
+        });
+      }
+    } else {
+      // Check if this customer is already an active distributor
+      if (customerEmail) {
+        checkCustomerStatus(customerEmail, txRef).then(res => {
+          if (res.is_distributor) setAlreadyDist(true);
+        });
+      }
     }
   }, []);
 
   const handleUpgraded = (res) => {
     setShowUpgrade(false);
-    // Log the upgrade result for debugging
     console.log('[handleUpgraded] Upgrade successful:', {
       status: res?.status,
       role: res?.user?.role,
       userStatus: res?.user?.status,
       hasToken: !!res?.access_token,
     });
-    // Navigate to the distributor dashboard — they are now logged in
-    // (upgradeToDistributor already saved token + user to AsyncStorage)
     navigation.replace('UserDashboard');
   };
 
@@ -492,6 +531,32 @@ const SuccessScreen = ({
               <Row label="Status"     value="Verified ✓" accent={SUCCESS} last />
             </View>
 
+            {/* ── Self-purchase: show node registration status ── */}
+            {isSelfPurchase && (
+              <View style={{ width: '100%', borderRadius: 16, padding: 16, marginBottom: 16,
+                backgroundColor: joiningNetwork ? 'rgba(99,102,241,0.1)' : joinDone ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                borderWidth: 1, borderColor: joiningNetwork ? 'rgba(99,102,241,0.3)' : joinDone ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
+                flexDirection: 'row', alignItems: 'center' }}>
+                {joiningNetwork
+                  ? <ActivityIndicator color={ACCENT} size="small" style={{ marginRight: 12 }} />
+                  : joinDone
+                    ? <CheckCircle color={SUCCESS} size={20} style={{ marginRight: 12 }} />
+                    : <Zap color={ERROR} size={20} style={{ marginRight: 12 }} />
+                }
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: TEXT, fontWeight: '800', fontSize: 13 }}>
+                    {joiningNetwork ? 'Registering your new account…' : joinDone ? 'Account added to tree!' : 'Could not register node'}
+                  </Text>
+                  {joiningNetwork && (
+                    <Text style={{ color: MUTED, fontSize: 11, marginTop: 2 }}>This may take up to 30 seconds</Text>
+                  )}
+                  {joinError && (
+                    <Text style={{ color: ERROR, fontSize: 11, marginTop: 2 }}>{joinError}</Text>
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* ── Upgrade prompt (only for real customer purchases) ── */}
             {!isSelfPurchase && !alreadyDist && (
               <TouchableOpacity
@@ -514,6 +579,26 @@ const SuccessScreen = ({
 
             {/* Already a distributor — go to dashboard */}
             {!isSelfPurchase && alreadyDist && (
+              <TouchableOpacity
+                onPress={() => navigation.replace('UserDashboard')}
+                style={{ width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}
+              >
+                <LinearGradient
+                  colors={[ACCENT, '#8B5CF6']}
+                  start={[0, 0]} end={[1, 0]}
+                  style={{ paddingVertical: 16, alignItems: 'center',
+                    flexDirection: 'row', justifyContent: 'center' }}
+                >
+                  <TrendingUp color="#fff" size={20} />
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginLeft: 10 }}>
+                    Go to My Dashboard
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            {/* Go to dashboard after self-purchase */}
+            {isSelfPurchase && (
               <TouchableOpacity
                 onPress={() => navigation.replace('UserDashboard')}
                 style={{ width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}
@@ -734,6 +819,8 @@ const CustomerPayScreen = ({ route, navigation }) => {
         customerName={name}
         customerEmail={email}
         isSelfPurchase={!!self_purchase}
+        productId={selectedProduct?.id}
+        distributorId={distributor_id}
         navigation={navigation}
         onNewCheckout={resetForm}
       />
