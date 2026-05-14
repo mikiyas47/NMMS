@@ -21,7 +21,7 @@ class MlmEngineService
     // ─── BFS placement ───────────────────────────────────────────────────────
     public function findPlacementNode($startNodeId)
     {
-        $queue = [$startNodeId];
+        $queue   = [$startNodeId];
         $visited = [];
         while (!empty($queue)) {
             $currentId = array_shift($queue);
@@ -38,8 +38,6 @@ class MlmEngineService
     }
 
     // ─── Recalculate own_points for a distributor ─────────────────────────────
-    // own_points = sum of product.point for every account this distributor owns.
-    // A quadruple golden = 4 × 800 = 3200 own_points.
     private function refreshOwnPoints(int $distributorId): int
     {
         $pts = Account::where('distributor_id', $distributorId)
@@ -54,45 +52,74 @@ class MlmEngineService
     }
 
     // ─── Self-purchase (joining / doubling / tripling / quadrupling) ──────────
+    //
+    // FIX: Removed lockForUpdate() on the distributor row — it caused deadlocks
+    // when the DistributorJoinController called this in a loop for quantity > 1.
+    // The controller already validates account count before calling us.
+    //
+    // FIX: Re-fetch the first account inside the loop so each iteration sees
+    // the node created by the previous iteration, enabling correct BFS placement
+    // for doubled/tripled/quadrupled accounts.
+    //
+    // FIX: Added null-check on findPlacementNode() result — throws a clear error
+    // instead of a fatal null-pointer exception when the tree is full.
     public function processPurchase($distributorId, $productId, $sponsorId = null, $quantity = 1)
     {
         DB::beginTransaction();
         try {
-            $distributor = Distributor::where('distributor_id', $distributorId)->lockForUpdate()->firstOrFail();
+            $distributor = Distributor::where('distributor_id', $distributorId)->firstOrFail();
             $product     = Product::findOrFail($productId);
 
             Wallet::firstOrCreate(['distributor_id' => $distributorId]);
             Stat::firstOrCreate(['distributor_id'   => $distributorId]);
 
-            $firstAccount = Account::where('distributor_id', $distributorId)->first();
-            $nodes = [];
+            $nodes       = [];
+            $lastAccount = null;
 
             for ($i = 0; $i < $quantity; $i++) {
-                if ($firstAccount && $firstAccount->node_id) {
-                    $placementNode = $this->findPlacementNode($firstAccount->node_id);
-                    $leg = $placementNode->children()->count() + 1;
+                // Re-fetch inside loop so each iteration sees nodes from previous iterations
+                $currentFirst = Account::where('distributor_id', $distributorId)->orderBy('id')->first();
+
+                if ($currentFirst && $currentFirst->node_id) {
+                    // Distributor already has a main node — place new account under it (doubling)
+                    $placementNode = $this->findPlacementNode($currentFirst->node_id);
+                    if (!$placementNode) {
+                        throw new \Exception('No available placement slot in the tree. Your tree is full.');
+                    }
+                    $leg = min($placementNode->children()->count() + 1, 4);
                     $newNode = Node::create([
                         'parent_id'      => $placementNode->id,
                         'distributor_id' => $distributorId,
                         'leg'            => $leg,
                     ]);
                 } else {
+                    // First-time join — place under sponsor or root
                     if ($sponsorId) {
-                        $sponsorNode = Node::where('distributor_id', $sponsorId)->first();
+                        $sponsorNode = Node::where('distributor_id', $sponsorId)->orderBy('id')->first();
                         if (!$sponsorNode) {
                             $companyRoot = Node::whereNull('parent_id')->first();
-                            $sponsorNode = $companyRoot
-                                ? Node::create(['parent_id' => $this->findPlacementNode($companyRoot->id)->id, 'distributor_id' => $sponsorId, 'leg' => $this->findPlacementNode($companyRoot->id)->children()->count() + 1])
-                                : Node::create(['parent_id' => null, 'distributor_id' => $sponsorId, 'leg' => 1]);
+                            if ($companyRoot) {
+                                $rootPlacement = $this->findPlacementNode($companyRoot->id);
+                                if (!$rootPlacement) throw new \Exception('Root tree is full.');
+                                $sponsorNode = Node::create([
+                                    'parent_id'      => $rootPlacement->id,
+                                    'distributor_id' => $sponsorId,
+                                    'leg'            => min($rootPlacement->children()->count() + 1, 4),
+                                ]);
+                            } else {
+                                $sponsorNode = Node::create(['parent_id' => null, 'distributor_id' => $sponsorId, 'leg' => 1]);
+                            }
                         }
                         $placementNode = $this->findPlacementNode($sponsorNode->id);
-                        $leg = $placementNode->children()->count() + 1;
+                        if (!$placementNode) throw new \Exception('No available placement slot under sponsor.');
+                        $leg = min($placementNode->children()->count() + 1, 4);
                         $newNode = Node::create(['parent_id' => $placementNode->id, 'distributor_id' => $distributorId, 'leg' => $leg]);
                     } else {
                         $root = Node::whereNull('parent_id')->first();
                         if ($root) {
                             $placementNode = $this->findPlacementNode($root->id);
-                            $leg = $placementNode->children()->count() + 1;
+                            if (!$placementNode) throw new \Exception('No available placement slot in the root tree.');
+                            $leg = min($placementNode->children()->count() + 1, 4);
                             $newNode = Node::create(['parent_id' => $placementNode->id, 'distributor_id' => $distributorId, 'leg' => $leg]);
                         } else {
                             $newNode = Node::create(['parent_id' => null, 'distributor_id' => $distributorId, 'leg' => 1]);
@@ -100,23 +127,19 @@ class MlmEngineService
                     }
                 }
 
-                $account = Account::create([
+                $lastAccount = Account::create([
                     'distributor_id' => $distributorId,
                     'node_id'        => $newNode->id,
                     'product_id'     => $productId,
                     'sponsor_id'     => $sponsorId,
                 ]);
 
-                if (!$firstAccount) $firstAccount = $account;
                 $nodes[] = $newNode;
             }
 
             // ── Commission on own purchase ────────────────────────────────────
-            // The distributor earns commission on every account they buy themselves
-            // (single, double, triple, quadruple). Rate is taken from their best
-            // existing account's referral_rate (or 10% minimum).
             $ownAccounts = Account::where('distributor_id', $distributorId)->with('product')->get();
-            $selfRate = 10;
+            $selfRate    = 10;
             foreach ($ownAccounts as $acc) {
                 if ($acc->product && $acc->product->referral_rate > $selfRate) {
                     $selfRate = $acc->product->referral_rate;
@@ -146,7 +169,7 @@ class MlmEngineService
                 ]);
             }
 
-            // ── Referral commission to sponsor (if referred by someone) ───────
+            // ── Referral commission to sponsor ────────────────────────────────
             if ($sponsorId) {
                 $sponsorAccounts = Account::where('distributor_id', $sponsorId)->with('product')->get();
                 if ($sponsorAccounts->isNotEmpty()) {
@@ -180,15 +203,12 @@ class MlmEngineService
                 }
             }
 
-            // Update own_points for this distributor
             $this->refreshOwnPoints($distributorId);
-
-            // Run rank check for this distributor and all ancestors
             $this->runRankCheck($distributorId);
             $this->runRankCheckForAncestors($nodes[0] ?? null, $distributorId);
 
             DB::commit();
-            return $account ?? null;
+            return $lastAccount;
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
@@ -202,8 +222,6 @@ class MlmEngineService
         try {
             $product = Product::findOrFail($productId);
 
-            // Generate a random temporary password so the customer can log in
-            // immediately after upgrading. The upgrade endpoint replaces this.
             $tempPassword = \Illuminate\Support\Str::random(12);
 
             $newDist = Distributor::firstOrCreate(
@@ -212,14 +230,13 @@ class MlmEngineService
                     'name'      => $customerName,
                     'phone'     => $customerPhone,
                     'password'  => bcrypt($tempPassword),
-                    'upline_id' => $distributorId,   // link to sponsor from day one
-                    'status'    => 'inactive',       // inactive until they set password
-                    'is_paid'   => false,            // not paid until they upgrade
-                    'join_date' => now(),
+                    'upline_id' => $distributorId,
+                    'status'    => 'inactive',
+                    'is_paid'   => false,
+                    'join_date' => now()->toDateString(),
                 ]
             );
 
-            // If the distributor already existed but has no upline set, set it now
             if (!$newDist->wasRecentlyCreated && !$newDist->upline_id) {
                 $newDist->upline_id = $distributorId;
                 $newDist->save();
@@ -233,42 +250,64 @@ class MlmEngineService
             if (!$sponsorMainNode) {
                 $companyRoot = Node::whereNull('parent_id')->first();
                 if ($companyRoot) {
-                    $rootPlacement = $this->findPlacementNode($companyRoot->id);
-                    $sponsorMainNode = Node::create(['parent_id' => $rootPlacement->id, 'distributor_id' => $distributorId, 'leg' => $rootPlacement->children()->count() + 1]);
+                    $rootPlacement   = $this->findPlacementNode($companyRoot->id);
+                    $sponsorMainNode = Node::create([
+                        'parent_id'      => $rootPlacement->id,
+                        'distributor_id' => $distributorId,
+                        'leg'            => min($rootPlacement->children()->count() + 1, 4),
+                    ]);
                 } else {
                     $sponsorMainNode = Node::create(['parent_id' => null, 'distributor_id' => $distributorId, 'leg' => 1]);
                 }
-                Account::firstOrCreate(['distributor_id' => $distributorId, 'node_id' => $sponsorMainNode->id], ['product_id' => $productId, 'sponsor_id' => null]);
+                Account::firstOrCreate(
+                    ['distributor_id' => $distributorId, 'node_id' => $sponsorMainNode->id],
+                    ['product_id' => $productId, 'sponsor_id' => null]
+                );
             }
 
             $placementNode = null;
-            $leg = null;
+            $leg           = null;
 
             if ($preferredLeg) {
                 $existingLegChild = Node::where('parent_id', $sponsorMainNode->id)->where('leg', $preferredLeg)->first();
                 if ($existingLegChild) {
                     $placementNode = $this->findPlacementNode($existingLegChild->id);
-                    $leg = $placementNode->children()->count() + 1;
+                    $leg           = min($placementNode->children()->count() + 1, 4);
                 } else {
                     $placementNode = $sponsorMainNode;
-                    $leg = $preferredLeg;
+                    $leg           = $preferredLeg;
                 }
             } else {
-                $secondaryNodes = Node::where('parent_id', $sponsorMainNode->id)->where('distributor_id', $distributorId)->orderBy('id')->get();
+                $secondaryNodes = Node::where('parent_id', $sponsorMainNode->id)
+                    ->where('distributor_id', $distributorId)->orderBy('id')->get();
                 if ($secondaryNodes->isNotEmpty()) {
                     foreach ($secondaryNodes as $secNode) {
                         $candidate = $this->findPlacementNode($secNode->id);
-                        if ($candidate && $candidate->children()->count() < 4) { $placementNode = $candidate; break; }
+                        if ($candidate && $candidate->children()->count() < 4) {
+                            $placementNode = $candidate;
+                            break;
+                        }
                     }
                 }
                 if (!$placementNode) $placementNode = $this->findPlacementNode($sponsorMainNode->id);
-                $leg = $placementNode->children()->count() + 1;
+                $leg = min($placementNode->children()->count() + 1, 4);
             }
 
-            if ($leg > 4) $leg = 4;
+            if (!$placementNode) {
+                throw new \Exception('No available placement slot in the sponsor tree.');
+            }
 
-            $newNode = Node::create(['parent_id' => $placementNode->id, 'distributor_id' => $newDist->distributor_id, 'leg' => $leg]);
-            $account = Account::create(['distributor_id' => $newDist->distributor_id, 'node_id' => $newNode->id, 'product_id' => $productId, 'sponsor_id' => $distributorId]);
+            $newNode = Node::create([
+                'parent_id'      => $placementNode->id,
+                'distributor_id' => $newDist->distributor_id,
+                'leg'            => $leg,
+            ]);
+            $account = Account::create([
+                'distributor_id' => $newDist->distributor_id,
+                'node_id'        => $newNode->id,
+                'product_id'     => $productId,
+                'sponsor_id'     => $distributorId,
+            ]);
 
             // Referral commission to sponsor
             $sponsorAccounts = Account::where('distributor_id', $distributorId)->with('product')->get();
@@ -286,10 +325,7 @@ class MlmEngineService
                 }
             }
 
-            // Update new customer's own_points
             $this->refreshOwnPoints($newDist->distributor_id);
-
-            // Run rank check for the new customer and all ancestors
             $this->runRankCheck($newDist->distributor_id);
             $this->runRankCheckForAncestors($newNode, $newDist->distributor_id);
 
@@ -302,18 +338,6 @@ class MlmEngineService
     }
 
     // ─── Rank Engine ─────────────────────────────────────────────────────────
-    // total_points = live BFS walk of the entire subtree rooted at this distributor's
-    //                first node, counting each unique distributor's own_points once.
-    // The root distributor's own package (own_points) is included in total_points
-    // AND added to leg 1's volume so their main account counts toward leg qualifications.
-    // MT:      ALL 4 legs ≥ 200 pts  AND total ≥ 5,000
-    // TT:      2 legs have MT+       AND total ≥ 10,000
-    // NTB:     4 legs have TT+       AND total ≥ 50,000
-    // IBB:     4 legs have NTB+      AND total ≥ 200,000
-    // GEB:     4 legs have IBB+      AND total ≥ 800,000
-    // CA:      4 legs have GEB       (Crown Achiever, $50K bonus)
-    // C_AWARD: 2+ legs have CA       (Crown Award,   $100K bonus)
-    // AL:      4 legs have CA        (Alpha Legend,  $500K bonus)
     public function runRankCheck($distributorId)
     {
         $stat = Stat::where('distributor_id', $distributorId)->first();
@@ -322,15 +346,9 @@ class MlmEngineService
         $node = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
         if (!$node) return;
 
-        // Total points = live walk of the entire subtree (each unique distributor counted once).
-        // This already includes the root distributor's own own_points.
         $totalPoints = $this->getSubtreeVolume($node->id);
+        $ownPoints   = (int)($stat->own_points ?? 0);
 
-        // The root distributor's own package points — these belong to the main account
-        // and must be counted toward leg qualifications, not just the total.
-        $ownPoints = (int)($stat->own_points ?? 0);
-
-        // Per-leg subtree volumes and highest ranks
         $directLegs = Node::where('parent_id', $node->id)->get()->keyBy('leg');
 
         $legPoints = [];
@@ -341,80 +359,49 @@ class MlmEngineService
             $legRanks[$i]  = $legNode ? $this->getHighestRankInSubtree($legNode->id) : 'CT';
         }
 
-        // Add the root distributor's own package points to leg 1 so their main
-        // account is considered when evaluating per-leg volume thresholds.
-        // This ensures a distributor who has purchased their own package is not
-        // penalised by having their points excluded from leg qualification checks.
         $legPoints[1] += $ownPoints;
 
-        $currentRank = $stat->rank ?: 'CT';
-        $newRank     = $currentRank;
-
-        // ── Rank progression is strictly sequential. Each rank requires the
-        //    previous rank to have been achieved first. MT is the gateway —
-        //    without it, no higher rank can be reached regardless of how many
-        //    MT+ legs exist. When a distributor finally balances all 4 legs
-        //    at ≥ 200 pts, all ranks they now qualify for are awarded in one go.
-        //
-        //    Evaluation order matters: we check from lowest to highest so that
-        //    a single event can advance through multiple ranks at once (e.g.
-        //    CT → MT → TT in one check if all conditions are met simultaneously).
+        $currentRank  = $stat->rank ?: 'CT';
+        $newRank      = $currentRank;
 
         $legsAbove200 = count(array_filter($legPoints, fn($p) => $p >= 200));
 
-        // CT → MT: requires ALL 4 legs ≥ 200 pts AND total ≥ 5,000
-        // This is the mandatory gateway — no higher rank without it.
         if ($legsAbove200 >= 4 && $totalPoints >= 5000) {
             $newRank = 'MT';
         }
-
-        // MT → TT: only reachable if MT was already achieved (current or just set above)
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['MT']
             && $this->countLegsWithRank($legRanks, 'MT') >= 2
             && $totalPoints >= 10000) {
             $newRank = 'TT';
         }
-
-        // TT → NTB
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['TT']
             && $this->countLegsWithRank($legRanks, 'TT') >= 4
             && $totalPoints >= 50000) {
             $newRank = 'NTB';
         }
-
-        // NTB → IBB
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['NTB']
             && $this->countLegsWithRank($legRanks, 'NTB') >= 4
             && $totalPoints >= 200000) {
             $newRank = 'IBB';
         }
-
-        // IBB → GEB
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['IBB']
             && $this->countLegsWithRank($legRanks, 'IBB') >= 4
             && $totalPoints >= 800000) {
             $newRank = 'GEB';
         }
-
-        // GEB → CA
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['GEB']
             && $this->countLegsWithRank($legRanks, 'GEB') >= 4) {
             $newRank = 'CA';
         }
-
-        // CA → C_AWARD
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['CA']
             && $this->countLegsWithRank($legRanks, 'CA') >= 2) {
             $newRank = 'C_AWARD';
         }
-
-        // C_AWARD → AL
         if ((self::RANK_SCORE[$newRank] ?? 0) >= self::RANK_SCORE['C_AWARD']
             && $this->countLegsWithRank($legRanks, 'CA') >= 4) {
             $newRank = 'AL';
         }
 
-        // Never demote — only advance
         if ((self::RANK_SCORE[$newRank] ?? 0) < (self::RANK_SCORE[$currentRank] ?? 0)) {
             $newRank = $currentRank;
         }
@@ -424,7 +411,10 @@ class MlmEngineService
             $stat->save();
 
             $dist = Distributor::where('distributor_id', $distributorId)->first();
-            if ($dist) { $dist->rank = $newRank; $dist->save(); }
+            if ($dist) {
+                $dist->rank = $newRank;
+                $dist->save();
+            }
 
             $this->payRankBonus($distributorId, $currentRank, $newRank);
         }
@@ -465,7 +455,11 @@ class MlmEngineService
             $wallet->save();
 
             $dist = Distributor::where('distributor_id', $distributorId)->first();
-            if ($dist) { $dist->income_monthly += $totalBonus; $dist->income_yearly += $totalBonus; $dist->save(); }
+            if ($dist) {
+                $dist->income_monthly += $totalBonus;
+                $dist->income_yearly  += $totalBonus;
+                $dist->save();
+            }
 
             \App\Models\Payment::create([
                 'product_id'        => 1,
@@ -484,22 +478,11 @@ class MlmEngineService
         }
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    /**
-     * BFS walk of the subtree rooted at $nodeId.
-     *
-     * Returns the sum of own_points for every UNIQUE distributor in the subtree,
-     * INCLUDING the root node's distributor (the account owner themselves).
-     *
-     * own_points already aggregates all of a distributor's accounts
-     * (e.g. quadruple golden = 4 × 800 = 3200), so each distributor_id
-     * must be counted exactly once regardless of how many nodes they have.
-     */
+    // ─── Subtree volume (BFS, each distributor counted once) ─────────────────
     public function getSubtreeVolume(int $nodeId): int
     {
         $total   = 0;
-        $counted = []; // prevent double-counting distributors with multiple nodes
+        $counted = [];
         $queue   = [$nodeId];
         $visited = [];
 
@@ -507,12 +490,11 @@ class MlmEngineService
             $currId = array_shift($queue);
             if (in_array($currId, $visited)) continue;
             $visited[] = $currId;
-            
-            $node   = Node::with('children')->find($currId);
+
+            $node = Node::with('children')->find($currId);
             if (!$node) continue;
 
             $distId = (int) $node->distributor_id;
-
             if (!isset($counted[$distId])) {
                 $stat = Stat::where('distributor_id', $distId)->first();
                 if ($stat) $total += (int)($stat->own_points ?? 0);
@@ -531,17 +513,18 @@ class MlmEngineService
     {
         $highest     = 0;
         $highestRank = 'CT';
-        $queue = [$nodeId];
-        $visited = [];
+        $queue       = [$nodeId];
+        $visited     = [];
         while (!empty($queue)) {
             $currId = array_shift($queue);
             if (in_array($currId, $visited)) continue;
             $visited[] = $currId;
-            
-            $node   = Node::with('children')->find($currId);
+
+            $node = Node::with('children')->find($currId);
             if (!$node) continue;
             $stat = Stat::where('distributor_id', $node->distributor_id)->first();
-            if ($stat && $stat->rank && isset(self::RANK_SCORE[$stat->rank]) && self::RANK_SCORE[$stat->rank] > $highest) {
+            if ($stat && $stat->rank && isset(self::RANK_SCORE[$stat->rank])
+                && self::RANK_SCORE[$stat->rank] > $highest) {
                 $highest     = self::RANK_SCORE[$stat->rank];
                 $highestRank = $stat->rank;
             }

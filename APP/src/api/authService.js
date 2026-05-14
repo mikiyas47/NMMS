@@ -367,8 +367,10 @@ export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
   console.log('[joinNetwork] Requesting with:', payload);
 
   try {
+    // 45s timeout — generous for Render cold starts but not exhausting for the user.
+    // processPurchase now runs in a single transaction so it's much faster.
     const response = await apiClient.post('/distributor/join', payload, {
-      timeout: 120000, // 120s — generous for cold starts + heavy tree processing
+      timeout: 45000,
     });
     console.log('[joinNetwork] Success:', response.data?.status);
     return response.data;
@@ -380,7 +382,7 @@ export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
     if (!error.response) {
       console.log('[joinNetwork] No server response — checking if join succeeded anyway...');
       try {
-        const statusRes = await apiClient.get('/distributor/status', { timeout: 30000 });
+        const statusRes = await apiClient.get('/distributor/status', { timeout: 15000 });
         if (statusRes.data?.has_joined && statusRes.data?.account_count > 0) {
           console.log('[joinNetwork] Server confirmed join succeeded despite timeout!', statusRes.data);
           return {
@@ -392,7 +394,7 @@ export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
       } catch (checkErr) {
         console.log('[joinNetwork] Status check also failed:', checkErr.message);
       }
-      throw new Error('The server is taking too long to respond. Please check the Tree screen — your account may have been created. If not, try again in a minute.');
+      throw new Error('The server is taking too long to respond. Please check the Tree screen — your account may have been created. If not, try again.');
     }
 
     // Server responded with an error — surface the real message

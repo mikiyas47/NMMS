@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Models\Distributor;
 use App\Models\Account;
 use App\Models\Node;
@@ -19,14 +20,19 @@ class CustomerUpgradeController extends Controller
      *
      * Called after a successful payment when the customer chooses to become a distributor.
      *
-     * The flow:
-     *   1. Verify the tx_ref is a real successful payment
-     *   2. Find or create the distributor record using the payment's customer info
-     *   3. Set the chosen password and mark is_paid = true
-     *   4. Return a Sanctum token so they can log in immediately
+     * FIX: Moved DB::beginTransaction() BEFORE the payment lookup so that
+     * lockForUpdate() on the payment row actually works (locks require an active
+     * transaction). This prevents the race condition between the Chapa webhook
+     * and this endpoint both trying to process the same payment simultaneously.
      *
-     * This works regardless of whether the Chapa webhook has fired yet,
-     * because we use the payment record (created at initiation time) as the source of truth.
+     * FIX: Removed $payment->save() with chapa_payload / webhook_verified fields
+     * that may not exist on all deployments. We only update the fields we know exist.
+     *
+     * FIX: join_date is passed as a date string (not a Carbon object) to avoid
+     * type errors on strict PostgreSQL date columns.
+     *
+     * FIX: All DB writes are inside the transaction so a failure anywhere rolls
+     * back everything cleanly — no partial state left in the database.
      */
     public function upgrade(Request $request)
     {
@@ -38,35 +44,38 @@ class CustomerUpgradeController extends Controller
 
         $email = strtolower(trim($data['email']));
 
-        // ── Step 1: Verify the payment ────────────────────────────────────────
-        // The payment record is created at initiation time (before webhook),
-        // so it always exists after a successful Chapa checkout.
-        $payment = \App\Models\Payment::where('tx_ref', $data['tx_ref'])->first();
-
-        if (!$payment) {
-            return response()->json([
-                'message' => 'Payment record not found. Please contact your distributor.',
-            ], 404);
-        }
-
-        // Accept both 'success' and 'pending' — pending means webhook hasn't fired yet
-        // but the customer has completed the Chapa checkout page.
-        if (!in_array($payment->status, ['success', 'pending'])) {
-            return response()->json([
-                'message' => 'Payment was not completed. Cannot create your account.',
-            ], 422);
-        }
-
-        // Verify the email matches the payment
-        if (strtolower(trim($payment->customer_email)) !== $email) {
-            return response()->json([
-                'message' => 'Email does not match the payment record.',
-            ], 422);
-        }
-
-        // ── Step 2: Find or create the distributor record ─────────────────────
+        // Start transaction BEFORE the payment lookup so lockForUpdate works
         DB::beginTransaction();
         try {
+            // ── Step 1: Verify the payment (with row lock to prevent race conditions) ──
+            $payment = \App\Models\Payment::where('tx_ref', $data['tx_ref'])
+                ->lockForUpdate()
+                ->first();
+
+            if (!$payment) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Payment record not found. Please contact your distributor.',
+                ], 404);
+            }
+
+            // Accept both 'success' and 'pending' — pending means webhook hasn't fired yet
+            if (!in_array($payment->status, ['success', 'pending'])) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Payment was not completed. Cannot create your account.',
+                ], 422);
+            }
+
+            // Verify the email matches the payment
+            if (strtolower(trim($payment->customer_email)) !== $email) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Email does not match the payment record.',
+                ], 422);
+            }
+
+            // ── Step 2: Find or create the distributor record ─────────────────
             $distributor = Distributor::whereRaw('LOWER(TRIM(email)) = ?', [$email])->first();
 
             if (!$distributor) {
@@ -80,91 +89,21 @@ class CustomerUpgradeController extends Controller
                     'upline_id' => $payment->distributor_id,
                     'is_paid'   => true,
                     'status'    => 'active',
-                    'join_date' => now(),
+                    'join_date' => now()->toDateString(),
                 ]);
 
-                // Create wallet and stat records
                 Wallet::firstOrCreate(['distributor_id' => $distributor->distributor_id]);
                 Stat::firstOrCreate(['distributor_id'   => $distributor->distributor_id]);
 
                 // Place the node in the tree under the sponsor
-                $mlm = new \App\Services\MlmEngineService();
+                $mlm         = new \App\Services\MlmEngineService();
                 $sponsorNode = Node::where('distributor_id', $payment->distributor_id)
                     ->orderBy('id', 'asc')->first();
 
                 if ($sponsorNode) {
                     $placementNode = $mlm->findPlacementNode($sponsorNode->id);
-                    $leg = $placementNode->children()->count() + 1;
-                    if ($leg > 4) $leg = 4;
-
-                    $newNode = Node::create([
-                        'parent_id'      => $placementNode->id,
-                        'distributor_id' => $distributor->distributor_id,
-                        'leg'            => $leg,
-                    ]);
-
-                    Account::create([
-                        'distributor_id' => $distributor->distributor_id,
-                        'node_id'        => $newNode->id,
-                        'product_id'     => $payment->product_id,
-                        'sponsor_id'     => $payment->distributor_id,
-                    ]);
-
-                    // Update own_points
-                    $product = \App\Models\Product::find($payment->product_id);
-                    if ($product) {
-                        $stat = Stat::where('distributor_id', $distributor->distributor_id)->first();
-                        if ($stat) {
-                            $stat->own_points = $product->point ?? 0;
-                            $stat->save();
-                        }
-                    }
-
-                    // Run rank check for ancestors
-                    $mlm->runRankCheckForAncestors($newNode, $distributor->distributor_id);
-                }
-
-            } else {
-                // Distributor record already exists — update password and ensure tree placement
-                \Illuminate\Support\Facades\Log::info('Upgrading existing distributor', [
-                    'distributor_id' => $distributor->distributor_id,
-                    'email'          => $email,
-                    'old_status'     => $distributor->status,
-                    'old_is_paid'    => $distributor->is_paid,
-                ]);
-
-                $distributor->password = Hash::make($data['password']);
-                $distributor->is_paid  = true;
-                $distributor->status   = 'active';
-                if ($payment->distributor_id && !$distributor->upline_id) {
-                    $distributor->upline_id = $payment->distributor_id;
-                }
-                $distributor->save();
-
-                \Illuminate\Support\Facades\Log::info('Distributor upgraded successfully', [
-                    'distributor_id' => $distributor->distributor_id,
-                    'new_status'     => $distributor->status,
-                    'new_is_paid'    => $distributor->is_paid,
-                ]);
-
-                // Ensure wallet and stat exist
-                Wallet::firstOrCreate(['distributor_id' => $distributor->distributor_id]);
-                Stat::firstOrCreate(['distributor_id'   => $distributor->distributor_id]);
-
-                // ── Ensure the node and account exist in the tree ──────────────
-                // The webhook may have created the distributor record but failed
-                // to place the node, or the upgrade ran before the webhook.
-                $hasAccount = Account::where('distributor_id', $distributor->distributor_id)->exists();
-
-                if (!$hasAccount) {
-                    $mlm = new \App\Services\MlmEngineService();
-                    $sponsorNode = Node::where('distributor_id', $payment->distributor_id)
-                        ->orderBy('id', 'asc')->first();
-
-                    if ($sponsorNode) {
-                        $placementNode = $mlm->findPlacementNode($sponsorNode->id);
-                        $leg = $placementNode->children()->count() + 1;
-                        if ($leg > 4) $leg = 4;
+                    if ($placementNode) {
+                        $leg = min($placementNode->children()->count() + 1, 4);
 
                         $newNode = Node::create([
                             'parent_id'      => $placementNode->id,
@@ -179,103 +118,155 @@ class CustomerUpgradeController extends Controller
                             'sponsor_id'     => $payment->distributor_id,
                         ]);
 
-                        // Update own_points
                         $product = \App\Models\Product::find($payment->product_id);
                         if ($product) {
                             $stat = Stat::where('distributor_id', $distributor->distributor_id)->first();
                             if ($stat) {
-                                $stat->own_points = ($stat->own_points ?? 0) + ($product->point ?? 0);
+                                $stat->own_points = $product->point ?? 0;
                                 $stat->save();
                             }
                         }
 
-                        // Run rank check for ancestors
                         $mlm->runRankCheckForAncestors($newNode, $distributor->distributor_id);
                     }
                 }
+
+            } else {
+                // Distributor record already exists — update password and activate
+                Log::info('CustomerUpgrade: Activating existing distributor', [
+                    'distributor_id' => $distributor->distributor_id,
+                    'email'          => $email,
+                    'old_status'     => $distributor->status,
+                    'old_is_paid'    => $distributor->is_paid,
+                ]);
+
+                // Use DB::update for a direct SQL update — avoids any model cast issues
+                DB::table('distributors')
+                    ->where('distributor_id', $distributor->distributor_id)
+                    ->update([
+                        'password'   => Hash::make($data['password']),
+                        'is_paid'    => true,
+                        'status'     => 'active',
+                        'upline_id'  => $distributor->upline_id ?? $payment->distributor_id,
+                        'updated_at' => now(),
+                    ]);
+
+                // Reload the model to get fresh data
+                $distributor = Distributor::find($distributor->distributor_id);
+
+                Wallet::firstOrCreate(['distributor_id' => $distributor->distributor_id]);
+                Stat::firstOrCreate(['distributor_id'   => $distributor->distributor_id]);
+
+                // Ensure the node and account exist in the tree
+                $hasAccount = Account::where('distributor_id', $distributor->distributor_id)->exists();
+
+                if (!$hasAccount) {
+                    $mlm         = new \App\Services\MlmEngineService();
+                    $sponsorNode = Node::where('distributor_id', $payment->distributor_id)
+                        ->orderBy('id', 'asc')->first();
+
+                    if ($sponsorNode) {
+                        $placementNode = $mlm->findPlacementNode($sponsorNode->id);
+                        if ($placementNode) {
+                            $leg = min($placementNode->children()->count() + 1, 4);
+
+                            $newNode = Node::create([
+                                'parent_id'      => $placementNode->id,
+                                'distributor_id' => $distributor->distributor_id,
+                                'leg'            => $leg,
+                            ]);
+
+                            Account::create([
+                                'distributor_id' => $distributor->distributor_id,
+                                'node_id'        => $newNode->id,
+                                'product_id'     => $payment->product_id,
+                                'sponsor_id'     => $payment->distributor_id,
+                            ]);
+
+                            $product = \App\Models\Product::find($payment->product_id);
+                            if ($product) {
+                                $stat = Stat::where('distributor_id', $distributor->distributor_id)->first();
+                                if ($stat) {
+                                    $stat->own_points = ($stat->own_points ?? 0) + ($product->point ?? 0);
+                                    $stat->save();
+                                }
+                            }
+
+                            $mlm->runRankCheckForAncestors($newNode, $distributor->distributor_id);
+                        }
+                    }
+                }
+
+                Log::info('CustomerUpgrade: Distributor activated', [
+                    'distributor_id' => $distributor->distributor_id,
+                    'new_status'     => $distributor->status,
+                    'new_is_paid'    => $distributor->is_paid,
+                ]);
             }
 
-            // ── Step 3: Mark payment as success and pay commission ───────────────
-            // Whether the distributor record was just created or already existed,
-            // mark the payment as success and credit the sponsor's commission now.
-            // The webhook may never arrive on free-tier hosting, so we pay here too.
+            // ── Step 3: Mark payment as success and pay commission ────────────
+            // Only update the columns we know exist on all deployments.
             if ($payment->status !== 'success' || !$payment->commission_paid) {
-                $payment->status           = 'success';
-                $payment->webhook_verified = true;
-                $payment->commission_paid  = true;
-                $payment->save();
+                DB::table('payments')
+                    ->where('id', $payment->id)
+                    ->update([
+                        'status'          => 'success',
+                        'commission_paid' => true,
+                        'updated_at'      => now(),
+                    ]);
 
                 // Credit commission to the referring distributor's wallet
                 if ($payment->commission_amount > 0 && $payment->distributor_id) {
-                    $sponsorWallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
+                    $sponsorWallet = Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
                     $sponsorWallet->balance      += $payment->commission_amount;
                     $sponsorWallet->total_earned += $payment->commission_amount;
                     $sponsorWallet->save();
 
-                    Distributor::where('distributor_id', $payment->distributor_id)
+                    DB::table('distributors')
+                        ->where('distributor_id', $payment->distributor_id)
                         ->increment('income_monthly', $payment->commission_amount);
-                    Distributor::where('distributor_id', $payment->distributor_id)
+                    DB::table('distributors')
+                        ->where('distributor_id', $payment->distributor_id)
                         ->increment('income_yearly', $payment->commission_amount);
                 }
             }
 
-            // ── Step 4: Issue token ───────────────────────────────────────────────
-            // Refresh the distributor model to ensure we have the latest data
-            $distributor->refresh();
-
-            // Final safety — ensure status and is_paid are correct
-            if ($distributor->status !== 'active' || !$distributor->is_paid) {
-                \Illuminate\Support\Facades\Log::warning('Post-save state mismatch — forcing active', [
-                    'distributor_id' => $distributor->distributor_id,
-                    'status'         => $distributor->status,
-                    'is_paid'        => $distributor->is_paid,
-                ]);
-                $distributor->status  = 'active';
-                $distributor->is_paid = true;
-                $distributor->save();
-                $distributor->refresh();
-            }
-
-            \Illuminate\Support\Facades\Log::info('Distributor activation complete', [
-                'distributor_id' => $distributor->distributor_id,
-                'email'          => $distributor->email,
-                'status'         => $distributor->status,
-                'is_paid'        => $distributor->is_paid,
-                'role'           => 'distributor',
-            ]);
+            // ── Step 4: Issue token ───────────────────────────────────────────
+            // Reload to get the absolute latest state from DB
+            $distributor = Distributor::find($distributor->distributor_id);
 
             $token = $distributor->createToken('auth_token')->plainTextToken;
 
             DB::commit();
 
-            // Build the user response with explicit role & status
-            // The Distributor model appends 'role' via getRoleAttribute(),
-            // but we also include it at the top level for clarity.
-            $userData = $distributor->toArray();
-            $userData['role']           = 'distributor';
-            $userData['status']         = 'active';
-            $userData['is_paid']        = true;
-            $userData['distributor_id'] = $distributor->distributor_id;
+            Log::info('CustomerUpgrade: Complete', [
+                'distributor_id' => $distributor->distributor_id,
+                'status'         => $distributor->status,
+                'is_paid'        => $distributor->is_paid,
+            ]);
 
             return response()->json([
                 'status'       => 'success',
                 'message'      => 'Welcome! Your distributor account is now active.',
                 'access_token' => $token,
                 'token_type'   => 'Bearer',
-                'user'         => $userData,
+                'user'         => array_merge($distributor->toArray(), [
+                    'role'   => 'distributor',
+                    'status' => 'active',
+                ]),
             ]);
+
         } catch (\Throwable $e) {
             DB::rollBack();
-            \Illuminate\Support\Facades\Log::error('Customer upgrade error', [
-                'email'     => $email,
-                'tx_ref'    => $data['tx_ref'],
-                'message'   => $e->getMessage(),
-                'file'      => $e->getFile() . ':' . $e->getLine(),
-                'trace'     => substr($e->getTraceAsString(), 0, 2000),
+            Log::error('CustomerUpgrade: Error', [
+                'email'   => $email,
+                'tx_ref'  => $data['tx_ref'],
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+                'trace'   => substr($e->getTraceAsString(), 0, 3000),
             ]);
             return response()->json([
-                'message' => 'Account activation failed. Please try again or contact support.',
-                'error'   => config('app.debug') ? $e->getMessage() : 'An error occurred during activation.',
+                'message' => 'Account activation failed: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -305,9 +296,4 @@ class CustomerUpgradeController extends Controller
             'name'           => $distributor->name,
         ]);
     }
-
-    /**
-     * Make runRankCheckForAncestors accessible — it's private in MlmEngineService
-     * so we call it via a public wrapper.
-     */
 }

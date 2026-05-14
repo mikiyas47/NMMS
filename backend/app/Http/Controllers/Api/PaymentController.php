@@ -200,10 +200,19 @@ class PaymentController extends Controller
                     try {
                         $mlmEngine = app(\App\Services\MlmEngineService::class);
 
-                        // Detect self-purchase: distributor is buying for themselves
+                        // Detect self-purchase: distributor is buying for themselves.
+                        // FIX: Use a two-factor check — email match OR the customer email
+                        // belongs to an existing distributor record with the same distributor_id.
+                        // This handles cases where the cached email in the app differs slightly.
                         $distributor = Distributor::where('distributor_id', $lockedPayment->distributor_id)->first();
-                        $isSelfPurchase = $distributor &&
-                            strtolower(trim($distributor->email)) === strtolower(trim($lockedPayment->customer_email));
+                        $customerDist = Distributor::whereRaw('LOWER(TRIM(email)) = ?', [
+                            strtolower(trim($lockedPayment->customer_email))
+                        ])->first();
+
+                        $isSelfPurchase = $distributor && (
+                            strtolower(trim($distributor->email)) === strtolower(trim($lockedPayment->customer_email))
+                            || ($customerDist && (int)$customerDist->distributor_id === (int)$lockedPayment->distributor_id)
+                        );
 
                         if ($isSelfPurchase) {
                             // Self-purchase (doubling/tripling/quadrupling):
@@ -480,10 +489,18 @@ class PaymentController extends Controller
                 try {
                     $mlmEngine = app(\App\Services\MlmEngineService::class);
 
-                    // Detect self-purchase: distributor is buying for themselves
+                    // Detect self-purchase: distributor is buying for themselves.
+                    // FIX: Use a two-factor check — email match OR the customer email
+                    // belongs to an existing distributor record with the same distributor_id.
                     $distributor = Distributor::where('distributor_id', $lockedPayment->distributor_id)->first();
-                    $isSelfPurchase = $distributor &&
-                        strtolower(trim($distributor->email)) === strtolower(trim($lockedPayment->customer_email));
+                    $customerDist = Distributor::whereRaw('LOWER(TRIM(email)) = ?', [
+                        strtolower(trim($lockedPayment->customer_email))
+                    ])->first();
+
+                    $isSelfPurchase = $distributor && (
+                        strtolower(trim($distributor->email)) === strtolower(trim($lockedPayment->customer_email))
+                        || ($customerDist && (int)$customerDist->distributor_id === (int)$lockedPayment->distributor_id)
+                    );
 
                     if ($isSelfPurchase) {
                         // Self-purchase (doubling/tripling/quadrupling):
