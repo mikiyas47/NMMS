@@ -19,19 +19,33 @@ class MlmEngineService
     ];
 
     // ─── BFS placement ───────────────────────────────────────────────────────
+    // Finds the first node in the subtree (BFS order) that has fewer than 4 children.
+    // Uses a single query per level to avoid N+1 queries on large trees.
     public function findPlacementNode($startNodeId)
     {
-        $queue   = [$startNodeId];
         $visited = [];
-        while (!empty($queue)) {
+        $queue   = [$startNodeId];
+        $maxIterations = 500; // safety limit — prevents infinite loops on corrupt trees
+        $iterations = 0;
+
+        while (!empty($queue) && $iterations < $maxIterations) {
+            $iterations++;
             $currentId = array_shift($queue);
             if (in_array($currentId, $visited)) continue;
             $visited[] = $currentId;
-            $node = Node::with('children')->find($currentId);
-            if (!$node) continue;
-            if ($node->children->count() < 4) return $node;
-            foreach ($node->children as $child) {
-                if (!in_array($child->id, $visited)) $queue[] = $child->id;
+
+            // Count children with a single query instead of loading the full model
+            $childCount = Node::where('parent_id', $currentId)->count();
+            if ($childCount < 4) {
+                return Node::find($currentId);
+            }
+
+            // Add children to queue
+            $childIds = Node::where('parent_id', $currentId)->pluck('id')->toArray();
+            foreach ($childIds as $childId) {
+                if (!in_array($childId, $visited)) {
+                    $queue[] = $childId;
+                }
             }
         }
         return null;
@@ -491,13 +505,16 @@ class MlmEngineService
         $counted = [];
         $queue   = [$nodeId];
         $visited = [];
+        $maxIterations = 1000;
+        $iterations = 0;
 
-        while (!empty($queue)) {
+        while (!empty($queue) && $iterations < $maxIterations) {
+            $iterations++;
             $currId = array_shift($queue);
             if (in_array($currId, $visited)) continue;
             $visited[] = $currId;
 
-            $node = Node::with('children')->find($currId);
+            $node = Node::find($currId);
             if (!$node) continue;
 
             $distId = (int) $node->distributor_id;
@@ -507,8 +524,9 @@ class MlmEngineService
                 $counted[$distId] = true;
             }
 
-            foreach ($node->children as $child) {
-                if (!in_array($child->id, $visited)) $queue[] = $child->id;
+            $childIds = Node::where('parent_id', $currId)->pluck('id')->toArray();
+            foreach ($childIds as $childId) {
+                if (!in_array($childId, $visited)) $queue[] = $childId;
             }
         }
 
@@ -521,12 +539,16 @@ class MlmEngineService
         $highestRank = 'CT';
         $queue       = [$nodeId];
         $visited     = [];
-        while (!empty($queue)) {
+        $maxIterations = 1000;
+        $iterations = 0;
+
+        while (!empty($queue) && $iterations < $maxIterations) {
+            $iterations++;
             $currId = array_shift($queue);
             if (in_array($currId, $visited)) continue;
             $visited[] = $currId;
 
-            $node = Node::with('children')->find($currId);
+            $node = Node::find($currId);
             if (!$node) continue;
             $stat = Stat::where('distributor_id', $node->distributor_id)->first();
             if ($stat && $stat->rank && isset(self::RANK_SCORE[$stat->rank])
@@ -534,8 +556,10 @@ class MlmEngineService
                 $highest     = self::RANK_SCORE[$stat->rank];
                 $highestRank = $stat->rank;
             }
-            foreach ($node->children as $child) {
-                if (!in_array($child->id, $visited)) $queue[] = $child->id;
+
+            $childIds = Node::where('parent_id', $currId)->pluck('id')->toArray();
+            foreach ($childIds as $childId) {
+                if (!in_array($childId, $visited)) $queue[] = $childId;
             }
         }
         return $highestRank;
