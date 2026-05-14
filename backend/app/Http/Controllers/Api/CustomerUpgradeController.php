@@ -95,16 +95,35 @@ class CustomerUpgradeController extends Controller
                 Wallet::firstOrCreate(['distributor_id' => $distributor->distributor_id]);
                 Stat::firstOrCreate(['distributor_id'   => $distributor->distributor_id]);
 
-                // Place the node in the tree under the sponsor
+                // Place the node in the tree under the sponsor, respecting the leg from the payment
                 $mlm         = new \App\Services\MlmEngineService();
                 $sponsorNode = Node::where('distributor_id', $payment->distributor_id)
                     ->orderBy('id', 'asc')->first();
 
                 if ($sponsorNode) {
-                    $placementNode = $mlm->findPlacementNode($sponsorNode->id);
-                    if ($placementNode) {
-                        $leg = min($placementNode->children()->count() + 1, 4);
+                    $preferredLeg  = $payment->leg ?? null;
+                    $placementNode = null;
+                    $leg           = null;
 
+                    if ($preferredLeg) {
+                        // Place at the leg the distributor selected when sharing the link
+                        $existingLegChild = Node::where('parent_id', $sponsorNode->id)
+                            ->where('leg', $preferredLeg)->first();
+                        if ($existingLegChild) {
+                            // That leg is occupied (e.g. doubled account) — BFS from inside it
+                            $placementNode = $mlm->findPlacementNode($existingLegChild->id);
+                            $leg           = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                        } else {
+                            // Leg is free — place directly under sponsor's main node
+                            $placementNode = $sponsorNode;
+                            $leg           = $preferredLeg;
+                        }
+                    } else {
+                        $placementNode = $mlm->findPlacementNode($sponsorNode->id);
+                        $leg           = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                    }
+
+                    if ($placementNode) {
                         $newNode = Node::create([
                             'parent_id'      => $placementNode->id,
                             'distributor_id' => $distributor->distributor_id,
@@ -166,10 +185,26 @@ class CustomerUpgradeController extends Controller
                         ->orderBy('id', 'asc')->first();
 
                     if ($sponsorNode) {
-                        $placementNode = $mlm->findPlacementNode($sponsorNode->id);
-                        if ($placementNode) {
-                            $leg = min($placementNode->children()->count() + 1, 4);
+                        $preferredLeg  = $payment->leg ?? null;
+                        $placementNode = null;
+                        $leg           = null;
 
+                        if ($preferredLeg) {
+                            $existingLegChild = Node::where('parent_id', $sponsorNode->id)
+                                ->where('leg', $preferredLeg)->first();
+                            if ($existingLegChild) {
+                                $placementNode = $mlm->findPlacementNode($existingLegChild->id);
+                                $leg           = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                            } else {
+                                $placementNode = $sponsorNode;
+                                $leg           = $preferredLeg;
+                            }
+                        } else {
+                            $placementNode = $mlm->findPlacementNode($sponsorNode->id);
+                            $leg           = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                        }
+
+                        if ($placementNode) {
                             $newNode = Node::create([
                                 'parent_id'      => $placementNode->id,
                                 'distributor_id' => $distributor->distributor_id,
