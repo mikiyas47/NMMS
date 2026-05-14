@@ -62,17 +62,25 @@ Route::middleware('auth:sanctum,api')->group(function () {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Temporary: backfill wallet balances from paid commissions ────────────────
-Route::get('/cleanup-duplicates', function () {
-    \App\Models\Account::whereIn('id', [86, 87])->delete();
-    \App\Models\Node::whereIn('id', [86, 87])->delete();
+Route::get('/cleanup-nodes/{id1}/{id2}', function ($id1, $id2) {
+    if (function_exists('opcache_reset')) {
+        opcache_reset();
+    }
+    $ids = [(int)$id1, (int)$id2];
+    $accounts = \App\Models\Account::whereIn('id', $ids)->delete();
+    $nodes = \App\Models\Node::whereIn('id', $ids)->delete();
     
     $stat = \App\Models\Stat::where('distributor_id', 41)->first();
     if ($stat) {
-        $stat->own_points = 800; // Reset to 1 account worth of points
+        $stat->own_points = 800;
         $stat->save();
     }
     
-    return response()->json(['message' => 'Cleaned up duplicate accounts 86 and 87']);
+    return response()->json([
+        'message' => "Cleaned up",
+        'accounts_deleted' => $accounts,
+        'nodes_deleted' => $nodes
+    ]);
 });
 
 Route::get('/backfill-wallets', function () {
