@@ -867,3 +867,32 @@ Route::get('/fix-is-paid', function () {
     }
     return response()->json(['fixed' => $fixed, 'message' => "Set is_paid=true for $fixed distributors who have accounts"]);
 });
+
+// Diagnostic: test processPurchase directly and return the real error
+Route::get('/test-join/{email}', function ($email) {
+    $dist = \App\Models\Distributor::where('email', $email)->first();
+    if (!$dist) return response()->json(['error' => 'Not found'], 404);
+
+    $product = \App\Models\Product::find(1);
+    if (!$product) return response()->json(['error' => 'No product'], 404);
+
+    $mlm = new \App\Services\MlmEngineService();
+    try {
+        $account = $mlm->processPurchase($dist->distributor_id, $product->id, null, 1);
+        $node = \App\Models\Node::find($account->node_id);
+        return response()->json([
+            'status'   => 'success',
+            'account'  => $account->id,
+            'node_id'  => $node->id,
+            'parent_id'=> $node->parent_id,
+            'leg'      => $node->leg,
+            'is_paid'  => \App\Models\Distributor::find($dist->distributor_id)->is_paid,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error'   => $e->getMessage(),
+            'file'    => $e->getFile() . ':' . $e->getLine(),
+            'trace'   => collect(explode("\n", $e->getTraceAsString()))->take(8)->toArray(),
+        ], 500);
+    }
+});
