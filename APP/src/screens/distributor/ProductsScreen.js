@@ -22,7 +22,7 @@ import {
   CheckCircle, Share2, ExternalLink, CreditCard, Zap, Users
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getProducts, getUser, joinNetwork, getDistributorStatus, getMyTree } from '../../api/authService';
+import { getProducts, getUser, joinNetwork, getDistributorStatus, getMyTree, refreshUserFromServer } from '../../api/authService';
 
 const API_BASE = 'https://nmms-backend.onrender.com';
 
@@ -547,7 +547,6 @@ const ProductsScreen = ({ C, navigation }) => {
 
       // Refresh user in AsyncStorage so is_paid and status are up to date
       try {
-        const { refreshUserFromServer } = require('../../api/authService');
         await refreshUserFromServer();
       } catch (_) {}
 

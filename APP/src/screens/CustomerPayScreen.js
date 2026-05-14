@@ -22,7 +22,7 @@ import {
 } from 'lucide-react-native';
 import {
   getProducts, initiatePayment, verifyPayment, getUser,
-  upgradeToDistributor, checkCustomerStatus,
+  upgradeToDistributor, checkCustomerStatus, joinNetwork, getDistributorStatus,
 } from '../api/authService';
 
 const { width, height } = Dimensions.get('window');
@@ -436,39 +436,36 @@ const SuccessScreen = ({
 
     if (isSelfPurchase) {
       // For self-purchases, call /distributor/join directly to register the node.
-      // Don't rely on the webhook — it may be slow or detect isSelfPurchase incorrectly.
       if (!joinCalledRef.current) {
         joinCalledRef.current = true;
         setJoiningNetwork(true);
-        import('../../api/authService').then(({ joinNetwork, getDistributorStatus }) => {
-          // First get the upline_id from status
-          getDistributorStatus()
-            .then(statusRes => {
-              return joinNetwork({
-                product_id: productId,
-                sponsor_id: statusRes?.upline_id ?? null,
-                quantity: 1,
-              });
-            })
-            .then(() => {
-              setJoinDone(true);
-              setJoiningNetwork(false);
-            })
-            .catch(err => {
-              console.log('[SuccessScreen] joinNetwork error:', err.message);
-              // Check if it already succeeded (duplicate call protection)
-              getDistributorStatus()
-                .then(s => {
-                  if (s?.has_joined) {
-                    setJoinDone(true);
-                  } else {
-                    setJoinError(err.message);
-                  }
-                })
-                .catch(() => setJoinError(err.message))
-                .finally(() => setJoiningNetwork(false));
+        // Get the upline_id from status then join
+        getDistributorStatus()
+          .then(statusRes => {
+            return joinNetwork({
+              product_id: productId,
+              sponsor_id: statusRes?.upline_id ?? null,
+              quantity: 1,
             });
-        });
+          })
+          .then(() => {
+            setJoinDone(true);
+            setJoiningNetwork(false);
+          })
+          .catch(err => {
+            console.log('[SuccessScreen] joinNetwork error:', err.message);
+            // Check if it already succeeded (duplicate call protection)
+            getDistributorStatus()
+              .then(s => {
+                if (s?.has_joined) {
+                  setJoinDone(true);
+                } else {
+                  setJoinError(err.message);
+                }
+              })
+              .catch(() => setJoinError(err.message))
+              .finally(() => setJoiningNetwork(false));
+          });
       }
     } else {
       // Check if this customer is already an active distributor
