@@ -526,27 +526,41 @@ const ProductsScreen = ({ C, navigation }) => {
   }, [search, activeCategory, products]);
 
   // ── Join Network handler ───────────────────────────────────────────────────
+  const [joinStatus, setJoinStatus] = useState('idle'); // 'idle' | 'connecting' | 'processing'
+
   const handleJoinNetwork = async () => {
     if (!joinProduct) return;
     setJoining(true);
+    setJoinStatus('connecting');
+
+    // After 10s with no response, the server is cold-starting — tell the user
+    const warmupTimer = setTimeout(() => {
+      setJoinStatus('processing');
+    }, 10000);
+
     try {
-      await joinNetwork({
+      const result = await joinNetwork({
         product_id: joinProduct.id,
-        sponsor_id: uplinkId || null,  // pass upline as sponsor so tree is linked correctly
+        sponsor_id: uplinkId || null,
         quantity: joinQty,
       });
+      clearTimeout(warmupTimer);
       setJoinModal(false);
       setHasJoined(true);
-      setAccountCount(prev => prev + joinQty);
+      // Use account_count from server response if available, otherwise add locally
+      const newCount = result?.accounts?.length ?? joinQty;
+      setAccountCount(newCount);
       Alert.alert(
         '🎉 Welcome to the Network!',
         `You joined with ${joinQty} account${joinQty > 1 ? 's' : ''}. Your node${joinQty > 1 ? 's have' : ' has'} been placed in the tree.`,
-        [{ text: 'View Tree', onPress: () => { } }, { text: 'OK' }]
+        [{ text: 'View Tree', onPress: () => {} }, { text: 'OK' }]
       );
     } catch (e) {
+      clearTimeout(warmupTimer);
       Alert.alert('Join Failed', e.message || 'Could not join the network. Please try again.');
     } finally {
       setJoining(false);
+      setJoinStatus('idle');
     }
   };
 
@@ -899,7 +913,9 @@ const ProductsScreen = ({ C, navigation }) => {
                   : <Zap color="#FCD34D" size={18} />
                 }
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 10 }}>
-                  {joining ? 'Activating…' : `Activate ${joinQty} Account${joinQty > 1 ? 's' : ''}`}
+                  {joining
+                    ? (joinStatus === 'processing' ? 'Server warming up…' : 'Activating…')
+                    : `Activate ${joinQty} Account${joinQty > 1 ? 's' : ''}`}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
