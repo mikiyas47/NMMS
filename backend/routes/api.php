@@ -692,3 +692,50 @@ Route::get('/reset-tree/{email}', function ($email) {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Fix duplicate/misplaced secondary nodes for a distributor
+// Moves all secondary nodes to be proper children of the main node
+Route::get('/fix-doubling/{email}', function ($email) {
+    $dist = \App\Models\Distributor::where('email', $email)->first();
+    if (!$dist) return response()->json(['error' => 'Not found'], 404);
+
+    $distId   = $dist->distributor_id;
+    $allNodes = \App\Models\Node::where('distributor_id', $distId)->orderBy('id')->get();
+
+    if ($allNodes->count() < 2) {
+        return response()->json(['message' => 'Nothing to fix — only one node']);
+    }
+
+    $mainNode = $allNodes->first();
+    $fixed    = [];
+
+    foreach ($allNodes->skip(1) as $secondary) {
+        // If this secondary node is NOT a child of the main node, move it there
+        if ($secondary->parent_id !== $mainNode->id) {
+            $usedLegs = \App\Models\Node::where('parent_id', $mainNode->id)
+                ->where('id', '!=', $secondary->id)
+                ->pluck('leg')->toArray();
+            $nextLeg = 1;
+            while (in_array($nextLeg, $usedLegs) && $nextLeg <= 4) $nextLeg++;
+            if ($nextLeg > 4) {
+                $fixed[] = "Node {$secondary->id}: no free leg under main node";
+                continue;
+            }
+            $secondary->parent_id = $mainNode->id;
+            $secondary->leg       = $nextLeg;
+            $secondary->save();
+            $fixed[] = "Node {$secondary->id}: moved to parent={$mainNode->id} leg={$nextLeg}";
+        } else {
+            $fixed[] = "Node {$secondary->id}: already correct (parent={$secondary->parent_id} leg={$secondary->leg})";
+        }
+    }
+
+    // Recalculate own_points
+    $mlm = new \App\Services\MlmEngineService();
+    $stat = \App\Models\Stat::firstOrCreate(['distributor_id' => $distId]);
+    $pts = \App\Models\Account::where('distributor_id', $distId)->with('product')->get()->sum(fn($a) => $a->product->point ?? 0);
+    $stat->own_points = $pts;
+    $stat->save();
+
+    return response()->json(['fixed' => $fixed, 'own_points' => $pts]);
+});

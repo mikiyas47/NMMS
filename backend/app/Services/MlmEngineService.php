@@ -81,8 +81,11 @@ class MlmEngineService
                 $currentFirst = Account::where('distributor_id', $distributorId)->orderBy('id')->first();
 
                 if ($currentFirst && $currentFirst->node_id) {
-                    // Distributor already has a main node — place new account under it (doubling)
-                    $placementNode = $this->findPlacementNode($currentFirst->node_id);
+                    // Distributor already has a main node — place new account as a
+                    // child of the main node (doubling). We always start BFS from
+                    // the MAIN node (first account's node), not from any secondary node.
+                    $mainNodeId    = Account::where('distributor_id', $distributorId)->orderBy('id')->value('node_id');
+                    $placementNode = $this->findPlacementNode($mainNodeId);
                     if (!$placementNode) {
                         throw new \Exception('No available placement slot in the tree. Your tree is full.');
                     }
