@@ -739,3 +739,115 @@ Route::get('/fix-doubling/{email}', function ($email) {
 
     return response()->json(['fixed' => $fixed, 'own_points' => $pts]);
 });
+
+// Full end-to-end upgrade flow test (creates payment + runs upgrade + verifies tree)
+Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
+    $custEmail   = $request->input('email');
+    $txRef       = $request->input('tx_ref');
+    $distributorId = (int) $request->input('distributor_id');
+    $productId   = (int) $request->input('product_id', 1);
+    $amount      = (float) $request->input('amount', 7690);
+    $leg         = (int) $request->input('leg', 2);
+    $password    = $request->input('password', 'testpass123');
+
+    if (!$custEmail || !$txRef || !$distributorId) {
+        return response()->json(['error' => 'Missing required fields'], 422);
+    }
+
+    // Step 1: Create a pending payment record (bypasses Chapa)
+    $payment = \App\Models\Payment::create([
+        'product_id'        => $productId,
+        'distributor_id'    => $distributorId,
+        'customer_name'     => 'Flow Test Customer',
+        'customer_email'    => $custEmail,
+        'customer_phone'    => '0944444444',
+        'tx_ref'            => $txRef,
+        'amount'            => $amount,
+        'currency'          => 'ETB',
+        'quantity'          => 1,
+        'commission_amount' => round($amount * 0.16, 2),
+        'status'            => 'pending',
+        'commission_paid'   => false,
+        'webhook_verified'  => false,
+        'leg'               => $leg,
+    ]);
+
+    // Step 2: Run the upgrade (same logic as CustomerUpgradeController)
+    \Illuminate\Support\Facades\DB::beginTransaction();
+    try {
+        $p = \App\Models\Payment::where('tx_ref', $txRef)->lockForUpdate()->first();
+
+        $dist = \App\Models\Distributor::create([
+            'name'      => $p->customer_name,
+            'email'     => $custEmail,
+            'phone'     => $p->customer_phone,
+            'password'  => \Illuminate\Support\Facades\Hash::make($password),
+            'upline_id' => $p->distributor_id,
+            'is_paid'   => true,
+            'status'    => 'active',
+            'join_date' => now()->toDateString(),
+        ]);
+
+        \App\Models\Wallet::firstOrCreate(['distributor_id' => $dist->distributor_id]);
+        \App\Models\Stat::firstOrCreate(['distributor_id'   => $dist->distributor_id]);
+
+        $sponsorNode = \App\Models\Node::where('distributor_id', $p->distributor_id)->orderBy('id')->first();
+        $nodeCreated = null;
+        if ($sponsorNode) {
+            $mlm       = new \App\Services\MlmEngineService();
+            $placement = $mlm->findPlacementNode($sponsorNode->id);
+            if ($placement) {
+                $legNum = min($placement->children()->count() + 1, 4);
+                $newNode = \App\Models\Node::create([
+                    'parent_id'      => $placement->id,
+                    'distributor_id' => $dist->distributor_id,
+                    'leg'            => $legNum,
+                ]);
+                \App\Models\Account::create([
+                    'distributor_id' => $dist->distributor_id,
+                    'node_id'        => $newNode->id,
+                    'product_id'     => $p->product_id,
+                    'sponsor_id'     => $p->distributor_id,
+                ]);
+                $nodeCreated = ['node_id' => $newNode->id, 'parent_id' => $newNode->parent_id, 'leg' => $newNode->leg];
+                $mlm->runRankCheckForAncestors($newNode, $dist->distributor_id);
+            }
+        }
+
+        \Illuminate\Support\Facades\DB::table('payments')->where('id', $p->id)->update([
+            'status' => 'success', 'commission_paid' => true, 'updated_at' => now(),
+        ]);
+
+        \Illuminate\Support\Facades\DB::commit();
+
+        $token = $dist->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'status'           => 'success',
+            'distributor_id'   => $dist->distributor_id,
+            'email'            => $dist->email,
+            'dist_status'      => $dist->status,
+            'is_paid'          => $dist->is_paid,
+            'node_created'     => $nodeCreated,
+            'access_token'     => $token,
+        ]);
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\DB::rollBack();
+        \App\Models\Payment::where('tx_ref', $txRef)->delete();
+        return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile().':'.$e->getLine()], 500);
+    }
+});
+
+// Cleanup test distributor by email
+Route::delete('/test-cleanup/{email}', function ($email) {
+    $dist = \App\Models\Distributor::where('email', $email)->first();
+    if (!$dist) return response()->json(['message' => 'Not found']);
+    $did = $dist->distributor_id;
+    \App\Models\Account::where('distributor_id', $did)->delete();
+    $nids = \App\Models\Node::where('distributor_id', $did)->pluck('id');
+    \App\Models\Node::whereIn('id', $nids)->delete();
+    \App\Models\Stat::where('distributor_id', $did)->delete();
+    \App\Models\Wallet::where('distributor_id', $did)->delete();
+    $dist->delete();
+    return response()->json(['message' => "Deleted distributor $email"]);
+});
