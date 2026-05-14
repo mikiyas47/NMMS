@@ -41,13 +41,15 @@ class DistributorJoinController extends Controller
         ]);
 
         $data = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'sponsor_id' => 'nullable|exists:distributors,distributor_id',
-            'quantity'   => 'nullable|integer|min:1|max:4',
+            'product_id'    => 'required|exists:products,id',
+            'sponsor_id'    => 'nullable|exists:distributors,distributor_id',
+            'quantity'      => 'nullable|integer|min:1|max:4',
+            'preferred_leg' => 'nullable|integer|between:1,4',
         ]);
 
-        $quantity  = (int) ($data['quantity'] ?? 1);
-        $sponsorId = $data['sponsor_id'] ?? null;
+        $quantity     = (int) ($data['quantity'] ?? 1);
+        $sponsorId    = $data['sponsor_id'] ?? null;
+        $preferredLeg = $data['preferred_leg'] ?? null;
 
         // Fall back to the distributor's upline_id if no sponsor was provided.
         if (!$sponsorId && $user->upline_id) {
@@ -74,7 +76,7 @@ class DistributorJoinController extends Controller
         try {
             // Pass the full quantity in one call — processPurchase handles the loop
             // internally inside a single DB transaction.
-            $account = $mlm->processPurchase($distributorId, $data['product_id'], $sponsorId, $quantity);
+            $account = $mlm->processPurchase($distributorId, $data['product_id'], $sponsorId, $quantity, $preferredLeg);
             $mlm->runRankCheck($distributorId);
 
             // Fetch updated account list for the response

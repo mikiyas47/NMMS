@@ -421,7 +421,7 @@ const UpgradeModal = ({ visible, customerName, customerEmail, txRef, onStay, onU
 // Shown after payment is confirmed. Includes the upgrade prompt for non-self-purchases.
 const SuccessScreen = ({
   txRef, amount, product, customerName, customerEmail,
-  isSelfPurchase, productId, distributorId, navigation, onNewCheckout,
+  isSelfPurchase, productId, distributorId, preferredLeg, navigation, onNewCheckout,
 }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -435,17 +435,16 @@ const SuccessScreen = ({
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
 
     if (isSelfPurchase) {
-      // For self-purchases, call /distributor/join directly to register the node.
       if (!joinCalledRef.current) {
         joinCalledRef.current = true;
         setJoiningNetwork(true);
-        // Get the upline_id from status then join
         getDistributorStatus()
           .then(statusRes => {
             return joinNetwork({
               product_id: productId,
               sponsor_id: statusRes?.upline_id ?? null,
               quantity: 1,
+              preferred_leg: preferredLeg ?? null,
             });
           })
           .then(() => {
@@ -454,7 +453,6 @@ const SuccessScreen = ({
           })
           .catch(err => {
             console.log('[SuccessScreen] joinNetwork error:', err.message);
-            // Check if it already succeeded (duplicate call protection)
             getDistributorStatus()
               .then(s => {
                 if (s?.has_joined) {
@@ -468,7 +466,6 @@ const SuccessScreen = ({
           });
       }
     } else {
-      // Check if this customer is already an active distributor
       if (customerEmail) {
         checkCustomerStatus(customerEmail, txRef).then(res => {
           if (res.is_distributor) setAlreadyDist(true);
@@ -818,6 +815,7 @@ const CustomerPayScreen = ({ route, navigation }) => {
         isSelfPurchase={!!self_purchase}
         productId={selectedProduct?.id}
         distributorId={distributor_id}
+        preferredLeg={leg ?? null}
         navigation={navigation}
         onNewCheckout={resetForm}
       />

@@ -18,6 +18,26 @@ class MlmEngineService
         'IBB' => 4, 'GEB' => 5, 'CA' => 6, 'C_AWARD' => 7, 'AL' => 8,
     ];
 
+    // ─── BFS placement using pre-loaded node map (no DB queries) ────────────
+    private function findPlacementNodeFromMap($startNodeId, $allNodes, $childrenMap)
+    {
+        $queue   = [$startNodeId];
+        $visited = [];
+        while (!empty($queue)) {
+            $currentId = array_shift($queue);
+            if (isset($visited[$currentId])) continue;
+            $visited[$currentId] = true;
+            $childCount = count($childrenMap[$currentId] ?? []);
+            if ($childCount < 4) {
+                return $allNodes->get($currentId);
+            }
+            foreach (($childrenMap[$currentId] ?? []) as $childId) {
+                if (!isset($visited[$childId])) $queue[] = $childId;
+            }
+        }
+        return null;
+    }
+
     // ─── BFS placement ───────────────────────────────────────────────────────
     // Finds the first node in the subtree (BFS order) that has fewer than 4 children.
     // Loads ALL nodes in one query and does BFS in memory — no N+1 queries.
@@ -83,7 +103,7 @@ class MlmEngineService
     //
     // FIX: Added null-check on findPlacementNode() result — throws a clear error
     // instead of a fatal null-pointer exception when the tree is full.
-    public function processPurchase($distributorId, $productId, $sponsorId = null, $quantity = 1)
+    public function processPurchase($distributorId, $productId, $sponsorId = null, $quantity = 1, $preferredLeg = null)
     {
         DB::beginTransaction();
         try {
@@ -93,30 +113,70 @@ class MlmEngineService
             Wallet::firstOrCreate(['distributor_id' => $distributorId]);
             Stat::firstOrCreate(['distributor_id'   => $distributorId]);
 
+            // Load all nodes once for BFS (avoids N+1 inside the loop)
+            $allNodes    = Node::all()->keyBy('id');
+            $childrenMap = [];
+            foreach ($allNodes as $node) {
+                if ($node->parent_id !== null) {
+                    $childrenMap[$node->parent_id][] = $node->id;
+                }
+            }
+
             $nodes       = [];
             $lastAccount = null;
 
             for ($i = 0; $i < $quantity; $i++) {
-                // Re-fetch inside loop so each iteration sees nodes from previous iterations
+                // Re-fetch the first account so each iteration sees nodes from previous iterations
                 $currentFirst = Account::where('distributor_id', $distributorId)->orderBy('id')->first();
 
                 if ($currentFirst && $currentFirst->node_id) {
-                    // Distributor already has a main node — place new account as a
-                    // child of the main node (doubling). We always start BFS from
-                    // the MAIN node (first account's node), not from any secondary node.
-                    $mainNodeId    = Account::where('distributor_id', $distributorId)->orderBy('id')->value('node_id');
-                    $placementNode = $this->findPlacementNode($mainNodeId);
+                    // ── Doubling: place new node under the main node ──────────
+                    $mainNodeId = Account::where('distributor_id', $distributorId)->orderBy('id')->value('node_id');
+
+                    if ($preferredLeg) {
+                        // Place at the specific leg the distributor selected
+                        $mainNode = $allNodes->get($mainNodeId);
+                        // Check if that leg is already taken under the main node
+                        $existingAtLeg = collect($childrenMap[$mainNodeId] ?? [])
+                            ->map(fn($id) => $allNodes->get($id))
+                            ->first(fn($n) => $n && $n->leg == $preferredLeg);
+
+                        if ($existingAtLeg) {
+                            // Leg is taken — do BFS from that leg's subtree
+                            $placementNode = $this->findPlacementNodeFromMap($existingAtLeg->id, $allNodes, $childrenMap);
+                        } else {
+                            // Leg is free — place directly under main node at that leg
+                            $placementNode = $allNodes->get($mainNodeId);
+                        }
+                        $leg = $preferredLeg;
+                        // If placement is not the main node, use BFS leg
+                        if ($placementNode && $placementNode->id !== $mainNodeId) {
+                            $leg = count($childrenMap[$placementNode->id] ?? []) + 1;
+                            if ($leg > 4) $leg = 4;
+                        }
+                    } else {
+                        // No preferred leg — BFS from main node
+                        $placementNode = $this->findPlacementNodeFromMap($mainNodeId, $allNodes, $childrenMap);
+                        $leg = count($childrenMap[$placementNode->id] ?? []) + 1;
+                        if ($leg > 4) $leg = 4;
+                    }
+
                     if (!$placementNode) {
                         throw new \Exception('No available placement slot in the tree. Your tree is full.');
                     }
-                    $leg = min($placementNode->children()->count() + 1, 4);
+
                     $newNode = Node::create([
                         'parent_id'      => $placementNode->id,
                         'distributor_id' => $distributorId,
                         'leg'            => $leg,
                     ]);
+
+                    // Update maps so next iteration in the loop sees this new node
+                    $allNodes->put($newNode->id, $newNode);
+                    $childrenMap[$placementNode->id][] = $newNode->id;
+
                 } else {
-                    // First-time join — place under sponsor or root
+                    // ── First-time join — place under sponsor or root ─────────
                     if ($sponsorId) {
                         $sponsorNode = Node::where('distributor_id', $sponsorId)->orderBy('id')->first();
                         if (!$sponsorNode) {
@@ -127,7 +187,7 @@ class MlmEngineService
                                 $sponsorNode = Node::create([
                                     'parent_id'      => $rootPlacement->id,
                                     'distributor_id' => $sponsorId,
-                                    'leg'            => min($rootPlacement->children()->count() + 1, 4),
+                                    'leg'            => min(count($childrenMap[$rootPlacement->id] ?? []) + 1, 4),
                                 ]);
                             } else {
                                 $sponsorNode = Node::create(['parent_id' => null, 'distributor_id' => $sponsorId, 'leg' => 1]);
@@ -135,19 +195,23 @@ class MlmEngineService
                         }
                         $placementNode = $this->findPlacementNode($sponsorNode->id);
                         if (!$placementNode) throw new \Exception('No available placement slot under sponsor.');
-                        $leg = min($placementNode->children()->count() + 1, 4);
+                        $leg = min(count($childrenMap[$placementNode->id] ?? []) + 1, 4);
                         $newNode = Node::create(['parent_id' => $placementNode->id, 'distributor_id' => $distributorId, 'leg' => $leg]);
                     } else {
                         $root = Node::whereNull('parent_id')->first();
                         if ($root) {
                             $placementNode = $this->findPlacementNode($root->id);
                             if (!$placementNode) throw new \Exception('No available placement slot in the root tree.');
-                            $leg = min($placementNode->children()->count() + 1, 4);
+                            $leg = min(count($childrenMap[$placementNode->id] ?? []) + 1, 4);
                             $newNode = Node::create(['parent_id' => $placementNode->id, 'distributor_id' => $distributorId, 'leg' => $leg]);
                         } else {
                             $newNode = Node::create(['parent_id' => null, 'distributor_id' => $distributorId, 'leg' => 1]);
                         }
                     }
+
+                    // Update maps
+                    $allNodes->put($newNode->id, $newNode);
+                    if ($newNode->parent_id) $childrenMap[$newNode->parent_id][] = $newNode->id;
                 }
 
                 $lastAccount = Account::create([
@@ -160,7 +224,7 @@ class MlmEngineService
                 $nodes[] = $newNode;
             }
 
-            // Mark distributor as paid now that they have at least one account
+            // Mark distributor as paid
             DB::table('distributors')
                 ->where('distributor_id', $distributorId)
                 ->update(['is_paid' => true, 'updated_at' => now()]);

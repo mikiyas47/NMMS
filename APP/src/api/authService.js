@@ -362,8 +362,9 @@ export const getSubtreeData = async (nodeId) => {
  * request successfully even though the client timed out. Retrying would
  * create duplicate accounts/nodes.
  */
-export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
+export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1, preferred_leg = null }) => {
   const payload = { product_id, sponsor_id, quantity };
+  if (preferred_leg) payload.preferred_leg = preferred_leg;
   console.log('[joinNetwork] Requesting with:', payload);
 
   try {
