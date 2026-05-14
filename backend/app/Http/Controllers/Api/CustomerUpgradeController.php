@@ -223,23 +223,46 @@ class CustomerUpgradeController extends Controller
             // Refresh the distributor model to ensure we have the latest data
             $distributor->refresh();
 
+            // Final safety — ensure status and is_paid are correct
+            if ($distributor->status !== 'active' || !$distributor->is_paid) {
+                \Illuminate\Support\Facades\Log::warning('Post-save state mismatch — forcing active', [
+                    'distributor_id' => $distributor->distributor_id,
+                    'status'         => $distributor->status,
+                    'is_paid'        => $distributor->is_paid,
+                ]);
+                $distributor->status  = 'active';
+                $distributor->is_paid = true;
+                $distributor->save();
+                $distributor->refresh();
+            }
+
             \Illuminate\Support\Facades\Log::info('Distributor activation complete', [
                 'distributor_id' => $distributor->distributor_id,
                 'email'          => $distributor->email,
                 'status'         => $distributor->status,
                 'is_paid'        => $distributor->is_paid,
+                'role'           => 'distributor',
             ]);
 
             $token = $distributor->createToken('auth_token')->plainTextToken;
 
             DB::commit();
 
+            // Build the user response with explicit role & status
+            // The Distributor model appends 'role' via getRoleAttribute(),
+            // but we also include it at the top level for clarity.
+            $userData = $distributor->toArray();
+            $userData['role']           = 'distributor';
+            $userData['status']         = 'active';
+            $userData['is_paid']        = true;
+            $userData['distributor_id'] = $distributor->distributor_id;
+
             return response()->json([
                 'status'       => 'success',
                 'message'      => 'Welcome! Your distributor account is now active.',
                 'access_token' => $token,
                 'token_type'   => 'Bearer',
-                'user'         => $distributor,
+                'user'         => $userData,
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -247,7 +270,8 @@ class CustomerUpgradeController extends Controller
                 'email'     => $email,
                 'tx_ref'    => $data['tx_ref'],
                 'message'   => $e->getMessage(),
-                'trace'     => $e->getTraceAsString(),
+                'file'      => $e->getFile() . ':' . $e->getLine(),
+                'trace'     => substr($e->getTraceAsString(), 0, 2000),
             ]);
             return response()->json([
                 'message' => 'Account activation failed. Please try again or contact support.',

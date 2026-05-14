@@ -23,7 +23,23 @@ class DistributorJoinController extends Controller
     public function join(Request $request, MlmEngineService $mlm)
     {
         $user = $request->user();
+
+        if (!$user) {
+            Log::error('DistributorJoin: No authenticated user found');
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Authentication required. Please log in again.',
+            ], 401);
+        }
+
         $distributorId = $user->distributor_id ?? $user->id;
+
+        Log::info('DistributorJoin: Starting join request', [
+            'distributor_id' => $distributorId,
+            'email'          => $user->email ?? 'N/A',
+            'user_class'     => get_class($user),
+            'request_data'   => $request->only(['product_id', 'sponsor_id', 'quantity']),
+        ]);
 
         $data = $request->validate([
             'product_id' => 'required|exists:products,id',
@@ -45,6 +61,12 @@ class DistributorJoinController extends Controller
         $existingCount = Account::where('distributor_id', $distributorId)->count();
         $maxAccounts   = 4; // Max quadruple account
 
+        Log::info('DistributorJoin: Pre-check', [
+            'existing_accounts' => $existingCount,
+            'requested_qty'     => $quantity,
+            'sponsor_id'        => $sponsorId,
+        ]);
+
         if ($existingCount + $quantity > $maxAccounts) {
             return response()->json([
                 'status'  => 'error',
@@ -55,10 +77,16 @@ class DistributorJoinController extends Controller
         $accounts = [];
         try {
             for ($i = 0; $i < $quantity; $i++) {
+                Log::info("DistributorJoin: Processing account " . ($i + 1) . " of {$quantity}");
                 $account = $mlm->processPurchase($distributorId, $data['product_id'], $sponsorId);
                 $accounts[] = $account;
             }
             $mlm->runRankCheck($distributorId);
+
+            Log::info('DistributorJoin: Join complete', [
+                'distributor_id'  => $distributorId,
+                'accounts_created' => count($accounts),
+            ]);
 
             return response()->json([
                 'status'   => 'success',
@@ -66,10 +94,15 @@ class DistributorJoinController extends Controller
                 'accounts' => $accounts,
             ]);
         } catch (\Exception $e) {
-            Log::error('Distributor join error: ' . $e->getMessage());
+            Log::error('DistributorJoin: Failed', [
+                'distributor_id' => $distributorId,
+                'error'          => $e->getMessage(),
+                'file'           => $e->getFile() . ':' . $e->getLine(),
+                'trace'          => substr($e->getTraceAsString(), 0, 2000),
+            ]);
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Failed to process your join request: ' . $e->getMessage(),
+                'message' => 'Failed to join the network: ' . $e->getMessage(),
             ], 500);
         }
     }

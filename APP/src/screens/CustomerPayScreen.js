@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CustomerPayScreen.js
  * Independent checkout page accessible via deep-link or direct navigation.
  * After a successful payment the customer is offered a choice:
@@ -440,7 +440,15 @@ const SuccessScreen = ({
 
   const handleUpgraded = (res) => {
     setShowUpgrade(false);
+    // Log the upgrade result for debugging
+    console.log('[handleUpgraded] Upgrade successful:', {
+      status: res?.status,
+      role: res?.user?.role,
+      userStatus: res?.user?.status,
+      hasToken: !!res?.access_token,
+    });
     // Navigate to the distributor dashboard — they are now logged in
+    // (upgradeToDistributor already saved token + user to AsyncStorage)
     navigation.replace('UserDashboard');
   };
 

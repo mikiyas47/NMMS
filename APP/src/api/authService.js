@@ -148,6 +148,25 @@ export const getUser = async () => {
   }
 };
 
+/**
+ * Refresh the user data from the server and update AsyncStorage.
+ * Call this after account upgrade to ensure the UI reflects the latest state.
+ */
+export const refreshUserFromServer = async () => {
+  try {
+    const response = await apiClient.get('/user');
+    const user = response.data;
+    if (user) {
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+      console.log('[refreshUserFromServer] User data updated:', user.email, 'role:', user.role, 'status:', user.status);
+    }
+    return user;
+  } catch (error) {
+    console.log('[refreshUserFromServer] Error:', error.message);
+    return null;
+  }
+};
+
 // ── Prospects ─────────────────────────────────────────────────────────────────
 export const getProspectDashboard = async () => (await apiClient.get('/prospects/dashboard')).data;
 export const getProspects = async (params) => (await apiClient.get('/prospects', { params })).data;
@@ -239,6 +258,22 @@ export const initiatePayment = async (paymentData) => {
 };
 
 /**
+ * Verify a payment by its tx_ref.
+ * The backend will check Chapa if the payment is still pending.
+ * Used by CustomerPayScreen to poll for payment confirmation.
+ */
+export const verifyPayment = async (txRef) => {
+  try {
+    const response = await apiClient.get(`/payments/verify/${txRef}`);
+    console.log(`[verifyPayment] tx_ref=${txRef}, status=${response.data?.status}`);
+    return response.data;
+  } catch (error) {
+    console.log(`[verifyPayment] Error for tx_ref=${txRef}:`, error.message);
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
+};
+
+/**
  * Fetch the distributor's sales / commission history.
  * Pass distributor_id to filter by distributor.
  */
@@ -321,13 +356,32 @@ export const getSubtreeData = async (nodeId) => {
  * quantity: 1=single, 2=double, 3=triple, 4=quadruple (more legs)
  */
 export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1 }) => {
-  const response = await apiClient.post('/distributor/join', { product_id, sponsor_id, quantity });
-  return response.data;
+  try {
+    console.log('[joinNetwork] Requesting with:', { product_id, sponsor_id, quantity });
+    const response = await apiClient.post('/distributor/join', { product_id, sponsor_id, quantity });
+    console.log('[joinNetwork] Success:', response.data?.status);
+    return response.data;
+  } catch (error) {
+    console.log('[joinNetwork] Error:', error.message, error.response?.status, error.response?.data);
+    // Surface the actual server error message, not the generic axios 'Network Error'
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timed out. The server may be starting up — please try again in 30 seconds.');
+    }
+    throw new Error(error.message || 'Could not connect to the server. Check your internet connection.');
+  }
 };
 
 export const getDistributorStatus = async () => {
-  const response = await apiClient.get('/distributor/status');
-  return response.data;
+  try {
+    const response = await apiClient.get('/distributor/status');
+    return response.data;
+  } catch (error) {
+    console.log('[getDistributorStatus] Error:', error.message, error.response?.status);
+    throw error.response ? error.response.data : new Error('Network Error');
+  }
 };
 
 export default apiClient;

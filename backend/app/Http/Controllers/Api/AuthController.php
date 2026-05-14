@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Models\Distributor;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -66,15 +67,44 @@ class AuthController extends Controller
         // If not found or password mismatch, check 'distributors' table
         $distributor = \App\Models\Distributor::where('email', $request->email)->first();
 
-        if ($distributor && Hash::check($request->password, $distributor->password)) {
-            $token = $distributor->createToken('auth_token')->plainTextToken;
-            
-            return response()->json([
-                'access_token' => $token,
-                'token_type' => 'Bearer',
-                'user' => $distributor,
+        if ($distributor) {
+            Log::info('Distributor login attempt', [
+                'email'     => $request->email,
+                'status'    => $distributor->status,
+                'is_paid'   => $distributor->is_paid,
+                'has_password' => !empty($distributor->password),
             ]);
+
+            if (Hash::check($request->password, $distributor->password)) {
+                // Reject inactive distributors — they need to complete upgrade first
+                if ($distributor->status !== 'active') {
+                    Log::warning('Inactive distributor tried to login', [
+                        'email'  => $request->email,
+                        'status' => $distributor->status,
+                    ]);
+                    return response()->json([
+                        'message' => 'Your account is not yet active. Please complete the distributor activation process first.',
+                    ], 403);
+                }
+
+                $token = $distributor->createToken('auth_token')->plainTextToken;
+
+                Log::info('Distributor login successful', [
+                    'distributor_id' => $distributor->distributor_id,
+                    'email'          => $distributor->email,
+                    'status'         => $distributor->status,
+                    'role'           => 'distributor',
+                ]);
+
+                return response()->json([
+                    'access_token' => $token,
+                    'token_type'   => 'Bearer',
+                    'user'         => $distributor,
+                ]);
+            }
         }
+
+        Log::warning('Failed login attempt', ['email' => $request->email]);
 
         return response()->json([
             'message' => 'Invalid login details'

@@ -52,7 +52,10 @@ class Distributor extends Authenticatable
     protected function casts(): array
     {
         return [
-            'password'       => 'hashed',
+            // NOTE: Do NOT add 'password' => 'hashed' here.
+            // All code paths (AuthController, CustomerUpgradeController, MlmEngineService)
+            // already call Hash::make() / bcrypt() before setting the password.
+            // Adding the 'hashed' cast would double-hash and break all logins.
             'is_paid'        => 'boolean',
             'join_date'      => 'date',
             'income_monthly' => 'decimal:2',
