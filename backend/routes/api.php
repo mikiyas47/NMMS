@@ -63,8 +63,8 @@ Route::middleware('auth:sanctum,api')->group(function () {
 
 // ── Temporary: backfill wallet balances from paid commissions ────────────────
 Route::get('/cleanup-duplicates', function () {
-    \App\Models\Account::whereIn('id', [84, 85])->delete();
-    \App\Models\Node::whereIn('id', [84, 85])->delete();
+    \App\Models\Account::whereIn('id', [86, 87])->delete();
+    \App\Models\Node::whereIn('id', [86, 87])->delete();
     
     $stat = \App\Models\Stat::where('distributor_id', 41)->first();
     if ($stat) {
@@ -72,7 +72,7 @@ Route::get('/cleanup-duplicates', function () {
         $stat->save();
     }
     
-    return response()->json(['message' => 'Cleaned up duplicate accounts 84 and 85']);
+    return response()->json(['message' => 'Cleaned up duplicate accounts 86 and 87']);
 });
 
 Route::get('/backfill-wallets', function () {
