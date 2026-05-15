@@ -99,6 +99,82 @@ const FloatingInput = ({
   );
 };
 
+// ─── Product Card (shown when product is pre-selected via payment link) ───────
+const ProductCard = ({ product, onChangeProduct, canChange }) => {
+  const uri = toHttps(product?.image);
+  const isVideo = uri && (uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') || uri.endsWith('.mkv'));
+
+  return (
+    <View style={{
+      borderRadius: 20, overflow: 'hidden', marginBottom: 20,
+      borderWidth: 1.5, borderColor: ACCENT,
+      backgroundColor: 'rgba(99,102,241,0.08)',
+    }}>
+      {/* Media */}
+      {uri ? (
+        <View style={{ width: '100%', height: 220, backgroundColor: '#000' }}>
+          {isVideo ? (
+            // Show video thumbnail placeholder with play icon
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
+              <Image source={{ uri }} style={{ width: '100%', height: '100%', position: 'absolute' }} resizeMode="cover" />
+              <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(0,0,0,0.6)',
+                alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontSize: 24 }}>▶</Text>
+              </View>
+            </View>
+          ) : (
+            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          )}
+          {/* Category badge */}
+          {product.category && (
+            <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: ACCENT,
+              paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>
+                {product.category.toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </View>
+      ) : (
+        <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(99,102,241,0.15)' }}>
+          <Package color={ACCENT} size={52} />
+        </View>
+      )}
+
+      {/* Details */}
+      <View style={{ padding: 16 }}>
+        <Text style={{ color: TEXT, fontSize: 18, fontWeight: '900', marginBottom: 6 }}>
+          {product.name}
+        </Text>
+        {product.description ? (
+          <Text style={{ color: MUTED, fontSize: 13, lineHeight: 18, marginBottom: 10 }} numberOfLines={3}>
+            {product.description}
+          </Text>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: ACCENT, fontSize: 22, fontWeight: '900' }}>
+            ETB {parseFloat(product.price).toFixed(2)}
+          </Text>
+          {product.point ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245,158,11,0.15)',
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '800' }}>★ {product.point} pts</Text>
+            </View>
+          ) : null}
+        </View>
+        {canChange && (
+          <TouchableOpacity onPress={onChangeProduct} style={{ marginTop: 10, alignSelf: 'flex-start',
+            paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+            backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: BORDER }}>
+            <Text style={{ color: MUTED, fontSize: 12, fontWeight: '600' }}>Change product</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
+
 // ─── Product Picker ───────────────────────────────────────────────────────────
 const ProductPicker = ({ products, selected, onSelect }) => {
   const [open, setOpen] = useState(false);
@@ -959,8 +1035,20 @@ const CustomerPayScreen = ({ route, navigation }) => {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <SectionTitle title="Select Product" />
-            <ProductPicker products={products} selected={selectedProduct} onSelect={setSelected} />
+            <SectionTitle title="Product" />
+            {/* When product is pre-selected via payment link, show rich card with image/video.
+                When no product is pre-selected, show the picker dropdown. */}
+            {selectedProduct && preSelectedProductId ? (
+              <ProductCard
+                product={selectedProduct}
+                onChangeProduct={() => setSelected(null)}
+                canChange={false}
+              />
+            ) : (
+              <>
+                <ProductPicker products={products} selected={selectedProduct} onSelect={setSelected} />
+              </>
+            )}
 
             {selectedProduct && (
               <>
