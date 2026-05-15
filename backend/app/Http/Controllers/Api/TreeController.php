@@ -82,9 +82,9 @@ class TreeController extends Controller
             'distributor_phone'=> $node->distributor->phone ?? 'Unknown',
             'distributor_id'   => $node->distributor_id,
             'leg'              => $node->leg,
-            'rank'             => $stat->rank ?? 'None',
+            // Each node has its own rank — secondary nodes start at CT and earn independently
+            'rank'             => $node->rank ?? 'CT',
             'status'           => $node->distributor->status ?? 'inactive',
-            // own_points = this distributor's personal package points only
             'product_points'   => $productPoints,
             'own_points'       => $stat->own_points ?? $productPoints,
             'children'         => $childrenData,

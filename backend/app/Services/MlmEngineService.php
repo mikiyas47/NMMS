@@ -438,16 +438,64 @@ class MlmEngineService
     }
 
     // ─── Rank Engine ─────────────────────────────────────────────────────────
+    // Rank is evaluated PER NODE, not per distributor.
+    // A distributor with 3 accounts has 3 nodes — each node earns its own rank
+    // independently based on its own 4 legs. The distributor's rank on the
+    // distributors/stats table reflects only the MAIN node (first account).
     public function runRankCheck($distributorId)
     {
         $stat = Stat::where('distributor_id', $distributorId)->first();
         if (!$stat) return;
 
-        $node = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
-        if (!$node) return;
+        // Evaluate rank for EVERY node this distributor owns
+        $allMyNodes = Node::where('distributor_id', $distributorId)->orderBy('id')->get();
+        if ($allMyNodes->isEmpty()) return;
 
+        $mainNode    = $allMyNodes->first();
+        $mainNewRank = null;
+
+        foreach ($allMyNodes as $node) {
+            $nodeNewRank = $this->evaluateNodeRank($node, $stat);
+
+            // Save rank on the node itself
+            if ($nodeNewRank !== ($node->rank ?? 'CT')) {
+                Node::where('id', $node->id)->update(['rank' => $nodeNewRank]);
+            }
+
+            // Track the main node's rank to update distributor/stat records
+            if ($node->id === $mainNode->id) {
+                $mainNewRank = $nodeNewRank;
+            }
+        }
+
+        // Update distributor and stat rank based on MAIN node only
+        if ($mainNewRank !== null) {
+            $currentRank = $stat->rank ?: 'CT';
+            if ($mainNewRank !== $currentRank) {
+                $stat->rank = $mainNewRank;
+                $stat->save();
+
+                $dist = Distributor::where('distributor_id', $distributorId)->first();
+                if ($dist) {
+                    $dist->rank = $mainNewRank;
+                    $dist->save();
+                }
+
+                $this->payRankBonus($distributorId, $currentRank, $mainNewRank);
+            }
+        }
+    }
+
+    // ─── Evaluate rank for a single node based on its own 4 legs ─────────────
+    private function evaluateNodeRank(Node $node, Stat $stat): string
+    {
         $totalPoints = $this->getSubtreeVolume($node->id);
         $ownPoints   = (int)($stat->own_points ?? 0);
+
+        // Only add own_points to leg 1 for the MAIN node (first account).
+        // Secondary nodes (doubled accounts) do NOT get the distributor's own
+        // package points added — they must earn rank purely from their own legs.
+        $isMainNode  = (Node::where('distributor_id', $node->distributor_id)->orderBy('id')->value('id') === $node->id);
 
         $directLegs = Node::where('parent_id', $node->id)->get()->keyBy('leg');
 
@@ -459,9 +507,12 @@ class MlmEngineService
             $legRanks[$i]  = $legNode ? $this->getHighestRankInSubtree($legNode->id) : 'CT';
         }
 
-        $legPoints[1] += $ownPoints;
+        // Only the main node gets own_points added to leg 1
+        if ($isMainNode) {
+            $legPoints[1] += $ownPoints;
+        }
 
-        $currentRank  = $stat->rank ?: 'CT';
+        $currentRank  = $node->rank ?? 'CT';
         $newRank      = $currentRank;
 
         $legsAbove200 = count(array_filter($legPoints, fn($p) => $p >= 200));
@@ -502,22 +553,12 @@ class MlmEngineService
             $newRank = 'AL';
         }
 
+        // Never demote
         if ((self::RANK_SCORE[$newRank] ?? 0) < (self::RANK_SCORE[$currentRank] ?? 0)) {
             $newRank = $currentRank;
         }
 
-        if ($newRank !== $currentRank) {
-            $stat->rank = $newRank;
-            $stat->save();
-
-            $dist = Distributor::where('distributor_id', $distributorId)->first();
-            if ($dist) {
-                $dist->rank = $newRank;
-                $dist->save();
-            }
-
-            $this->payRankBonus($distributorId, $currentRank, $newRank);
-        }
+        return $newRank;
     }
 
     // ─── Walk up the tree and re-check rank for every ancestor ───────────────
@@ -622,7 +663,6 @@ class MlmEngineService
     private function getHighestRankInSubtree(int $nodeId): string
     {
         $allNodes    = Node::all()->keyBy('id');
-        $allStats    = Stat::all()->keyBy('distributor_id');
         $childrenMap = [];
         foreach ($allNodes as $node) {
             if ($node->parent_id !== null) {
@@ -642,11 +682,12 @@ class MlmEngineService
 
             $node = $allNodes->get($currId);
             if (!$node) continue;
-            $stat = $allStats->get($node->distributor_id);
-            if ($stat && $stat->rank && isset(self::RANK_SCORE[$stat->rank])
-                && self::RANK_SCORE[$stat->rank] > $highest) {
-                $highest     = self::RANK_SCORE[$stat->rank];
-                $highestRank = $stat->rank;
+
+            // Use node.rank — each node has its own rank now
+            $nodeRank = $node->rank ?? 'CT';
+            if (isset(self::RANK_SCORE[$nodeRank]) && self::RANK_SCORE[$nodeRank] > $highest) {
+                $highest     = self::RANK_SCORE[$nodeRank];
+                $highestRank = $nodeRank;
             }
 
             foreach (($childrenMap[$currId] ?? []) as $childId) {
