@@ -992,3 +992,15 @@ Route::get('/backfill-node-ranks', function () {
     }
     return response()->json(['message' => "Backfilled ranks for $updated distributors"]);
 });
+
+// Run rank check for a single distributor by id (for backfilling)
+Route::get('/run-rank-check/{distributorId}', function ($distributorId) {
+    $mlm = new \App\Services\MlmEngineService();
+    try {
+        $mlm->runRankCheck((int)$distributorId);
+        $nodes = \App\Models\Node::where('distributor_id', $distributorId)->orderBy('id')->get(['id', 'rank', 'leg', 'parent_id']);
+        return response()->json(['status' => 'ok', 'distributor_id' => $distributorId, 'nodes' => $nodes]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
