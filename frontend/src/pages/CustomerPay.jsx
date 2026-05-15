@@ -108,7 +108,15 @@ const CustomerPay = () => {
 
   useEffect(() => {
     if (returnTxRef) {
-      // Came back from Chapa — verify payment
+      // Came back from Chapa — restore customer info from localStorage
+      try {
+        const saved = JSON.parse(localStorage.getItem('nmms_checkout') || '{}');
+        if (saved.name)   setName(saved.name);
+        if (saved.email)  setEmail(saved.email);
+        if (saved.phone)  setPhone(saved.phone);
+        if (saved.amount) setPaymentAmount(saved.amount);
+        if (saved.tx_ref) setTxRef(saved.tx_ref);
+      } catch {}
       verifyPayment(returnTxRef);
     } else {
       loadProducts();
@@ -181,7 +189,18 @@ const CustomerPay = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Payment initiation failed.');
-      if (data.payment_url) window.location.href = data.payment_url;
+      if (data.payment_url) {
+        // Save customer info to localStorage so we can restore it after Chapa redirect
+        localStorage.setItem('nmms_checkout', JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          product_id: selectedProduct.id,
+          tx_ref: data.tx_ref,
+          amount: data.amount,
+        }));
+        window.location.href = data.payment_url;
+      }
     } catch (err) {
       setError(err.message);
       setSubmitting(false);
@@ -201,6 +220,7 @@ const CustomerPay = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Upgrade failed.');
+      localStorage.removeItem('nmms_checkout');
       setUpgradeStep('done');
     } catch (err) {
       setUpgradeError(err.message);
@@ -275,7 +295,7 @@ const CustomerPay = () => {
             <button onClick={() => setUpgradeStep('form')} style={S.btnGold}>
               <TrendingUp size={20} /> Yes, Become a Distributor!
             </button>
-            <button onClick={() => setUpgradeStep('stayed')} style={S.btnGray}>
+            <button onClick={() => { localStorage.removeItem('nmms_checkout'); setUpgradeStep('stayed'); }} style={S.btnGray}>
               No thanks, stay as customer
             </button>
           </>
