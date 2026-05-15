@@ -27,7 +27,7 @@ class TreeController extends Controller
 
         $distributorId = $user->distributor_id ?? $user->id;
 
-        $rootNode = Node::where('distributor_id', $distributorId)->first();
+        $rootNode = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
         if (!$rootNode) {
             return response()->json(['message' => 'No tree found. You have not purchased a product yet.'], 404);
         }
