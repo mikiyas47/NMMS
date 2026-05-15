@@ -10,9 +10,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Modal, Alert, Image, Dimensions,
-  Animated, StatusBar, KeyboardAvoidingView, Platform,
+  Animated, StatusBar, KeyboardAvoidingView, Platform, AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -99,6 +100,32 @@ const FloatingInput = ({
   );
 };
 
+// ─── Product Video Player ─────────────────────────────────────────────────────
+const ProductVideo = ({ uri }) => {
+  const player = useVideoPlayer(uri, p => {
+    p.loop = true;
+    p.muted = false;
+    p.play();
+  });
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') player.play();
+      else player.pause();
+    });
+    return () => sub.remove();
+  }, [player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={{ width: '100%', height: '100%' }}
+      contentFit="cover"
+      nativeControls={true}
+    />
+  );
+};
+
 // ─── Product Card (shown when product is pre-selected via payment link) ───────
 const ProductCard = ({ product, onChangeProduct, canChange }) => {
   const uri = toHttps(product?.image);
@@ -114,14 +141,7 @@ const ProductCard = ({ product, onChangeProduct, canChange }) => {
       {uri ? (
         <View style={{ width: '100%', height: 220, backgroundColor: '#000' }}>
           {isVideo ? (
-            // Show video thumbnail placeholder with play icon
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}>
-              <Image source={{ uri }} style={{ width: '100%', height: '100%', position: 'absolute' }} resizeMode="cover" />
-              <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(0,0,0,0.6)',
-                alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 24 }}>▶</Text>
-              </View>
-            </View>
+            <ProductVideo uri={uri} />
           ) : (
             <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           )}
