@@ -1021,3 +1021,20 @@ Route::get('/check-payment/{txRef}', function ($txRef) {
         'commission_paid'=> $p->commission_paid,
     ]);
 });
+
+// Check distributor status by email (for debugging)
+Route::get('/check-distributor/{email}', function ($email) {
+    $d = \App\Models\Distributor::where('email', $email)->first();
+    if (!$d) return response()->json(['error' => 'Not found'], 404);
+    $hasAccount = \App\Models\Account::where('distributor_id', $d->distributor_id)->exists();
+    return response()->json([
+        'distributor_id' => $d->distributor_id,
+        'name'           => $d->name,
+        'email'          => $d->email,
+        'status'         => $d->status,
+        'is_paid'        => $d->is_paid,
+        'rank'           => $d->rank,
+        'has_account'    => $hasAccount,
+        'upline_id'      => $d->upline_id,
+    ]);
+});
