@@ -80,7 +80,7 @@ class PaymentController extends Controller
             'phone_number' => $data['customer_phone'] ?? '',
             'tx_ref' => $txRef,
             'callback_url' => env('APP_URL') . '/api/payments/webhook',
-            'return_url' => env('APP_URL') . '/api/payments/return?tx_ref=' . $txRef,
+            'return_url'   => env('FRONTEND_URL', 'https://nmms-ochre.vercel.app') . '/pay?tx_ref=' . $txRef . '&distributor_id=' . $data['distributor_id'] . '&product_id=' . $product->id . '&leg=' . ($data['leg'] ?? ''),
             'customization' => [
                 'title' => 'NMMS Purchase',
                 'description' => $data['quantity'] . 'x ' . Str::limit($product->name, 20),

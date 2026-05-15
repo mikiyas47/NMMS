@@ -108,7 +108,7 @@ const CustomerPay = () => {
 
   useEffect(() => {
     if (returnTxRef) {
-      // Came back from Chapa — restore customer info from localStorage
+      // Came back from Chapa — restore customer info from localStorage first
       try {
         const saved = JSON.parse(localStorage.getItem('nmms_checkout') || '{}');
         if (saved.name)   setName(saved.name);
@@ -117,7 +117,8 @@ const CustomerPay = () => {
         if (saved.amount) setPaymentAmount(saved.amount);
         if (saved.tx_ref) setTxRef(saved.tx_ref);
       } catch {}
-      verifyPayment(returnTxRef);
+      // Also load products so we can show the product card on success screen
+      loadProducts().then(() => verifyPayment(returnTxRef));
     } else {
       loadProducts();
     }
