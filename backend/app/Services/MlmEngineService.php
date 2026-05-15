@@ -126,6 +126,16 @@ class MlmEngineService
             $lastAccount = null;
 
             for ($i = 0; $i < $quantity; $i++) {
+                // Reload all nodes fresh each iteration so we see nodes from previous iterations
+                // AND nodes created by previous separate transactions (e.g. first join)
+                $allNodes    = Node::all()->keyBy('id');
+                $childrenMap = [];
+                foreach ($allNodes as $node) {
+                    if ($node->parent_id !== null) {
+                        $childrenMap[$node->parent_id][] = $node->id;
+                    }
+                }
+
                 // Re-fetch the first account so each iteration sees nodes from previous iterations
                 $currentFirst = Account::where('distributor_id', $distributorId)->orderBy('id')->first();
 
