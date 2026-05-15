@@ -1004,3 +1004,20 @@ Route::get('/run-rank-check/{distributorId}', function ($distributorId) {
         return response()->json(['error' => $e->getMessage()], 500);
     }
 });
+
+// Check payment details by tx_ref (for debugging return_url)
+Route::get('/check-payment/{txRef}', function ($txRef) {
+    $p = \App\Models\Payment::where('tx_ref', $txRef)->first();
+    if (!$p) return response()->json(['error' => 'Not found'], 404);
+    return response()->json([
+        'tx_ref'         => $p->tx_ref,
+        'status'         => $p->status,
+        'customer_email' => $p->customer_email,
+        'customer_name'  => $p->customer_name,
+        'amount'         => $p->amount,
+        'product_id'     => $p->product_id,
+        'distributor_id' => $p->distributor_id,
+        'leg'            => $p->leg,
+        'commission_paid'=> $p->commission_paid,
+    ]);
+});
