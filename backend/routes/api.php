@@ -955,3 +955,24 @@ Route::get('/check-tree-integrity', function () {
         'root_nodes'  => $nodes->whereNull('parent_id')->pluck('id'),
     ]);
 });
+
+// Insert a pending payment record only (for testing stay-as-customer)
+Route::post('/insert-test-payment', function (\Illuminate\Http\Request $request) {
+    $payment = \App\Models\Payment::create([
+        'product_id'        => $request->input('product_id', 1),
+        'distributor_id'    => $request->input('distributor_id'),
+        'customer_name'     => $request->input('customer_name', 'Test Customer'),
+        'customer_email'    => $request->input('customer_email'),
+        'customer_phone'    => $request->input('customer_phone', '0911111111'),
+        'tx_ref'            => $request->input('tx_ref'),
+        'amount'            => $request->input('amount', 7690),
+        'currency'          => 'ETB',
+        'quantity'          => 1,
+        'commission_amount' => round($request->input('amount', 7690) * 0.16, 2),
+        'status'            => 'pending',
+        'commission_paid'   => false,
+        'webhook_verified'  => false,
+        'leg'               => $request->input('leg', null),
+    ]);
+    return response()->json(['payment_id' => $payment->id, 'tx_ref' => $payment->tx_ref]);
+});
