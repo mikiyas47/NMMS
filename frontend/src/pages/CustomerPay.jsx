@@ -157,8 +157,16 @@ const CustomerPay = () => {
       setLoading(true);
       const res = await fetch(`${API_BASE}/payments/verify/${ref}`);
       const data = await res.json();
-      setPaymentStatus(data.status === 'success' ? 'success' : 'failed');
-      if (data.amount) setPaymentAmount(data.amount);
+      // Accept both 'success' and 'pending' — pending means webhook hasn't fired yet
+      // but the customer has completed the Chapa checkout page.
+      if (data.status === 'success' || data.status === 'pending') {
+        setPaymentStatus('success');
+        if (data.amount) setPaymentAmount(data.amount);
+        // Also set txRef from the response in case localStorage didn't have it
+        setTxRef(ref);
+      } else {
+        setPaymentStatus('failed');
+      }
     } catch {
       setPaymentStatus('failed');
     } finally {
