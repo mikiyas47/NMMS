@@ -435,6 +435,7 @@ const SuccessScreen = ({
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
 
     if (isSelfPurchase) {
+      // Self-purchase: call joinNetwork to register the doubled node
       if (!joinCalledRef.current) {
         joinCalledRef.current = true;
         setJoiningNetwork(true);
@@ -466,6 +467,15 @@ const SuccessScreen = ({
           });
       }
     } else {
+      // Customer purchase: ALWAYS register the customer node immediately on payment success.
+      // This runs regardless of whether they choose to become a distributor or stay as customer.
+      // If they later choose "Become a Distributor", CustomerUpgradeController will update
+      // the existing inactive record to active. The stayAsCustomer call is idempotent.
+      stayAsCustomer({ tx_ref: txRef, customer_email: customerEmail })
+        .then(() => console.log('[SuccessScreen] Customer node registered'))
+        .catch(e => console.log('[SuccessScreen] stayAsCustomer error (non-fatal):', e.message));
+
+      // Check if already an active distributor (to show correct button)
       if (customerEmail) {
         checkCustomerStatus(customerEmail, txRef).then(res => {
           if (res.is_distributor) setAlreadyDist(true);
@@ -630,13 +640,7 @@ const SuccessScreen = ({
         customerName={customerName}
         customerEmail={customerEmail}
         txRef={txRef}
-        onStay={() => {
-          setShowUpgrade(false);
-          // Ensure the customer node is created in the tree even if webhook didn't fire
-          stayAsCustomer({ tx_ref: txRef, customer_email: customerEmail })
-            .then(() => console.log('[onStay] Customer registered in tree'))
-            .catch(e => console.log('[onStay] stayAsCustomer error:', e.message));
-        }}
+        onStay={() => setShowUpgrade(false)}
         onUpgraded={handleUpgraded}
       />
     </LinearGradient>
