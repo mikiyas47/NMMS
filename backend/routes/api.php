@@ -976,3 +976,19 @@ Route::post('/insert-test-payment', function (\Illuminate\Http\Request $request)
     ]);
     return response()->json(['payment_id' => $payment->id, 'tx_ref' => $payment->tx_ref]);
 });
+
+// Backfill node ranks for all distributors (run once after adding nodes.rank column)
+Route::get('/backfill-node-ranks', function () {
+    $mlm = new \App\Services\MlmEngineService();
+    $distributors = \App\Models\Distributor::whereHas('nodes')->get();
+    $updated = 0;
+    foreach ($distributors as $dist) {
+        try {
+            $mlm->runRankCheck($dist->distributor_id);
+            $updated++;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('backfill-node-ranks error for ' . $dist->email . ': ' . $e->getMessage());
+        }
+    }
+    return response()->json(['message' => "Backfilled ranks for $updated distributors"]);
+});
