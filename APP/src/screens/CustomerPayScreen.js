@@ -126,10 +126,14 @@ const ProductVideo = ({ uri }) => {
   );
 };
 
-// ─── Product Card (shown when product is pre-selected via payment link) ───────
+// ─── Product Card (shown when product is selected on checkout) ───────────────
 const ProductCard = ({ product, onChangeProduct, canChange }) => {
   const uri = toHttps(product?.image);
-  const isVideo = uri && (uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') || uri.endsWith('.mkv'));
+  const isVideo = uri && (
+    uri.includes('.mp4') || uri.includes('.mov') ||
+    uri.includes('.avi') || uri.includes('.mkv') ||
+    uri.includes('/video/')
+  );
 
   return (
     <View style={{
@@ -137,59 +141,77 @@ const ProductCard = ({ product, onChangeProduct, canChange }) => {
       borderWidth: 1.5, borderColor: ACCENT,
       backgroundColor: 'rgba(99,102,241,0.08)',
     }}>
-      {/* Media */}
-      {uri ? (
-        <View style={{ width: '100%', height: 220, backgroundColor: '#000' }}>
-          {isVideo ? (
+      {/* Media area */}
+      <View style={{ width: '100%', height: 240, backgroundColor: '#111', position: 'relative' }}>
+        {uri ? (
+          isVideo ? (
             <ProductVideo uri={uri} />
           ) : (
-            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-          )}
-          {/* Category badge */}
-          {product.category && (
-            <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: ACCENT,
-              paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>
-                {product.category.toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </View>
-      ) : (
-        <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center',
-          backgroundColor: 'rgba(99,102,241,0.15)' }}>
-          <Package color={ACCENT} size={52} />
-        </View>
-      )}
+            <Image
+              source={{ uri }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          )
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(99,102,241,0.15)' }}>
+            <Package color={ACCENT} size={52} />
+          </View>
+        )}
+        {/* Category badge overlay */}
+        {product?.category ? (
+          <View style={{
+            position: 'absolute', top: 12, left: 12,
+            backgroundColor: ACCENT, paddingHorizontal: 10,
+            paddingVertical: 4, borderRadius: 20,
+          }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>
+              {product.category.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
-      {/* Details */}
+      {/* Product details */}
       <View style={{ padding: 16 }}>
         <Text style={{ color: TEXT, fontSize: 18, fontWeight: '900', marginBottom: 6 }}>
-          {product.name}
+          {product?.name}
         </Text>
-        {product.description ? (
-          <Text style={{ color: MUTED, fontSize: 13, lineHeight: 18, marginBottom: 10 }} numberOfLines={3}>
+        {product?.description ? (
+          <Text style={{ color: MUTED, fontSize: 13, lineHeight: 18, marginBottom: 10 }}
+            numberOfLines={3}>
             {product.description}
           </Text>
         ) : null}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
           <Text style={{ color: ACCENT, fontSize: 22, fontWeight: '900' }}>
-            ETB {parseFloat(product.price).toFixed(2)}
+            ETB {parseFloat(product?.price ?? 0).toFixed(2)}
           </Text>
-          {product.point ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245,158,11,0.15)',
-              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-              <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '800' }}>★ {product.point} pts</Text>
+          {product?.point ? (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              backgroundColor: 'rgba(245,158,11,0.15)',
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+            }}>
+              <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '800' }}>
+                ★ {product.point} pts
+              </Text>
             </View>
           ) : null}
         </View>
-        {canChange && (
-          <TouchableOpacity onPress={onChangeProduct} style={{ marginTop: 10, alignSelf: 'flex-start',
-            paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
-            backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: BORDER }}>
+        {canChange ? (
+          <TouchableOpacity
+            onPress={onChangeProduct}
+            style={{
+              marginTop: 12, alignSelf: 'flex-start',
+              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              borderWidth: 1, borderColor: BORDER,
+            }}>
             <Text style={{ color: MUTED, fontSize: 12, fontWeight: '600' }}>Change product</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -1056,18 +1078,17 @@ const CustomerPayScreen = ({ route, navigation }) => {
             keyboardShouldPersistTaps="handled"
           >
             <SectionTitle title="Product" />
-            {/* When product is pre-selected via payment link, show rich card with image/video.
-                When no product is pre-selected, show the picker dropdown. */}
-            {selectedProduct && preSelectedProductId ? (
+            {/* Show rich product card whenever a product is selected AND we came via
+                a payment link (distributor_id in params = came from outside the app).
+                Show the picker only when no product is pre-selected. */}
+            {selectedProduct ? (
               <ProductCard
                 product={selectedProduct}
                 onChangeProduct={() => setSelected(null)}
-                canChange={false}
+                canChange={!preSelectedProductId}
               />
             ) : (
-              <>
-                <ProductPicker products={products} selected={selectedProduct} onSelect={setSelected} />
-              </>
+              <ProductPicker products={products} selected={selectedProduct} onSelect={setSelected} />
             )}
 
             {selectedProduct && (
