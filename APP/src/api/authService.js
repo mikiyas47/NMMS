@@ -25,7 +25,7 @@ export const invalidateCache = (urlPrefix) => {
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 s — allows Render's free-tier cold start to complete
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -35,25 +35,31 @@ const apiClient = axios.create({
       try {
         return JSON.parse(data);
       } catch (e) {
-        // Try to handle concatenated JSON strings (e.g., from Laravel errors appended to response)
         const match = data.match(/^(\{.*?\})(?=\{|$)/);
-        if (match) {
-          try {
-            return JSON.parse(match[1]);
-          } catch (e2) {}
-        }
-        
-        try {
-          const arrayStr = '[' + data.replace(/\}\{/g, '},{') + ']';
-          const arr = JSON.parse(arrayStr);
-          return arr[0];
-        } catch (e3) {}
+        if (match) { try { return JSON.parse(match[1]); } catch {} }
+        try { return JSON.parse('[' + data.replace(/\}\{/g, '},{') + ']')[0]; } catch {}
         return data;
       }
     }
     return data;
   }],
 });
+
+// ── Keep-alive ping: wake the Render server every 10 minutes ─────────────────
+// Render free-tier sleeps after 15 min of inactivity. This prevents cold starts.
+let _pingInterval = null;
+export const startKeepAlive = () => {
+  if (_pingInterval) return;
+  // Ping immediately on app start
+  axios.get(API_BASE_URL + '/products', { timeout: 10000 }).catch(() => {});
+  // Then every 10 minutes
+  _pingInterval = setInterval(() => {
+    axios.get(API_BASE_URL + '/products', { timeout: 10000 }).catch(() => {});
+  }, 10 * 60 * 1000);
+};
+export const stopKeepAlive = () => {
+  if (_pingInterval) { clearInterval(_pingInterval); _pingInterval = null; }
+};
 
 // Add request interceptor to attach auth token
 apiClient.interceptors.request.use(
