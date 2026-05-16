@@ -107,14 +107,17 @@ class AccountUpgradeController extends Controller
         // Call Chapa
         $chapaSecret = env('CHAPA_SECRET_KEY');
         $nameParts   = explode(' ', trim($account->distributor->name ?? 'Customer'));
+        $customerEmail = filter_var($account->distributor->email ?? '', FILTER_VALIDATE_EMAIL)
+            ? $account->distributor->email
+            : ($sponsor->email ?? 'upgrade@nmms.app');
 
         $chapaPayload = [
             'amount'       => $amount,
             'currency'     => 'ETB',
-            'email'        => $account->distributor->email ?? 'upgrade@nmms.app',
+            'email'        => $customerEmail,
             'first_name'   => $nameParts[0],
             'last_name'    => count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '-',
-            'phone_number' => $account->distributor->phone ?? '',
+            'phone_number' => $account->distributor->phone ?? $sponsor->phone ?? '',
             'tx_ref'       => $txRef,
             'callback_url' => env('APP_URL') . '/api/payments/webhook',
             'return_url'   => env('FRONTEND_URL', 'https://nmms-ochre.vercel.app')
