@@ -114,7 +114,7 @@ class PerformanceController extends Controller
         $this->markOnboardingMilestone($distId, 'first_presentation_assigned');
         // Weekly goal
         $this->incrementWeeklyGoal($distId, 'presentations_actual');
-        $link = config('app.url') . '/p/' . $token;
+        $link = 'https://nmms-backend.onrender.com/api/p/' . $token;
         return response()->json(['status' => 'success', 'data' => $assignment, 'tracked_link' => $link], 201);
     }
 
@@ -326,7 +326,7 @@ class PerformanceController extends Controller
         $this->markOnboardingMilestone($distId, 'first_invite_sent');
         $this->checkBadge($distId, 'first_invite');
         $this->incrementWeeklyGoal($distId, 'invitations_actual');
-        $link = config('app.url') . '/invite/' . $token;
+        $link = 'https://nmms-backend.onrender.com/api/invite/' . $token;
         return response()->json(['status' => 'success', 'data' => $invitation, 'tracked_link' => $link, 'script' => $script], 201);
     }
 
