@@ -32,7 +32,7 @@ class TreeController extends Controller
             return response()->json(['message' => 'No tree found. You have not purchased a product yet.'], 404);
         }
 
-        $tree = $this->buildTree($rootNode->id, 3); // Load up to 3 levels deep initially
+        $tree = $this->getOptimizedTree($rootNode->id, 3); // Load up to 3 levels deep initially
 
         return response()->json([
             'status' => 'success',
@@ -47,7 +47,7 @@ class TreeController extends Controller
     public function getSubtree($nodeId)
     {
         $node = Node::findOrFail($nodeId);
-        $tree = $this->buildTree($node->id, 2);
+        $tree = $this->getOptimizedTree($node->id, 2);
 
         return response()->json([
             'status' => 'success',
@@ -55,24 +55,67 @@ class TreeController extends Controller
         ]);
     }
 
-    private function buildTree($nodeId, $depth)
+    private function getOptimizedTree($rootNodeId, $depth)
     {
-        if ($depth < 0) return null;
+        // 1. Build eager load array dynamically based on depth
+        // We go up to $depth + 1 for children so we can easily calculate has_more without N+1 count() queries.
+        $with = ['distributor'];
+        $currentChildRel = 'children';
+        for ($i = 0; $i <= $depth; $i++) {
+            $with[] = $currentChildRel;
+            if ($i < $depth) {
+                $with[] = $currentChildRel . '.distributor';
+            }
+            $currentChildRel .= '.children';
+        }
 
-        $node = Node::with(['distributor', 'children'])->find($nodeId);
-        if (!$node) return null;
+        // 2. Fetch the root node with all nested children
+        $rootNode = Node::with($with)->find($rootNodeId);
+        if (!$rootNode) return null;
 
-        $stat = Stat::where('distributor_id', $node->distributor_id)->first();
+        // 3. Flatten the nodes to collect IDs for bulk fetching
+        $allNodes = collect();
+        $this->flattenNodes($rootNode, $allNodes, $depth);
 
-        // own_points = sum of product.point for all accounts this node's distributor owns
-        $account       = Account::where('node_id', $node->id)->with('product')->first();
+        $nodeIds = $allNodes->pluck('id')->unique();
+        $distributorIds = $allNodes->pluck('distributor_id')->unique();
+
+        // 4. Bulk fetch Accounts with Products, and Stats
+        $accounts = Account::whereIn('node_id', $nodeIds)->with('product')->get()->keyBy('node_id');
+        $stats = Stat::whereIn('distributor_id', $distributorIds)->get()->keyBy('distributor_id');
+
+        // 5. Map the in-memory tree to the response format
+        return $this->mapNodeToResponse($rootNode, $depth, $accounts, $stats);
+    }
+
+    private function flattenNodes($node, &$collection, $depth)
+    {
+        if (!$node) return;
+        $collection->push($node);
+        if ($depth > 0 && $node->relationLoaded('children')) {
+            foreach ($node->children as $child) {
+                $this->flattenNodes($child, $collection, $depth - 1);
+            }
+        }
+    }
+
+    private function mapNodeToResponse($node, $depth, $accounts, $stats)
+    {
+        $stat = $stats->get($node->distributor_id);
+        $account = $accounts->get($node->id);
         $productPoints = $account && $account->product ? $account->product->point : 0;
 
         $childrenData = [];
-        if ($depth > 0) {
+        if ($depth > 0 && $node->relationLoaded('children')) {
             foreach ($node->children as $child) {
-                $childrenData[] = $this->buildTree($child->id, $depth - 1);
+                $childrenData[] = $this->mapNodeToResponse($child, $depth - 1, $accounts, $stats);
             }
+        }
+
+        // Calculate has_more using the loaded relation to prevent an extra query
+        $hasMore = false;
+        if ($depth == 0 && $node->relationLoaded('children')) {
+            $hasMore = $node->children->count() > 0;
         }
 
         return [
@@ -82,13 +125,12 @@ class TreeController extends Controller
             'distributor_phone'=> $node->distributor->phone ?? 'Unknown',
             'distributor_id'   => $node->distributor_id,
             'leg'              => $node->leg,
-            // Each node has its own rank — secondary nodes start at CT and earn independently
             'rank'             => $node->rank ?? 'CT',
             'status'           => $node->distributor->status ?? 'inactive',
             'product_points'   => $productPoints,
             'own_points'       => $stat->own_points ?? $productPoints,
             'children'         => $childrenData,
-            'has_more'         => $node->children->count() > 0 && $depth == 0,
+            'has_more'         => $hasMore,
         ];
     }
 }
