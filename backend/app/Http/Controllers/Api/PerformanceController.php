@@ -173,52 +173,151 @@ class PerformanceController extends Controller
         $assignment = PresentationAssignment::where('token', $token)->first();
         if (!$assignment)
             return response()->json(['message' => 'Not found'], 404);
-        $eventType = $r->input('event_type', 'opened');
+
+        $action = $r->input('action', 'heartbeat');
         $watchPct = (int) $r->input('watch_percent', 0);
-        $pageReached = (int) $r->input('page_reached', 0);
-        // Record engagement event
-        EngagementEvent::create([
-            'distributor_id' => $assignment->distributor_id,
-            'prospect_id' => $assignment->prospect_id,
-            'token' => $token,
-            'event_type' => $eventType,
-            'source_type' => 'presentation',
-            'source_id' => $assignment->id,
-            'watch_percent' => $watchPct ?: null,
-            'page_reached' => $pageReached ?: null,
-            'visitor_ip' => $r->ip(),
-            'user_agent' => $r->userAgent(),
-        ]);
-        // Update assignment
-        if ($eventType === 'opened' && !$assignment->opened_at) {
-            $assignment->status = 'opened';
-            $assignment->opened_at = now();
+        $timeSpent = (int) $r->input('time_spent', 0);
+        $deviceType = $r->input('device_type');
+
+        if ($deviceType && !$assignment->device_type) {
+            $assignment->device_type = $deviceType;
         }
-        if ($watchPct > $assignment->watch_percent)
+
+        if ($watchPct > $assignment->watch_percent) {
             $assignment->watch_percent = $watchPct;
-        if ($pageReached > $assignment->page_reached)
-            $assignment->page_reached = $pageReached;
-        // Compute engagement score
-        $pres = $assignment->presentation;
-        $pageCompletionPct = ($pres && $pres->total_pages > 0) ? min(100, round(($assignment->page_reached / $pres->total_pages) * 100)) : 0;
-        $timeMins = $assignment->time_spent_seconds / 60;
-        $assignment->engagement_score = min(100, ($assignment->watch_percent * 0.6) + ($pageCompletionPct * 0.3) + ($timeMins * 0.1));
-        // Check completion
-        $completed = ($assignment->watch_percent >= 100) || ($pres && $pres->total_pages > 0 && $assignment->page_reached >= $pres->total_pages);
-        if ($completed && $assignment->status !== 'completed') {
-            // Fire event first, then update status
-            EngagementEvent::create(['distributor_id' => $assignment->distributor_id, 'prospect_id' => $assignment->prospect_id, 'token' => $token, 'event_type' => 'presentation_completed', 'source_type' => 'presentation', 'source_id' => $assignment->id, 'visitor_ip' => $r->ip()]);
-            $assignment->status = 'completed';
-            $assignment->completed_at = now();
-            // Trigger automation
-            $this->fireAutomation($assignment->distributor_id, $assignment->prospect_id, 'presentation_watch_percent_reached', ['watch_percent' => $assignment->watch_percent]);
         }
+        
+        if ($timeSpent > $assignment->time_spent_seconds) {
+            $assignment->time_spent_seconds = $timeSpent;
+        }
+
+        $notify = false;
+        $notifyType = '';
+        $notifyTitle = '';
+        $notifyBody = '';
+        $prospectName = Prospect::find($assignment->prospect_id)->name ?? 'A prospect';
+
+        // Base Engagement Score Logic
+        $score = 5; // Opened link
+        if ($assignment->watch_percent >= 50) $score += 15;
+        if ($assignment->watch_percent >= 100) $score += 40;
+        if ($assignment->rewatch_count > 0) $score += 20;
+        if ($assignment->cta_clicked_at) $score += 50;
+        
+        // Handle specific actions
+        if ($action === 'cta_clicked') {
+            $assignment->cta_clicked_at = now();
+            $score += 50;
+            $notify = true;
+            $notifyType = 'cta_clicked';
+            $notifyTitle = 'CTA Clicked!';
+            $notifyBody = "$prospectName just clicked the Call to Action on your presentation!";
+        } elseif ($action === 'completed') {
+            if ($assignment->status !== 'completed') {
+                $assignment->status = 'completed';
+                $assignment->completed_at = now();
+                $notify = true;
+                $notifyType = 'presentation_completed';
+                $notifyTitle = 'Presentation Completed';
+                $notifyBody = "$prospectName just finished watching the presentation!";
+                
+                // Auto Follow-up: 100% Complete
+                \App\Models\Followup::create([
+                    'distributor_id' => $assignment->distributor_id,
+                    'prospect_id' => $assignment->prospect_id,
+                    'followup_type' => 'Auto-Generated',
+                    'notes' => "Auto Reminder: $prospectName watched 100%. Suggested message: 'Glad you completed the presentation. Want me to walk you through how to get started?'",
+                    'next_action' => 'Contact via WhatsApp/Call',
+                    'next_action_date' => now()->toDateString(),
+                    'status' => 'pending'
+                ]);
+
+            } else {
+                // If it was already completed, this is a rewatch
+                $assignment->rewatch_count += 1;
+                $score += 20;
+                $notify = true;
+                $notifyType = 'presentation_rewatched';
+                $notifyTitle = 'Presentation Rewatched';
+                $notifyBody = "$prospectName is rewatching the presentation!";
+            }
+        } elseif ($action === 'closed' && $assignment->watch_percent > 0 && $assignment->watch_percent < 90) {
+            // Auto Follow-up: Opened but didn't finish
+            \App\Models\Followup::create([
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'followup_type' => 'Auto-Generated',
+                'notes' => "Auto Reminder: $prospectName didn't finish the presentation. Suggested message: 'Hey, looks like you didn't finish the presentation. The last section explains the earning model clearly.'",
+                'next_action' => 'Send Follow-up Message',
+                'next_action_date' => now()->toDateString(),
+                'status' => 'pending'
+            ]);
+        } elseif (str_starts_with($action, 'watched_')) {
+            // e.g. watched_50_percent
+            if (str_contains($action, '50_percent')) {
+                $notify = true;
+                $notifyType = 'presentation_50';
+                $notifyTitle = '50% Milestone Reached';
+                $notifyBody = "$prospectName just watched 50% of the presentation.";
+            } elseif (str_contains($action, '75_percent')) {
+                $notify = true;
+                $notifyType = 'presentation_75';
+                $notifyTitle = '75% Milestone Reached';
+                $notifyBody = "$prospectName is highly engaged! They reached 75%.";
+            }
+        }
+
+        $assignment->engagement_score = min(100, $score);
+
+        // Classification
+        if ($assignment->engagement_score >= 81) $assignment->classification = 'Hot Lead';
+        elseif ($assignment->engagement_score >= 51) $assignment->classification = 'Interested';
+        elseif ($assignment->engagement_score >= 21) $assignment->classification = 'Warm';
+        else $assignment->classification = 'Cold';
+
         $assignment->save();
-        // Update presentation stats
+
+        // Record raw event
+        if ($action !== 'heartbeat') {
+            EngagementEvent::create([
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'token' => $token,
+                'event_type' => $action,
+                'source_type' => 'presentation',
+                'source_id' => $assignment->id,
+                'watch_percent' => $watchPct,
+                'visitor_ip' => $r->ip(),
+                'user_agent' => $r->userAgent(),
+            ]);
+        }
+
+        // Send Notification
+        if ($notify) {
+            \App\Models\EngagementNotification::create([
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'type' => $notifyType,
+                'title' => $notifyTitle,
+                'body' => $notifyBody,
+            ]);
+        }
+
+        // Update Prospect's interest score directly
+        $prospect = Prospect::find($assignment->prospect_id);
+        if ($prospect) {
+            $prospect->interest_score = max($prospect->interest_score ?? 0, $assignment->engagement_score);
+            if ($prospect->interest_score >= 81) $prospect->interest_level = 'hot';
+            elseif ($prospect->interest_score >= 51) $prospect->interest_level = 'warm';
+            elseif ($prospect->interest_score >= 21) $prospect->interest_level = 'warm'; // Keep 'warm' for both since mobile only has hot/warm/cold mostly, but wait, we can just use the score.
+            else $prospect->interest_level = 'cold';
+            $prospect->save();
+        }
+
         $this->updatePresentationStats($assignment->presentation_id);
-        // Recompute priority
         $this->recomputePriority($assignment->prospect_id, $assignment->distributor_id);
-        return response()->json(['status' => 'success']);
+
+        return response()->json(['status' => 'success', 'score' => $assignment->engagement_score]);
     }
 
     private function updatePresentationStats(int $presentationId): void
@@ -868,37 +967,30 @@ class PerformanceController extends Controller
         $distributor = Distributor::where('distributor_id', $assignment->distributor_id)->first();
         $pres = $assignment->presentation;
 
-        // Mark as opened
+        // Note: The view's JS will trigger the 'opened' event immediately, but we can also log it here if it's the first time
         if (!$assignment->opened_at) {
             $assignment->status = 'opened';
             $assignment->opened_at = now();
             $assignment->save();
+
+            EngagementEvent::create([
+                'distributor_id' => $assignment->distributor_id, 
+                'prospect_id' => $assignment->prospect_id, 
+                'token' => $token, 
+                'event_type' => 'opened', 
+                'source_type' => 'presentation', 
+                'source_id' => $assignment->id, 
+                'visitor_ip' => $r->ip(), 
+                'user_agent' => $r->userAgent()
+            ]);
+            $this->recomputePriority($assignment->prospect_id, $assignment->distributor_id);
         }
 
-        EngagementEvent::create([
-            'distributor_id' => $assignment->distributor_id, 
-            'prospect_id' => $assignment->prospect_id, 
-            'token' => $token, 
-            'event_type' => 'opened', 
-            'source_type' => 'presentation', 
-            'source_id' => $assignment->id, 
-            'visitor_ip' => $r->ip(), 
-            'user_agent' => $r->userAgent()
-        ]);
-
-        $this->recomputePriority($assignment->prospect_id, $assignment->distributor_id);
-
-        $redirectUrl = $pres->external_url ?? $pres->file_url ?? null;
-        if ($redirectUrl) {
-            return redirect()->away($redirectUrl);
-        }
-
-        return response()->json([
-            'status' => 'success', 
-            'page_type' => 'presentation', 
-            'distributor_name' => $distributor?->name, 
-            'presentation' => $pres, 
-            'assignment_status' => $assignment->status
+        return view('presentation', [
+            'assignment' => $assignment,
+            'presentation' => $pres,
+            'distributor' => $distributor,
+            'token' => $token
         ]);
     }
 
