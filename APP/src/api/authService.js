@@ -297,9 +297,24 @@ export const getSalesHistory = async (distributorId) => {
 };
 
 // ── MLM Wallet & Stats ────────────────────────────────────────────────────────
+const WALLET_CACHE_KEY = 'nmms_wallet_cache';
+
 export const getWallet = async () => {
+  // Return cached data immediately if available, then refresh in background
   const response = await apiClient.get('/wallet');
+  // Persist to AsyncStorage for instant load next time
+  AsyncStorage.setItem(WALLET_CACHE_KEY, JSON.stringify(response.data)).catch(() => {});
   return response.data;
+};
+
+export const getWalletCached = async () => {
+  // Returns cached wallet data instantly (no network), then triggers background refresh
+  try {
+    const cached = await AsyncStorage.getItem(WALLET_CACHE_KEY);
+    return cached ? JSON.parse(cached) : null;
+  } catch {
+    return null;
+  }
 };
 
 // ── Customer → Distributor Upgrade ────────────────────────────────────────────

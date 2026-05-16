@@ -8,7 +8,7 @@ import {
   Users, DollarSign, Target, Star, ArrowUpRight,
   Zap, TrendingUp, ChevronRight, Award, Bell, Network,
 } from 'lucide-react-native';
-import { getWallet, getUser } from '../../api/authService';
+import { getWallet, getWalletCached, getUser } from '../../api/authService';
 
 const { width } = Dimensions.get('window');
 const CARD_W = (width - 48) / 2;
@@ -47,16 +47,16 @@ const DistributorOverview = ({ C }) => {
   const load = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(false);
     try {
-      const [userData, wData] = await Promise.all([getUser(), getWallet().catch(e => {
-        // 404 = wallet route not deployed yet or new distributor — use empty defaults
-        if (e?.response?.status === 404) return null;
-        throw e;
-      })]);
+      // Show cached data instantly while fetching fresh data in background
+      const [userData, cachedWallet] = await Promise.all([getUser(), getWalletCached()]);
       if (userData?.name) setUserName(userData.name.split(' ')[0]);
-      if (wData) setWalletData(wData);
+      if (cachedWallet) setWalletData(cachedWallet);
+
+      // Fetch fresh data in background (don't block UI)
+      getWallet().then(wData => {
+        if (wData) setWalletData(wData);
+      }).catch(() => {}).finally(() => setRefreshing(false));
     } catch (e) {
-      console.log('Overview load error:', e.message);
-    } finally {
       setRefreshing(false);
     }
   }, []);
