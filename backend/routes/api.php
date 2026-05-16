@@ -372,6 +372,7 @@ Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/account/upgrade/complete',  [AccountUpgradeController::class, 'complete']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
+use App\Http\Controllers\Api\CustomerUpgradeController;
 Route::post('/customer/upgrade', [CustomerUpgradeController::class, 'upgrade']);
 Route::get('/customer/status',   [CustomerUpgradeController::class, 'status']);
 // ─────────────────────────────────────────────────────────────────────────────
