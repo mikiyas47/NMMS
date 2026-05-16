@@ -364,7 +364,8 @@ export const initiateAccountUpgrade = async ({ node_id, new_product_id, distribu
     const response = await apiClient.post('/account/upgrade/initiate', { node_id, new_product_id, distributor_id });
     return response.data;
   } catch (error) {
-    const msg = error.response?.data?.message ?? 'Could not initiate upgrade.';
+    const data = error.response?.data;
+    const msg = typeof data?.message === 'string' ? data.message : (data ? JSON.stringify(data) : 'Could not initiate upgrade.');
     throw new Error(msg);
   }
 };
@@ -374,7 +375,8 @@ export const completeAccountUpgrade = async ({ tx_ref, node_id, new_product_id }
     const response = await apiClient.post('/account/upgrade/complete', { tx_ref, node_id, new_product_id });
     return response.data;
   } catch (error) {
-    const msg = error.response?.data?.message ?? 'Upgrade failed.';
+    const data = error.response?.data;
+    const msg = typeof data?.message === 'string' ? data.message : (data ? JSON.stringify(data) : 'Upgrade failed.');
     throw new Error(msg);
   }
 };

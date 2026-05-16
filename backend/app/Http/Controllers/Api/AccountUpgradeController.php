@@ -45,6 +45,24 @@ class AccountUpgradeController extends Controller
 
         $newProduct = Product::findOrFail($data['new_product_id']);
         $sponsor    = Distributor::findOrFail($data['distributor_id']);
+        $targetDist = $account->distributor;
+
+        // ── Permission check ──────────────────────────────────────────────────
+        // Case 1: Self-upgrade — distributor upgrading their own account
+        $isSelf = $targetDist && (int)$targetDist->distributor_id === (int)$data['distributor_id'];
+
+        // Case 2: Upline upgrading a downline — only allowed if the downline is
+        // inactive (customer who hasn't set a password / become a distributor).
+        // Active distributors must upgrade their own accounts themselves.
+        $isAllowedDownline = $targetDist
+            && !$isSelf
+            && $targetDist->status === 'inactive';
+
+        if (!$isSelf && !$isAllowedDownline) {
+            return response()->json([
+                'message' => 'You can only upgrade inactive customer accounts. Active distributors must upgrade their own accounts.',
+            ], 403);
+        }
 
         // Validate: new product must have more points than current
         $currentPoints = $account->product->point ?? 0;
@@ -260,14 +278,22 @@ class AccountUpgradeController extends Controller
         $nodeId = $request->query('node_id') ?? $request->query('account_id');
 
         // Find account by node_id first, fall back to account id
-        $account = Account::with('product')->where('node_id', $nodeId)->first()
-                ?? Account::with('product')->find($nodeId);
+        $account = Account::with(['product', 'distributor'])->where('node_id', $nodeId)->first()
+                ?? Account::with(['product', 'distributor'])->find($nodeId);
 
         if (!$account) {
             return response()->json(['message' => 'Account not found.'], 404);
         }
 
         $currentPoints = $account->product->point ?? 0;
+        $targetDist    = $account->distributor;
+
+        // Check if upgrade is allowed for this node
+        // (self-upgrade always allowed; downline upgrade only for inactive customers)
+        $requestingDistId = $request->query('distributor_id');
+        $isSelf = $targetDist && $requestingDistId && (int)$targetDist->distributor_id === (int)$requestingDistId;
+        $isInactiveDownline = $targetDist && $targetDist->status === 'inactive';
+        $canUpgrade = $isSelf || $isInactiveDownline || !$requestingDistId;
 
         // Only show products with MORE points than current
         $upgrades = Product::where('point', '>', $currentPoints)
@@ -284,13 +310,15 @@ class AccountUpgradeController extends Controller
 
         return response()->json([
             'account_id'      => $account->id,
+            'can_upgrade'     => $canUpgrade,
+            'target_status'   => $targetDist?->status ?? 'unknown',
             'current_product' => [
                 'id'       => $account->product->id ?? null,
                 'name'     => $account->product->name ?? 'Unknown',
                 'category' => $account->product->category ?? 'Unknown',
                 'point'    => $currentPoints,
             ],
-            'upgrades' => $upgrades,
+            'upgrades' => $canUpgrade ? $upgrades : [],
         ]);
     }
 }

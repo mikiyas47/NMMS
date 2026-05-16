@@ -138,10 +138,16 @@ const AccountUpgradeModal = ({ visible, node, distributorId, onClose, onUpgraded
       setPayUrl(null);
       setError('');
       setLoading(true);
-      setAccId(node.id); // node.id is the tree node id
+      setAccId(node.id);
       getUpgradeOptions(node.id)
-        .then(data => { setOptions(data); })
-        .catch(() => setError('Could not load upgrade options.'))
+        .then(data => {
+          setOptions(data);
+          // If upgrade not allowed (active distributor's node), show message
+          if (data.can_upgrade === false) {
+            setError('This account belongs to an active distributor. They must upgrade their own account by logging in.');
+          }
+        })
+        .catch(err => setError(typeof err?.message === 'string' ? err.message : 'Could not load upgrade options.'))
         .finally(() => setLoading(false));
     }
     return () => clearInterval(pollRef.current);
@@ -190,7 +196,8 @@ const AccountUpgradeModal = ({ visible, node, distributorId, onClose, onUpgraded
         if (attempts > 150) { clearInterval(pollRef.current); setPayUrl(null); setStep('options'); }
       }, 2000);
     } catch (e) {
-      setError(e.message);
+      const msg = typeof e?.message === 'string' ? e.message : (e?.response?.data?.message ?? 'Upgrade failed. Please try again.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
