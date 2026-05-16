@@ -1044,3 +1044,43 @@ Route::get('/check-distributor/{email}', function ($email) {
         'upline_id'      => $d->upline_id,
     ]);
 });
+
+// Test account upgrade complete directly
+Route::post('/test-upgrade-complete', function (\Illuminate\Http\Request $request) {
+    try {
+        $txRef = $request->input('tx_ref');
+        $nodeId = $request->input('node_id');
+        $newProductId = $request->input('new_product_id');
+
+        $account = \App\Models\Account::with(['product', 'distributor'])->where('node_id', $nodeId)->first();
+        if (!$account) return response()->json(['error' => 'Account not found for node ' . $nodeId], 404);
+
+        $newProduct = \App\Models\Product::find($newProductId);
+        if (!$newProduct) return response()->json(['error' => 'Product not found'], 404);
+
+        $currentPoints = $account->product->point ?? 0;
+        if ($newProduct->point <= $currentPoints) {
+            return response()->json(['error' => 'New product must have more points. Current: ' . $currentPoints . ', New: ' . $newProduct->point], 422);
+        }
+
+        \Illuminate\Support\Facades\DB::table('accounts')
+            ->where('id', $account->id)
+            ->update(['product_id' => $newProduct->id, 'updated_at' => now()]);
+
+        $mlm = new \App\Services\MlmEngineService();
+        $mlm->recalcAndRankForDistributor($account->distributor_id);
+
+        $account->refresh(); $account->load('product');
+
+        return response()->json([
+            'status'       => 'success',
+            'account_id'   => $account->id,
+            'new_product'  => $newProduct->name,
+            'new_category' => $newProduct->category,
+            'new_points'   => $newProduct->point,
+            'distributor_id' => $account->distributor_id,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile() . ':' . $e->getLine()], 500);
+    }
+});
