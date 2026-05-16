@@ -110,22 +110,29 @@ class AccountUpgradeController extends Controller
 
         // Reload distributor fresh to ensure email is populated
         $targetDistributor = \App\Models\Distributor::find($account->distributor_id);
-        $customerEmail = $targetDistributor && filter_var($targetDistributor->email, FILTER_VALIDATE_EMAIL)
-            ? $targetDistributor->email
-            : ($sponsor->email ?? 'upgrade@nmms.app');
+
+        // Use the sponsor's (paying distributor's) email for Chapa — it's guaranteed valid
+        // since they are an active distributor who logged in.
+        // The target customer's email may have underscores or other chars Chapa rejects.
+        $chapaEmail = filter_var($sponsor->email, FILTER_VALIDATE_EMAIL)
+            ? $sponsor->email
+            : 'payment@nmms.app';
+
+        $customerName = $targetDistributor->name ?? $sponsor->name ?? 'Customer';
+        $nameParts    = explode(' ', trim($customerName));
 
         Log::info('AccountUpgrade initiate', [
             'node_id'        => $data['node_id'],
             'account_id'     => $account->id,
             'distributor_id' => $account->distributor_id,
-            'customer_email' => $customerEmail,
+            'chapa_email'    => $chapaEmail,
             'new_product'    => $newProduct->name,
         ]);
 
         $chapaPayload = [
             'amount'       => $amount,
             'currency'     => 'ETB',
-            'email'        => $customerEmail,
+            'email'        => $chapaEmail,
             'first_name'   => $nameParts[0],
             'last_name'    => count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '-',
             'phone_number' => $targetDistributor->phone ?? $sponsor->phone ?? '',
