@@ -301,6 +301,15 @@ class PerformanceController extends Controller
                 'title' => $notifyTitle,
                 'body' => $notifyBody,
             ]);
+
+            \App\Models\ProspectActivity::create([
+                'prospect_id' => $assignment->prospect_id,
+                'distributor_id' => $assignment->distributor_id,
+                'activity_type' => 'presentation',
+                'title' => $notifyTitle,
+                'description' => $notifyBody,
+                'created_at' => now(),
+            ]);
         }
 
         // Update Prospect's interest score directly

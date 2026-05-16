@@ -31,7 +31,7 @@ class ProspectController extends Controller
         $distId = $this->distId($request);
         $today  = Carbon::today();
 
-        $all = Prospect::where('distributor_id', $distId)->get();
+        $all = Prospect::where('distributor_id', $distId)->with(['activities'])->get();
 
         // Stage counts
         $stageCounts = [];
@@ -133,6 +133,7 @@ class ProspectController extends Controller
         $search = $request->query('search');
 
         $query = Prospect::where('distributor_id', $distId)
+            ->with(['activities'])
             ->withCount(['followups', 'closingAttempts']);
 
         if ($stage)  $query->where('stage', $stage);
