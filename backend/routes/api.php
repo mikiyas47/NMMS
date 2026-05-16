@@ -1084,3 +1084,20 @@ Route::post('/test-upgrade-complete', function (\Illuminate\Http\Request $reques
         return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile() . ':' . $e->getLine()], 500);
     }
 });
+
+// Debug account distributor relationship
+Route::get('/debug-account/{nodeId}', function ($nodeId) {
+    $account = \App\Models\Account::with(['product', 'distributor'])->where('node_id', $nodeId)->first();
+    if (!$account) return response()->json(['error' => 'Not found']);
+    return response()->json([
+        'account_id'     => $account->id,
+        'distributor_id' => $account->distributor_id,
+        'distributor'    => $account->distributor ? [
+            'id'     => $account->distributor->distributor_id,
+            'name'   => $account->distributor->name,
+            'email'  => $account->distributor->email,
+            'status' => $account->distributor->status,
+        ] : null,
+        'product' => $account->product ? $account->product->name : null,
+    ]);
+});
