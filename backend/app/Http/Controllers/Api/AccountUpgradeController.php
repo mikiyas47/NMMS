@@ -123,7 +123,7 @@ class AccountUpgradeController extends Controller
                 . '&product_id=' . $newProduct->id,
             'customization' => [
                 'title'       => 'Account Upgrade',
-                'description' => 'Upgrade to ' . $newProduct->name . ' (' . $newProduct->category . ')',
+                'description' => preg_replace('/[^a-zA-Z0-9\-_ .]/', '', 'Upgrade to ' . $newProduct->name . ' ' . $newProduct->category),
             ],
         ];
 
