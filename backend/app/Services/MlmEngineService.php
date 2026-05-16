@@ -77,6 +77,18 @@ class MlmEngineService
         return null;
     }
 
+    // ─── Public helper: recalculate own_points and run rank check ────────────
+    public function recalcAndRankForDistributor(int $distributorId): void
+    {
+        $this->refreshOwnPoints($distributorId);
+        $this->runRankCheck($distributorId);
+        // Also re-check ancestors
+        $mainNode = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
+        if ($mainNode) {
+            $this->runRankCheckForAncestors($mainNode, $distributorId);
+        }
+    }
+
     // ─── Recalculate own_points for a distributor ─────────────────────────────
     private function refreshOwnPoints(int $distributorId): int
     {

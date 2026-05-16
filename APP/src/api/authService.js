@@ -353,7 +353,31 @@ export const checkCustomerStatus = async (email, txRef) => {
   }
 };
 
-// ── Tree ──────────────────────────────────────────────────────────────────────
+// ── Account Product Upgrade ───────────────────────────────────────────────────
+export const getUpgradeOptions = async (nodeId) => {
+  const response = await apiClient.get('/account/upgrade/options', { params: { node_id: nodeId } });
+  return response.data;
+};
+
+export const initiateAccountUpgrade = async ({ node_id, new_product_id, distributor_id }) => {
+  try {
+    const response = await apiClient.post('/account/upgrade/initiate', { node_id, new_product_id, distributor_id });
+    return response.data;
+  } catch (error) {
+    const msg = error.response?.data?.message ?? 'Could not initiate upgrade.';
+    throw new Error(msg);
+  }
+};
+
+export const completeAccountUpgrade = async ({ tx_ref, node_id, new_product_id }) => {
+  try {
+    const response = await apiClient.post('/account/upgrade/complete', { tx_ref, node_id, new_product_id });
+    return response.data;
+  } catch (error) {
+    const msg = error.response?.data?.message ?? 'Upgrade failed.';
+    throw new Error(msg);
+  }
+};
 export const getMyTree = async () => {
   const response = await apiClient.get('/tree');
   return response.data;

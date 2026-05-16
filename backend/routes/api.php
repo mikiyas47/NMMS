@@ -364,8 +364,14 @@ Route::middleware('auth:sanctum,api')->group(function () {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Customer → Distributor Upgrade (public — no auth needed) ─────────────────
-use App\Http\Controllers\Api\CustomerUpgradeController;
+// ── Account Product Upgrade ───────────────────────────────────────────────────
+use App\Http\Controllers\Api\AccountUpgradeController;
+Route::middleware('auth:sanctum,api')->group(function () {
+    Route::get('/account/upgrade/options',    [AccountUpgradeController::class, 'options']);
+    Route::post('/account/upgrade/initiate',  [AccountUpgradeController::class, 'initiate']);
+    Route::post('/account/upgrade/complete',  [AccountUpgradeController::class, 'complete']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
 Route::post('/customer/upgrade', [CustomerUpgradeController::class, 'upgrade']);
 Route::get('/customer/status',   [CustomerUpgradeController::class, 'status']);
 // ─────────────────────────────────────────────────────────────────────────────

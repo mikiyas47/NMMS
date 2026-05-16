@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Animated, ActivityIndicator, Dimensions, Modal
+  Animated, ActivityIndicator, Dimensions, Modal, Alert, Image
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Network, ZoomIn, ZoomOut, Maximize, User, Zap } from 'lucide-react-native';
-import { getMyTree, getSubtreeData } from '../../api/authService';
+import { Network, ZoomIn, ZoomOut, Maximize, User, Zap, ArrowUpCircle, Package } from 'lucide-react-native';
+import { getMyTree, getSubtreeData, getUser, getUpgradeOptions, initiateAccountUpgrade, completeAccountUpgrade } from '../../api/authService';
+import { WebView } from 'react-native-webview';
 
 const { width, height } = Dimensions.get('window');
 
@@ -116,14 +117,218 @@ const TreeNode = ({ node, isRoot = false, C, onNodeClick }) => {
   );
 };
 
+// ── Account Upgrade Modal ──────────────────────────────────────────────────────
+const AccountUpgradeModal = ({ visible, node, distributorId, onClose, onUpgraded, C }) => {
+  const [step, setStep]           = useState('options'); // 'options' | 'paying' | 'done'
+  const [options, setOptions]     = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [selectedProduct, setSel] = useState(null);
+  const [paymentUrl, setPayUrl]   = useState(null);
+  const [txRef, setTxRef]         = useState(null);
+  const [accountId, setAccId]     = useState(null);
+  const [newProductId, setNewPid] = useState(null);
+  const [completing, setCompleting] = useState(false);
+  const [error, setError]         = useState('');
+  const pollRef                   = useRef(null);
+
+  useEffect(() => {
+    if (visible && node) {
+      setStep('options');
+      setSel(null);
+      setPayUrl(null);
+      setError('');
+      setLoading(true);
+      setAccId(node.id); // node.id is the tree node id
+      getUpgradeOptions(node.id)
+        .then(data => { setOptions(data); })
+        .catch(() => setError('Could not load upgrade options.'))
+        .finally(() => setLoading(false));
+    }
+    return () => clearInterval(pollRef.current);
+  }, [visible, node]);
+
+  const handlePay = async () => {
+    if (!selectedProduct) return;
+    setError('');
+    setLoading(true);
+    try {
+      const res = await initiateAccountUpgrade({
+        node_id:        accountId,   // accountId holds the node.id
+        new_product_id: selectedProduct.id,
+        distributor_id: distributorId,
+      });
+      setTxRef(res.tx_ref);
+      setNewPid(selectedProduct.id);
+      setPayUrl(res.payment_url);
+      setStep('paying');
+      // Poll for payment completion
+      let attempts = 0;
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        try {
+          const vr = await fetch(`https://nmms-backend.onrender.com/api/payments/verify/${res.tx_ref}`);
+          const vd = await vr.json();
+          if (vd.status === 'success' || vd.status === 'pending') {
+            clearInterval(pollRef.current);
+            setPayUrl(null);
+            setCompleting(true);
+            const cr = await completeAccountUpgrade({
+              tx_ref:         res.tx_ref,
+              node_id:        accountId,
+              new_product_id: selectedProduct.id,
+            });
+            setCompleting(false);
+            setStep('done');
+            setTimeout(() => { onUpgraded(cr); onClose(); }, 1500);
+          } else if (vd.status === 'failed' || vd.status === 'rejected') {
+            clearInterval(pollRef.current);
+            setPayUrl(null);
+            setStep('options');
+            setError('Payment failed. Please try again.');
+          }
+        } catch {}
+        if (attempts > 150) { clearInterval(pollRef.current); setPayUrl(null); setStep('options'); }
+      }, 2000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!visible) return null;
+
+  const GOLD = '#F59E0B';
+  const ACCENT = '#6366F1';
+  const TEXT = '#F9FAFB';
+  const MUTED = 'rgba(255,255,255,0.45)';
+  const BORDER = 'rgba(255,255,255,0.08)';
+
+  const catColors = { Yellow: '#FBBF24', Orange: '#F97316', Green: '#10B981', Golden: '#F59E0B' };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={step === 'options' ? onClose : undefined} />
+
+        {/* Chapa WebView */}
+        {step === 'paying' && paymentUrl && (
+          <View style={{ height: '85%', backgroundColor: '#000', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }}>
+            <View style={{ padding: 16, backgroundColor: '#111827', flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => { clearInterval(pollRef.current); setPayUrl(null); setStep('options'); }} style={{ marginRight: 12 }}>
+                <Text style={{ color: MUTED, fontSize: 22 }}>←</Text>
+              </TouchableOpacity>
+              <Text style={{ color: TEXT, fontWeight: '800', fontSize: 15 }}>Upgrade Payment</Text>
+            </View>
+            <WebView source={{ uri: paymentUrl }} style={{ flex: 1 }}
+              onShouldStartLoadWithRequest={(req) => {
+                if (req.url.includes('/api/payments/return')) {
+                  setPayUrl(null);
+                  setCompleting(true);
+                  completeAccountUpgrade({ tx_ref: txRef, node_id: accountId, new_product_id: newProductId })
+                    .then(cr => { setCompleting(false); setStep('done'); setTimeout(() => { onUpgraded(cr); onClose(); }, 1500); })
+                    .catch(e => { setCompleting(false); setError(e.message); setStep('options'); });
+                  return false;
+                }
+                return true;
+              }}
+            />
+          </View>
+        )}
+
+        {/* Completing overlay */}
+        {completing && (
+          <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={GOLD} />
+            <Text style={{ color: TEXT, marginTop: 16, fontWeight: '700' }}>Applying upgrade…</Text>
+          </View>
+        )}
+
+        {/* Options / Done sheet */}
+        {(step === 'options' || step === 'done') && (
+          <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8, borderTopWidth: 1, borderColor: BORDER, maxHeight: '80%' }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: BORDER, alignSelf: 'center', marginBottom: 20 }} />
+
+            {step === 'done' ? (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <Text style={{ fontSize: 48, marginBottom: 12 }}>🎉</Text>
+                <Text style={{ color: TEXT, fontSize: 20, fontWeight: '900', textAlign: 'center' }}>Upgrade Successful!</Text>
+                <Text style={{ color: MUTED, fontSize: 14, marginTop: 8, textAlign: 'center' }}>Account upgraded. Points recalculated.</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={{ color: TEXT, fontSize: 18, fontWeight: '900', marginBottom: 4 }}>Upgrade Account</Text>
+                <Text style={{ color: MUTED, fontSize: 13, marginBottom: 16 }}>
+                  {node?.distributor_name} · Current: {options?.current_product?.category ?? '…'} ({options?.current_product?.point ?? 0} pts)
+                </Text>
+
+                {error ? (
+                  <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
+                    <Text style={{ color: '#EF4444', fontSize: 13, textAlign: 'center' }}>{error}</Text>
+                  </View>
+                ) : null}
+
+                {loading ? (
+                  <ActivityIndicator color={ACCENT} style={{ marginVertical: 24 }} />
+                ) : options?.upgrades?.length === 0 ? (
+                  <Text style={{ color: MUTED, textAlign: 'center', marginVertical: 24 }}>This account is already at the highest tier.</Text>
+                ) : (
+                  <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                    {(options?.upgrades ?? []).map(p => {
+                      const active = selectedProduct?.id === p.id;
+                      const color  = catColors[p.category] ?? ACCENT;
+                      return (
+                        <TouchableOpacity key={p.id} onPress={() => setSel(p)}
+                          style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, marginBottom: 10,
+                            backgroundColor: active ? `${color}22` : 'rgba(255,255,255,0.04)',
+                            borderWidth: 1.5, borderColor: active ? color : BORDER }}>
+                          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${color}33`, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                            <Text style={{ fontSize: 20 }}>
+                              {p.category === 'Yellow' ? '🟡' : p.category === 'Orange' ? '🟠' : p.category === 'Green' ? '🟢' : '🏆'}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: TEXT, fontWeight: '800', fontSize: 14 }}>{p.category} — {p.name}</Text>
+                            <Text style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>★ {p.point} pts · ETB {parseFloat(p.price).toLocaleString()}</Text>
+                          </View>
+                          {active && <Text style={{ color, fontSize: 18 }}>✓</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+
+                <TouchableOpacity onPress={handlePay} disabled={!selectedProduct || loading}
+                  style={{ borderRadius: 16, overflow: 'hidden', opacity: (!selectedProduct || loading) ? 0.5 : 1 }}>
+                  <LinearGradient colors={[GOLD, '#F97316']} start={[0,0]} end={[1,0]}
+                    style={{ paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
+                    {loading ? <ActivityIndicator color="#fff" size="small" /> : <ArrowUpCircle color="#fff" size={20} />}
+                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginLeft: 10 }}>
+                      {loading ? 'Loading…' : selectedProduct ? `Pay ETB ${parseFloat(selectedProduct.price).toLocaleString()} & Upgrade` : 'Select a tier to upgrade'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={onClose} style={{ paddingVertical: 12, alignItems: 'center', marginTop: 8 }}>
+                  <Text style={{ color: MUTED, fontSize: 14 }}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+};
+
 // ── Node Info Modal Component ──
-const NodeInfoModal = ({ visible, node, onClose, C }) => {
+const NodeInfoModal = ({ visible, node, distributorId, onClose, onUpgrade, C }) => {
   if (!node) return null;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
         <View style={{ width: '100%', maxWidth: 360, backgroundColor: C.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: C.border }}>
-          
+
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
             <LinearGradient
               colors={node.status === 'inactive' ? RANK_COLORS.None : (RANK_COLORS[node.rank] || RANK_COLORS.None)}
@@ -137,7 +342,7 @@ const NodeInfoModal = ({ visible, node, onClose, C }) => {
             </Text>
           </View>
 
-          <View style={{ gap: 12, marginBottom: 24 }}>
+          <View style={{ gap: 12, marginBottom: 20 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 }}>
               <Text style={{ color: C.muted, fontSize: 12 }}>Email</Text>
               <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{node.distributor_email}</Text>
@@ -147,16 +352,24 @@ const NodeInfoModal = ({ visible, node, onClose, C }) => {
               <Text style={{ color: C.text, fontSize: 12, fontWeight: '600' }}>{node.distributor_phone}</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 }}>
-              <Text style={{ color: C.muted, fontSize: 12 }}>Own Package Points</Text>
+              <Text style={{ color: C.muted, fontSize: 12 }}>Package Points</Text>
               <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '800' }}>{node.own_points || node.product_points || 0} PTS</Text>
             </View>
           </View>
 
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ backgroundColor: C.accent, paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
-          >
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>Close</Text>
+          {/* Upgrade button — shown for all nodes */}
+          <TouchableOpacity onPress={onUpgrade}
+            style={{ borderRadius: 14, overflow: 'hidden', marginBottom: 10 }}>
+            <LinearGradient colors={['#F59E0B', '#F97316']} start={[0,0]} end={[1,0]}
+              style={{ paddingVertical: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              <ArrowUpCircle color="#fff" size={18} />
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14, marginLeft: 8 }}>Upgrade Account</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={onClose}
+            style={{ backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 13, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ color: C.muted, fontWeight: '600', fontSize: 14 }}>Close</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -165,16 +378,19 @@ const NodeInfoModal = ({ visible, node, onClose, C }) => {
 };
 
 const TreeScreen = ({ C, navigate }) => {
-  const [treeData, setTreeData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [notJoined, setNotJoined] = useState(false);
-  const [error, setError] = useState(null);
-  const [scale, setScale] = useState(1);
+  const [treeData, setTreeData]       = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [notJoined, setNotJoined]     = useState(false);
+  const [error, setError]             = useState(null);
+  const [scale, setScale]             = useState(1);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [distributorId, setDistributorId] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
       fetchTree();
+      getUser().then(u => { if (u?.distributor_id) setDistributorId(u.distributor_id); });
     }, [])
   );
 
@@ -323,9 +539,20 @@ const TreeScreen = ({ C, navigate }) => {
       </View>
 
       <NodeInfoModal
-        visible={!!selectedNode}
+        visible={!!selectedNode && !showUpgrade}
         node={selectedNode}
+        distributorId={distributorId}
         onClose={() => setSelectedNode(null)}
+        onUpgrade={() => setShowUpgrade(true)}
+        C={C}
+      />
+
+      <AccountUpgradeModal
+        visible={showUpgrade}
+        node={selectedNode}
+        distributorId={distributorId}
+        onClose={() => { setShowUpgrade(false); setSelectedNode(null); }}
+        onUpgraded={() => { setShowUpgrade(false); setSelectedNode(null); fetchTree(); }}
         C={C}
       />
     </View>
