@@ -571,14 +571,10 @@ const SuccessScreen = ({
             setJoiningNetwork(false);
           })
           .catch(err => {
-            console.log('[SuccessScreen] joinNetwork error:', err.message);
             getDistributorStatus()
               .then(s => {
-                if (s?.has_joined) {
-                  setJoinDone(true);
-                } else {
-                  setJoinError(err.message);
-                }
+                if (s?.has_joined) setJoinDone(true);
+                else setJoinError(err.message);
               })
               .catch(() => setJoinError(err.message))
               .finally(() => setJoiningNetwork(false));
@@ -589,9 +585,7 @@ const SuccessScreen = ({
       // This runs regardless of whether they choose to become a distributor or stay as customer.
       // If they later choose "Become a Distributor", CustomerUpgradeController will update
       // the existing inactive record to active. The stayAsCustomer call is idempotent.
-      stayAsCustomer({ tx_ref: txRef, customer_email: customerEmail })
-        .then(() => console.log('[SuccessScreen] Customer node registered'))
-        .catch(e => console.log('[SuccessScreen] stayAsCustomer error (non-fatal):', e.message));
+      stayAsCustomer({ tx_ref: txRef, customer_email: customerEmail }).catch(() => {});
 
       // Check if already an active distributor (to show correct button)
       if (customerEmail) {
@@ -604,12 +598,6 @@ const SuccessScreen = ({
 
   const handleUpgraded = (res) => {
     setShowUpgrade(false);
-    console.log('[handleUpgraded] Upgrade successful:', {
-      status: res?.status,
-      role: res?.user?.role,
-      userStatus: res?.user?.status,
-      hasToken: !!res?.access_token,
-    });
     navigation.replace('UserDashboard');
   };
 

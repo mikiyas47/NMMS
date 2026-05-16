@@ -3,6 +3,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = 'https://nmms-backend.onrender.com/api';
 
+// ── Simple in-memory cache for GET requests ───────────────────────────────────
+// Prevents hammering the server when multiple screens mount simultaneously.
+const _cache = {};
+const CACHE_TTL = 30000; // 30 seconds
+
+const cachedGet = async (url, params = {}) => {
+  const key = url + JSON.stringify(params);
+  const now = Date.now();
+  if (_cache[key] && now - _cache[key].ts < CACHE_TTL) {
+    return _cache[key].data;
+  }
+  const response = await apiClient.get(url, params ? { params } : {});
+  _cache[key] = { data: response.data, ts: now };
+  return response.data;
+};
+
+export const invalidateCache = (urlPrefix) => {
+  Object.keys(_cache).forEach(k => { if (k.startsWith(urlPrefix)) delete _cache[k]; });
+};
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 s — allows Render's free-tier cold start to complete
@@ -46,29 +66,18 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
-    
-    // Detect FormData in React Native (can be _parts or FormData instance)
+
+    // Detect FormData in React Native
     const isFormData =
       config.data instanceof FormData ||
       (config.data && typeof config.data === 'object' && config.data._parts);
-
     if (isFormData) {
-      // Let the browser/RN set the correct multipart boundary automatically
       delete config.headers['Content-Type'];
-    }
-
-    console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`);
-    if (token) {
-       console.log(`[API Token] length: ${token.length}, starts with: ${token.substring(0, 5)}...`);
-    } else {
-       console.log(`[API Token] No token found in AsyncStorage!`);
     }
 
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export const login = async (email, password) => {
@@ -112,8 +121,8 @@ export const register = async (userData) => {
 export const logout = async () => {
   try {
     await apiClient.post('/logout');
-  } catch (error) {
-    console.log('Logout error:', error);
+  } catch {
+    // ignore logout errors
   } finally {
     await AsyncStorage.removeItem('authToken');
     await AsyncStorage.removeItem('user');
@@ -122,8 +131,7 @@ export const logout = async () => {
 
 export const getProducts = async () => {
   try {
-    const response = await apiClient.get('/products');
-    return response.data;
+    return await cachedGet('/products');
   } catch (error) {
     throw error.response ? error.response.data : new Error('Network Error');
   }
@@ -142,15 +150,13 @@ export const getUser = async () => {
   try {
     const user = await AsyncStorage.getItem('user');
     return user ? JSON.parse(user) : null;
-  } catch (error) {
-    console.log('Get user error:', error);
+  } catch {
     return null;
   }
 };
 
 /**
  * Refresh the user data from the server and update AsyncStorage.
- * Call this after account upgrade to ensure the UI reflects the latest state.
  */
 export const refreshUserFromServer = async () => {
   try {
@@ -158,11 +164,9 @@ export const refreshUserFromServer = async () => {
     const user = response.data;
     if (user) {
       await AsyncStorage.setItem('user', JSON.stringify(user));
-      console.log('[refreshUserFromServer] User data updated:', user.email, 'role:', user.role, 'status:', user.status);
     }
     return user;
-  } catch (error) {
-    console.log('[refreshUserFromServer] Error:', error.message);
+  } catch {
     return null;
   }
 };
@@ -265,10 +269,8 @@ export const initiatePayment = async (paymentData) => {
 export const verifyPayment = async (txRef) => {
   try {
     const response = await apiClient.get(`/payments/verify/${txRef}`);
-    console.log(`[verifyPayment] tx_ref=${txRef}, status=${response.data?.status}`);
     return response.data;
   } catch (error) {
-    console.log(`[verifyPayment] Error for tx_ref=${txRef}:`, error.message);
     throw error.response ? error.response.data : new Error('Network Error');
   }
 };
@@ -331,14 +333,9 @@ export const upgradeToDistributor = async ({ email, password, password_confirmat
  */
 export const stayAsCustomer = async ({ tx_ref, customer_email }) => {
   try {
-    const response = await apiClient.post('/payments/stay-as-customer', {
-      tx_ref,
-      customer_email,
-    });
+    const response = await apiClient.post('/payments/stay-as-customer', { tx_ref, customer_email });
     return response.data;
   } catch (error) {
-    // Non-fatal — log but don't throw. The webhook may have already handled it.
-    console.log('[stayAsCustomer] Error (non-fatal):', error.message);
     return { status: 'error', message: error.message };
   }
 };
@@ -405,45 +402,25 @@ export const getSubtreeData = async (nodeId) => {
 export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1, preferred_leg = null }) => {
   const payload = { product_id, sponsor_id, quantity };
   if (preferred_leg) payload.preferred_leg = preferred_leg;
-  console.log('[joinNetwork] Requesting with:', payload);
 
   try {
-    // 90s timeout — Render free-tier cold start takes ~30s, plus tree processing.
-    const response = await apiClient.post('/distributor/join', payload, {
-      timeout: 90000,
-    });
-    console.log('[joinNetwork] Success:', response.data?.status);
+    const response = await apiClient.post('/distributor/join', payload, { timeout: 90000 });
     return response.data;
   } catch (error) {
-    console.log('[joinNetwork] Error:', error.message, error.code, error.response?.status, error.response?.data);
-
-    // If it was a timeout or network error (no server response), the server may
-    // have actually processed the request. Check status before reporting failure.
     if (!error.response) {
-      console.log('[joinNetwork] No server response — checking if join succeeded anyway...');
       try {
-        // Give the server up to 30s to respond to the status check
         const statusRes = await apiClient.get('/distributor/status', { timeout: 30000 });
         if (statusRes.data?.has_joined && statusRes.data?.account_count > 0) {
-          console.log('[joinNetwork] Server confirmed join succeeded despite timeout!', statusRes.data);
-          // Return success — the account was created, just the response was slow
           return {
             status: 'success',
             message: `Successfully joined with ${statusRes.data.account_count} account(s).`,
             accounts: statusRes.data.accounts || [],
           };
         }
-      } catch (checkErr) {
-        console.log('[joinNetwork] Status check also failed:', checkErr.message);
-      }
-      // Only show the scary message if we truly cannot confirm success
+      } catch {}
       throw new Error('The server is starting up. Please wait 30 seconds and try again.');
     }
-
-    // Server responded with an error — surface the real message
-    if (error.response?.data?.message) {
-      throw new Error(error.response.data.message);
-    }
+    if (error.response?.data?.message) throw new Error(error.response.data.message);
     throw new Error(error.message || 'Could not connect to the server.');
   }
 };
@@ -453,7 +430,6 @@ export const getDistributorStatus = async () => {
     const response = await apiClient.get('/distributor/status');
     return response.data;
   } catch (error) {
-    console.log('[getDistributorStatus] Error:', error.message, error.response?.status);
     throw error.response ? error.response.data : new Error('Network Error');
   }
 };

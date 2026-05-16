@@ -510,10 +510,8 @@ const TreeScreen = ({ C, navigate }) => {
         // Distributor hasn't joined the network yet — not an error
         setNotJoined(true);
       } else if (status === 401) {
-        console.log('Tree error: Unauthorized (401)');
-        setError('Your session has expired or is invalid. Please log out and log in again.');
+        setError('Your session has expired. Please log out and log in again.');
       } else {
-        console.log('Tree error:', err.message);
         setError(err.message || 'Failed to load tree.');
       }
     } finally {
@@ -527,8 +525,8 @@ const TreeScreen = ({ C, navigate }) => {
     try {
       const res = await getSubtreeData(node.id);
       setTreeData(res.tree);
-    } catch (err) {
-      console.log('Expand error', err);
+    } catch {
+      // silently ignore expand errors
     }
   };
 
