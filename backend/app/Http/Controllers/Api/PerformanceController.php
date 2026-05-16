@@ -167,6 +167,56 @@ class PerformanceController extends Controller
         return response()->json(['status' => 'success', 'data' => $items]);
     }
 
+    // Public: serve the presentation page when a prospect clicks the tracked link
+    public function publicPresentationPage(Request $r, $token)
+    {
+        $assignment = PresentationAssignment::where('token', $token)->with('presentation')->first();
+        if (!$assignment) {
+            return response()->json(['message' => 'Presentation link not found or has expired.'], 404);
+        }
+
+        $pres = $assignment->presentation;
+        if (!$pres) {
+            return response()->json(['message' => 'Presentation content not available.'], 404);
+        }
+
+        // Record 'opened' event
+        if (!$assignment->opened_at) {
+            $assignment->status     = 'opened';
+            $assignment->opened_at  = now();
+            $assignment->save();
+        }
+
+        EngagementEvent::create([
+            'distributor_id' => $assignment->distributor_id,
+            'prospect_id'    => $assignment->prospect_id,
+            'token'          => $token,
+            'event_type'     => 'opened',
+            'source_type'    => 'presentation',
+            'source_id'      => $assignment->id,
+            'visitor_ip'     => $r->ip(),
+            'user_agent'     => $r->userAgent(),
+        ]);
+
+        $this->recomputePriority($assignment->prospect_id, $assignment->distributor_id);
+
+        // If it's a video/external URL, redirect the prospect directly to it
+        $redirectUrl = $pres->external_url ?? $pres->file_url ?? null;
+        if ($redirectUrl) {
+            return redirect()->away($redirectUrl);
+        }
+
+        // Fallback: return JSON with presentation details
+        return response()->json([
+            'status'      => 'success',
+            'title'       => $pres->title ?? 'Presentation',
+            'description' => $pres->description,
+            'content_type'=> $pres->content_type,
+            'file_url'    => $pres->file_url,
+            'token'       => $token,
+        ]);
+    }
+
     // Public: track presentation engagement (no auth)
     public function trackPresentation(Request $r, $token)
     {
@@ -295,6 +345,47 @@ class PerformanceController extends Controller
         $data = $r->validate(['status' => 'required|in:ignored']);
         $inv->update($data);
         return response()->json(['status' => 'success', 'data' => $inv->fresh()]);
+    }
+
+    // Public: serve the invitation page when a prospect clicks the tracked link
+    public function publicInvitePage(Request $r, $token)
+    {
+        $inv = Invitation::where('token', $token)->first();
+        if (!$inv) {
+            return response()->json(['message' => 'Invitation link not found or has expired.'], 404);
+        }
+
+        if (!$inv->opened_at) {
+            $inv->status = 'opened';
+            $inv->opened_at = now();
+            $inv->save();
+        }
+
+        EngagementEvent::create([
+            'distributor_id' => $inv->distributor_id,
+            'prospect_id'    => $inv->prospect_id,
+            'token'          => $token,
+            'event_type'     => 'open',
+            'source_type'    => 'invitation',
+            'source_id'      => $inv->id,
+            'visitor_ip'     => $r->ip(),
+            'user_agent'     => $r->userAgent(),
+        ]);
+
+        $this->recomputePriority($inv->prospect_id, $inv->distributor_id);
+
+        $distributor = Distributor::where('distributor_id', $inv->distributor_id)->first();
+        $prospect = Prospect::find($inv->prospect_id);
+
+        return response()->json([
+            'status'           => 'success',
+            'distributor_name' => $distributor?->name,
+            'prospect_name'    => $prospect?->name,
+            'invitation_type'  => $inv->invitation_type,
+            'scheduled_at'     => $inv->scheduled_at,
+            'notes'            => $inv->notes,
+            'token'            => $token,
+        ]);
     }
 
     // Public: track invitation engagement (no auth)
