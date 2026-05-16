@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Animated, ActivityIndicator, Dimensions, Modal, Alert, Image
+  Animated, ActivityIndicator, Dimensions, Modal, Alert, Image, TextInput
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -119,17 +119,310 @@ const TreeNode = ({ node, isRoot = false, C, onNodeClick }) => {
 
 // ── Account Upgrade Modal ──────────────────────────────────────────────────────
 const AccountUpgradeModal = ({ visible, node, distributorId, onClose, onUpgraded, C }) => {
-  const [step, setStep]           = useState('options'); // 'options' | 'paying' | 'done'
-  const [options, setOptions]     = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [selectedProduct, setSel] = useState(null);
-  const [paymentUrl, setPayUrl]   = useState(null);
-  const [txRef, setTxRef]         = useState(null);
-  const [accountId, setAccId]     = useState(null);
-  const [newProductId, setNewPid] = useState(null);
-  const [completing, setCompleting] = useState(false);
-  const [error, setError]         = useState('');
-  const pollRef                   = useRef(null);
+  // steps: 'options' | 'consent' | 'paying' | 'completing' | 'done'
+  const [step, setStep]             = useState('options');
+  const [options, setOptions]       = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [selectedProduct, setSel]   = useState(null);
+  const [paymentUrl, setPayUrl]     = useState(null);
+  const [txRef, setTxRef]           = useState(null);
+  const [newProductId, setNewPid]   = useState(null);
+  const [error, setError]           = useState('');
+  const [consentPin, setConsentPin] = useState('');
+  const [consentError, setConsentError] = useState('');
+  const pollRef                     = useRef(null);
+
+  const isSelfUpgrade = node && options && node.distributor_id &&
+    String(node.distributor_id) === String(distributorId);
+
+  useEffect(() => {
+    if (visible && node) {
+      setStep('options');
+      setSel(null);
+      setPayUrl(null);
+      setError('');
+      setConsentPin('');
+      setConsentError('');
+      setLoading(true);
+      getUpgradeOptions(node.id)
+        .then(data => {
+          setOptions(data);
+          if (data.can_upgrade === false) {
+            setError('This account belongs to an active distributor. They must upgrade their own account by logging in.');
+          }
+        })
+        .catch(err => setError(typeof err?.message === 'string' ? err.message : 'Could not load upgrade options.'))
+        .finally(() => setLoading(false));
+    }
+    return () => clearInterval(pollRef.current);
+  }, [visible, node]);
+
+  // Step 1: Distributor selects tier and taps Pay
+  const handleSelectAndPay = () => {
+    if (!selectedProduct) return;
+    setError('');
+    // For inactive customer accounts, require consent PIN first
+    if (!isSelfUpgrade && node?.status === 'inactive') {
+      setStep('consent');
+    } else {
+      initiatePayment();
+    }
+  };
+
+  // Step 2 (for customer accounts): verify consent PIN = last 4 digits of customer phone
+  const handleConsent = () => {
+    const phone = node?.distributor_phone ?? '';
+    const last4 = phone.replace(/\D/g, '').slice(-4);
+    if (!last4) {
+      // No phone on record — skip PIN check, proceed
+      initiatePayment();
+      return;
+    }
+    if (consentPin.trim() !== last4) {
+      setConsentError(`Incorrect PIN. Ask the customer for the last 4 digits of their phone number.`);
+      return;
+    }
+    setConsentError('');
+    initiatePayment();
+  };
+
+  // Step 3: Initiate Chapa payment
+  const initiatePayment = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await initiateAccountUpgrade({
+        node_id:        node.id,
+        new_product_id: selectedProduct.id,
+        distributor_id: distributorId,
+      });
+      setTxRef(res.tx_ref);
+      setNewPid(selectedProduct.id);
+      setPayUrl(res.payment_url);
+      setStep('paying');
+      // Poll for payment status
+      let attempts = 0;
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        try {
+          const vr = await fetch(`https://nmms-backend.onrender.com/api/payments/verify/${res.tx_ref}`);
+          const vd = await vr.json();
+          if (vd.status === 'success' || vd.status === 'pending') {
+            clearInterval(pollRef.current);
+            setPayUrl(null);
+            setStep('completing');
+            const cr = await completeAccountUpgrade({
+              tx_ref:         res.tx_ref,
+              node_id:        node.id,
+              new_product_id: selectedProduct.id,
+            });
+            setStep('done');
+            // Give user 2 seconds to see success then close
+            setTimeout(() => { onUpgraded(cr); onClose(); }, 2000);
+          } else if (vd.status === 'failed' || vd.status === 'rejected') {
+            clearInterval(pollRef.current);
+            setPayUrl(null);
+            setStep('options');
+            setError('Payment failed. Please try again.');
+          }
+        } catch {}
+        if (attempts > 150) { clearInterval(pollRef.current); setPayUrl(null); setStep('options'); setError('Payment timed out. Please try again.'); }
+      }, 2000);
+    } catch (e) {
+      const msg = typeof e?.message === 'string' ? e.message : 'Upgrade failed. Please try again.';
+      setError(msg);
+      setStep('options');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!visible) return null;
+
+  const GOLD   = '#F59E0B';
+  const ACCENT = '#6366F1';
+  const TEXT   = '#F9FAFB';
+  const MUTED  = 'rgba(255,255,255,0.45)';
+  const BORDER = 'rgba(255,255,255,0.08)';
+  const SUCCESS_GREEN = '#10B981';
+  const catColors = { Yellow: '#FBBF24', Orange: '#F97316', Green: '#10B981', Golden: '#F59E0B' };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={() => { if (step === 'options' || step === 'consent') onClose(); }}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1}
+          onPress={() => { if (step === 'options' || step === 'consent') onClose(); }} />
+
+        {/* ── Chapa WebView ── */}
+        {step === 'paying' && paymentUrl && (
+          <View style={{ height: '88%', backgroundColor: '#000', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }}>
+            <View style={{ padding: 16, backgroundColor: '#111827', flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => { clearInterval(pollRef.current); setPayUrl(null); setStep('options'); }} style={{ marginRight: 12 }}>
+                <Text style={{ color: MUTED, fontSize: 22 }}>←</Text>
+              </TouchableOpacity>
+              <Text style={{ color: TEXT, fontWeight: '800', fontSize: 15 }}>
+                Upgrade Payment · ETB {parseFloat(selectedProduct?.price ?? 0).toLocaleString()}
+              </Text>
+            </View>
+            <WebView source={{ uri: paymentUrl }} style={{ flex: 1 }}
+              onShouldStartLoadWithRequest={(req) => {
+                if (req.url.includes('/api/payments/return')) {
+                  clearInterval(pollRef.current);
+                  setPayUrl(null);
+                  setStep('completing');
+                  completeAccountUpgrade({ tx_ref: txRef, node_id: node.id, new_product_id: newProductId })
+                    .then(cr => { setStep('done'); setTimeout(() => { onUpgraded(cr); onClose(); }, 2000); })
+                    .catch(e => { setError(typeof e?.message === 'string' ? e.message : 'Upgrade failed.'); setStep('options'); });
+                  return false;
+                }
+                return true;
+              }}
+            />
+          </View>
+        )}
+
+        {/* ── Completing spinner ── */}
+        {step === 'completing' && (
+          <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 40, alignItems: 'center', borderTopWidth: 1, borderColor: BORDER }}>
+            <ActivityIndicator size="large" color={GOLD} />
+            <Text style={{ color: TEXT, fontSize: 16, fontWeight: '700', marginTop: 20 }}>Applying upgrade…</Text>
+            <Text style={{ color: MUTED, fontSize: 13, marginTop: 8 }}>This will only take a moment</Text>
+          </View>
+        )}
+
+        {/* ── Success ── */}
+        {step === 'done' && (
+          <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 40, alignItems: 'center', borderTopWidth: 1, borderColor: BORDER }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: SUCCESS_GREEN, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 40 }}>✓</Text>
+            </View>
+            <Text style={{ color: TEXT, fontSize: 22, fontWeight: '900', textAlign: 'center' }}>Upgrade Successful!</Text>
+            <Text style={{ color: MUTED, fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+              {node?.distributor_name}'s account upgraded to {selectedProduct?.category}.{'\n'}Points recalculated.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Consent PIN (for inactive customer accounts) ── */}
+        {step === 'consent' && (
+          <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8, borderTopWidth: 1, borderColor: BORDER }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: BORDER, alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={{ color: TEXT, fontSize: 18, fontWeight: '900', marginBottom: 8 }}>Customer Consent</Text>
+            <Text style={{ color: MUTED, fontSize: 13, lineHeight: 20, marginBottom: 20 }}>
+              To confirm {node?.distributor_name} consents to this upgrade, enter the last 4 digits of their registered phone number.
+            </Text>
+            <View style={{ backgroundColor: 'rgba(245,158,11,0.08)', borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
+              <Text style={{ color: '#F59E0B', fontSize: 13, fontWeight: '700' }}>
+                Upgrading: {node?.distributor_name}
+              </Text>
+              <Text style={{ color: MUTED, fontSize: 12, marginTop: 4 }}>
+                {options?.current_product?.category} → {selectedProduct?.category} · ETB {parseFloat(selectedProduct?.price ?? 0).toLocaleString()}
+              </Text>
+            </View>
+            {consentError ? (
+              <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
+                <Text style={{ color: '#EF4444', fontSize: 13, textAlign: 'center' }}>{consentError}</Text>
+              </View>
+            ) : null}
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, borderWidth: 1.5, borderColor: BORDER, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 16 }}>
+              <Text style={{ color: MUTED, fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 }}>LAST 4 DIGITS OF CUSTOMER PHONE</Text>
+              <TextInput
+                value={consentPin}
+                onChangeText={setConsentPin}
+                keyboardType="numeric"
+                maxLength={4}
+                style={{ color: TEXT, fontSize: 24, fontWeight: '800', letterSpacing: 8, textAlign: 'center' }}
+                placeholder="_ _ _ _"
+                placeholderTextColor={MUTED}
+              />
+            </View>
+            <TouchableOpacity onPress={handleConsent} disabled={consentPin.length < 4}
+              style={{ borderRadius: 16, overflow: 'hidden', opacity: consentPin.length < 4 ? 0.5 : 1, marginBottom: 10 }}>
+              <LinearGradient colors={[GOLD, '#F97316']} start={[0,0]} end={[1,0]}
+                style={{ paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
+                <ArrowUpCircle color="#fff" size={20} />
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginLeft: 10 }}>Confirm & Pay</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setStep('options')} style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ color: MUTED, fontSize: 14 }}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Options sheet ── */}
+        {step === 'options' && (
+          <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8, borderTopWidth: 1, borderColor: BORDER, maxHeight: '80%' }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: BORDER, alignSelf: 'center', marginBottom: 20 }} />
+            <Text style={{ color: TEXT, fontSize: 18, fontWeight: '900', marginBottom: 4 }}>Upgrade Account</Text>
+            <Text style={{ color: MUTED, fontSize: 13, marginBottom: 16 }}>
+              {node?.distributor_name} · Current: {options?.current_product?.category ?? '…'} ({options?.current_product?.point ?? 0} pts)
+            </Text>
+
+            {error ? (
+              <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}>
+                <Text style={{ color: '#EF4444', fontSize: 13, textAlign: 'center' }}>{error}</Text>
+              </View>
+            ) : null}
+
+            {loading ? (
+              <ActivityIndicator color={ACCENT} style={{ marginVertical: 24 }} />
+            ) : options?.upgrades?.length === 0 ? (
+              <Text style={{ color: MUTED, textAlign: 'center', marginVertical: 24 }}>
+                {options?.can_upgrade === false
+                  ? 'Active distributors must upgrade their own account by logging in.'
+                  : 'This account is already at the highest tier (Golden).'}
+              </Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                {(options?.upgrades ?? []).map(p => {
+                  const active = selectedProduct?.id === p.id;
+                  const color  = catColors[p.category] ?? ACCENT;
+                  return (
+                    <TouchableOpacity key={p.id} onPress={() => setSel(p)}
+                      style={{ flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 16, marginBottom: 10,
+                        backgroundColor: active ? `${color}22` : 'rgba(255,255,255,0.04)',
+                        borderWidth: 1.5, borderColor: active ? color : BORDER }}>
+                      <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${color}33`, alignItems: 'center', justifyContent: 'center', marginRight: 14 }}>
+                        <Text style={{ fontSize: 20 }}>
+                          {p.category === 'Yellow' ? '🟡' : p.category === 'Orange' ? '🟠' : p.category === 'Green' ? '🟢' : '🏆'}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: TEXT, fontWeight: '800', fontSize: 14 }}>{p.category} — {p.name}</Text>
+                        <Text style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>★ {p.point} pts · ETB {parseFloat(p.price).toLocaleString()}</Text>
+                      </View>
+                      {active && <Text style={{ color, fontSize: 18 }}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            {options?.upgrades?.length > 0 && (
+              <TouchableOpacity onPress={handleSelectAndPay} disabled={!selectedProduct || loading}
+                style={{ borderRadius: 16, overflow: 'hidden', opacity: (!selectedProduct || loading) ? 0.5 : 1 }}>
+                <LinearGradient colors={[GOLD, '#F97316']} start={[0,0]} end={[1,0]}
+                  style={{ paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
+                  <ArrowUpCircle color="#fff" size={20} />
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginLeft: 10 }}>
+                    {selectedProduct
+                      ? `Pay ETB ${parseFloat(selectedProduct.price).toLocaleString()} & Upgrade`
+                      : 'Select a tier to upgrade'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity onPress={onClose} style={{ paddingVertical: 12, alignItems: 'center', marginTop: 8 }}>
+              <Text style={{ color: MUTED, fontSize: 14 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+};
 
   useEffect(() => {
     if (visible && node) {
