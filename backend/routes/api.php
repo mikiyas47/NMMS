@@ -249,6 +249,40 @@ Route::get('/test-engine/{email}', function ($email) {
         ], 500);
     }
 });
+
+Route::get('/debug-login', function (\Illuminate\Http\Request $r) {
+    try {
+        $email = $r->query('email');
+        $password = $r->query('password');
+        
+        $user = \App\Models\User::where('email', $email)->first();
+        if ($user) {
+            if (\Illuminate\Support\Facades\Hash::check($password, $user->password)) {
+                $token = $user->createToken('auth_token')->plainTextToken;
+                return response()->json(['status' => 'success_user', 'token' => $token, 'user' => $user]);
+            }
+            return response()->json(['error' => 'Wrong password for user']);
+        }
+
+        $distributor = \App\Models\Distributor::where('email', $email)->first();
+        if ($distributor) {
+            if (\Illuminate\Support\Facades\Hash::check($password, $distributor->password)) {
+                $token = $distributor->createToken('auth_token')->plainTextToken;
+                return response()->json(['status' => 'success_distributor', 'token' => $token, 'dist' => $distributor]);
+            }
+            return response()->json(['error' => 'Wrong password for distributor']);
+        }
+        
+        return response()->json(['error' => 'User not found']);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file'  => $e->getFile(),
+            'line'  => $e->getLine(),
+            'trace' => collect(explode("\n", $e->getTraceAsString()))->take(5)->toArray(),
+        ], 500);
+    }
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Goals ─────────────────────────────────────────────────────────────────────
