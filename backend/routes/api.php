@@ -298,6 +298,7 @@ Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/presentations/assign',   [PerformanceController::class, 'assignPresentation']);
     Route::post('/presentations/call-outcome', [PerformanceController::class, 'logPresentationCallOutcome']);
     Route::get('/prospects/{id}/assignments', [PerformanceController::class, 'listAssignments']);
+    Route::get('/prospects/{id}/watching',    [PerformanceController::class, 'watchingStatus']);
     // Invitations
     Route::post('/invitations',                    [PerformanceController::class, 'createInvitation']);
     Route::get('/prospects/{id}/invitations',      [PerformanceController::class, 'listInvitations']);

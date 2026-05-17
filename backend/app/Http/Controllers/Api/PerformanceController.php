@@ -22,6 +22,8 @@ use App\Models\WeeklyGoal;
 use App\Models\Prospect;
 use App\Models\Distributor;
 use App\Models\ProspectActivity;
+use App\Events\PresentationEngaged;
+use App\Events\ProspectVideoActivity;
 
 class PerformanceController extends Controller
 {
@@ -191,6 +193,16 @@ class PerformanceController extends Controller
             $assignment->time_spent_seconds = $timeSpent;
         }
 
+        // ── Real-time Watching State ──────────────────────────────
+        // The mobile app polls /api/prospects/{id}/watching every 5s.
+        // We track watching via DB so it works on any server (no WebSocket needed).
+        if (in_array($action, ['opened', 'heartbeat'])) {
+            $assignment->is_watching = true;
+            $assignment->last_heartbeat_at = now();
+        } elseif ($action === 'closed' || $action === 'completed') {
+            $assignment->is_watching = false;
+        }
+
         $notify = false;
         $notifyType = '';
         $notifyTitle = '';
@@ -325,6 +337,15 @@ class PerformanceController extends Controller
 
         $this->updatePresentationStats($assignment->presentation_id);
         $this->recomputePriority($assignment->prospect_id, $assignment->distributor_id);
+
+        // Broadcast real-time event for Live Pulse
+        PresentationEngaged::dispatch(
+            $assignment->distributor_id, 
+            $assignment->prospect_id, 
+            $action, 
+            $assignment->engagement_score, 
+            $watchPct
+        );
 
         return response()->json(['status' => 'success', 'score' => $assignment->engagement_score]);
     }
@@ -965,6 +986,39 @@ class PerformanceController extends Controller
         $prospect = Prospect::find($inv->prospect_id);
         EngagementEvent::create(['distributor_id' => $inv->distributor_id, 'prospect_id' => $inv->prospect_id, 'token' => $token, 'event_type' => 'page_visit', 'source_type' => 'invitation', 'source_id' => $inv->id, 'visitor_ip' => $r->ip(), 'user_agent' => $r->userAgent()]);
         return response()->json(['status' => 'success', 'page_type' => 'invitation', 'distributor_name' => $distributor?->name, 'prospect_name' => $prospect?->name, 'invitation_type' => $inv->invitation_type, 'scheduled_at' => $inv->scheduled_at, 'script' => $inv->script_used]);
+    }
+
+    /**
+     * Mobile polling endpoint — returns whether the prospect is currently watching
+     * any presentation. Considered "watching" if last heartbeat was < 30 seconds ago.
+     * Called by the mobile app every 5 seconds when viewing a prospect profile.
+     */
+    public function watchingStatus(Request $r, $prospectId)
+    {
+        $distId = $this->distId($r);
+        // Ensure this prospect belongs to the distributor
+        Prospect::where('prospect_id', $prospectId)->where('distributor_id', $distId)->firstOrFail();
+
+        $watching = PresentationAssignment::where('prospect_id', $prospectId)
+            ->where('distributor_id', $distId)
+            ->where('is_watching', true)
+            ->where('last_heartbeat_at', '>=', now()->subSeconds(30))
+            ->exists();
+
+        // Also count recent closes (within last 5 mins) to show "just closed"
+        $recentlyClosed = !$watching && PresentationAssignment::where('prospect_id', $prospectId)
+            ->where('distributor_id', $distId)
+            ->where('is_watching', false)
+            ->where('last_heartbeat_at', '>=', now()->subMinutes(5))
+            ->whereNotNull('last_heartbeat_at')
+            ->exists();
+
+        return response()->json([
+            'status'          => 'success',
+            'is_watching'     => $watching,
+            'recently_closed' => $recentlyClosed,
+            'checked_at'      => now()->toISOString(),
+        ]);
     }
 
     public function publicPresentationPage(Request $r, $token)

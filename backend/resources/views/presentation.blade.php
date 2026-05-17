@@ -26,7 +26,7 @@
             @if($presentation->content_type === 'video' || $presentation->external_url)
                 <div class="video-container shadow-md">
                     @if(str_contains($presentation->external_url, 'youtube.com') || str_contains($presentation->external_url, 'youtu.be'))
-                        <!-- YouTube embed (placeholder URL for script) -->
+                        <!-- YouTube embed -->
                         <iframe id="yt-player" type="text/html" width="100%" height="100%"
                           src="{{ \Illuminate\Support\Str::replace('watch?v=', 'embed/', $presentation->external_url) }}?enablejsapi=1"
                           frameborder="0" allowfullscreen></iframe>
@@ -66,19 +66,20 @@
     </div>
 
     <script>
-        // Track analytics
         const token = "{{ $token }}";
         const isYoutube = {{ str_contains($presentation->external_url ?? '', 'youtu') ? 'true' : 'false' }};
         let watchDuration = 0;
         let watchPercent = 0;
-        let lastReportedPercent = 0;
         let timer = null;
+        let heartbeatInterval = null;
         let ytPlayer;
+        let isClosed = false;
 
         const API_URL = `/api/p/${token}/track`;
 
         function sendTrackingData(event_type, extras = {}) {
-            fetch(API_URL, {
+            if (isClosed && event_type !== 'closed') return;
+            return fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
@@ -88,10 +89,19 @@
                     device_type: /Mobi|Android/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
                     ...extras
                 })
-            }).catch(e => console.error(e));
+            }).catch(e => console.error('Track error:', e));
         }
 
-        // CTA Click
+        // ── STEP 1: Send "opened" immediately on page load ──────────────────
+        sendTrackingData('opened');
+
+        // ── STEP 2: Send heartbeat every 15 seconds to keep "watching" alive ─
+        heartbeatInterval = setInterval(() => {
+            watchDuration += 15;
+            sendTrackingData('heartbeat');
+        }, 15000);
+
+        // ── CTA Click ────────────────────────────────────────────────────────
         document.getElementById('cta-btn').addEventListener('click', () => {
             sendTrackingData('cta_clicked');
             const link = "{{ $presentation->cta_link }}";
@@ -99,23 +109,29 @@
             else alert('Please reach out to your distributor directly.');
         });
 
-        // Track Exit
+        // ── Track Exit ────────────────────────────────────────────────────────
         window.addEventListener('beforeunload', () => {
-            sendTrackingData('closed');
+            isClosed = true;
+            clearInterval(heartbeatInterval);
+            clearInterval(timer);
+            // Use sendBeacon for reliable delivery on page close
+            navigator.sendBeacon(API_URL, JSON.stringify({
+                action: 'closed',
+                watch_percent: Math.floor(watchPercent),
+                time_spent: Math.floor(watchDuration),
+                device_type: /Mobi|Android/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop'
+            }));
         });
 
-        // Initialize Players
+        // ── Initialize Players ────────────────────────────────────────────────
         if (isYoutube) {
             let tag = document.createElement('script');
             tag.src = "https://www.youtube.com/iframe_api";
-            let firstScriptTag = document.getElementsByTagName('script')[0];
-            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]);
 
             window.onYouTubeIframeAPIReady = function() {
                 ytPlayer = new YT.Player('yt-player', {
-                    events: {
-                        'onStateChange': onPlayerStateChange
-                    }
+                    events: { 'onStateChange': onPlayerStateChange }
                 });
             };
 
@@ -130,8 +146,7 @@
                         }
                     }, 1000);
                 } else if (event.data != YT.PlayerState.PLAYING) {
-                    clearInterval(timer);
-                    timer = null;
+                    clearInterval(timer); timer = null;
                     if(event.data == YT.PlayerState.ENDED) {
                         watchPercent = 100;
                         checkMilestones();
@@ -158,20 +173,14 @@
                     watchPercent = 100; checkMilestones(); sendTrackingData('completed');
                 });
             } else {
-                // Not a video, maybe PDF. Track generic time spent.
-                setInterval(() => {
-                    watchDuration++;
-                    if(watchDuration % 10 === 0) sendTrackingData('heartbeat');
-                }, 1000);
+                // PDF tracking
+                setInterval(() => { watchDuration++; }, 1000);
             }
         }
 
         const milestones = [25, 50, 75, 95];
         let reachedMilestones = new Set();
-
         function checkMilestones() {
-            if(watchDuration % 5 === 0) sendTrackingData('heartbeat'); // sync every 5s
-
             milestones.forEach(m => {
                 if (watchPercent >= m && !reachedMilestones.has(m)) {
                     reachedMilestones.add(m);
