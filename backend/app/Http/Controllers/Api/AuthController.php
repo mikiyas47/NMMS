@@ -41,7 +41,8 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $request->validate([
+        try {
+            $request->validate([
             'email' => 'required|email',
             'password' => 'required',
         ]);
@@ -109,6 +110,14 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Invalid login details'
         ], 401);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Server Error',
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine()
+            ], 500);
+        }
     }
 
     public function user(Request $request)
