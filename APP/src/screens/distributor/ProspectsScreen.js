@@ -1406,7 +1406,9 @@ const AwaitingUpdateModal = ({ visible, prospect, invitationId, onClose, onSaved
   );
 };
 
+// ── InviteFlowModal — Full multi-step invitation workflow ──
 
+const INVITE_SCRIPTS = [
   { id: 's1', text: "Hey {name}! I want to share something with you that I think you'll find really interesting. Are you open to it? ≡ƒÿè" },
   { id: 's2', text: "Hi {name}, can I send you a short video? It's only 5 minutes and I think it could change things for you." },
   { id: 's3', text: "Hey {name}! Are you open to seeing a simple business idea? No pressure at all ΓÇö just want to share something exciting." },
