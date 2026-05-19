@@ -250,6 +250,8 @@ export const getProspectScoreBreakdown = async (prospectId) => (await apiClient.
 export const createInvitation = async (data) => (await apiClient.post('/invitations', data)).data;
 export const getProspectInvitations = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/invitations`)).data;
 export const updateInvitationStatus = async (id, status) => (await apiClient.patch(`/invitations/${id}/status`, { status })).data;
+export const updateTextInvitationResponse = async (id, data) => (await apiClient.patch(`/invitations/${id}/response`, data)).data;
+export const getInvitationSmartCheck = async (id) => (await apiClient.get(`/invitations/${id}/smart-check`)).data;
 export const getScript = async (invitationType, prospectId) => (await apiClient.get('/scripts', { params: { invitation_type: invitationType, prospect_id: prospectId } })).data;
 
 // ── Automation ────────────────────────────────────────────────────────────────

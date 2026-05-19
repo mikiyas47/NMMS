@@ -25,9 +25,10 @@ import {
   createInvitation, getPresentations, assignPresentation,
   getProspectInvitations, getProspectAssignments,
   getFollowups, getClosings, initEcho, getProspectWatchingStatus,
-  getProspectScoreBreakdown,
+  getProspectScoreBreakdown, updateTextInvitationResponse, getInvitationSmartCheck,
 } from '../../api/authService';
 import { FollowupWizardContent, ClosingWizardContent } from '../../components/WizardModals';
+import TextInviteFlow from './TextInviteFlow';
 const { width } = Dimensions.get('window');
 
 // ΓöÇΓöÇ Constants ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -391,6 +392,8 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
   const [showScoreInfo, setShowScoreInfo] = useState(false);
   const [scoreBreakdown, setScoreBreakdown] = useState(null);
   const [scoreLoading, setScoreLoading] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [pendingInvitationId, setPendingInvitationId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
   const watchPulse = useRef(new Animated.Value(1)).current;
@@ -623,6 +626,43 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* ── Awaiting Response persistent Update button ── */}
+      {prospect.stage === 'Awaiting Response' && (
+        <TouchableOpacity
+          onPress={async () => {
+            // Load the most recent pending invitation for this prospect
+            try {
+              const res = await getProspectInvitations(prospect.prospect_id);
+              const invitations = res.data ?? [];
+              const pending = invitations.find(i => i.status === 'sent' || i.status === 'opened');
+              if (pending) {
+                setPendingInvitationId(pending.invitation_id);
+              } else {
+                setPendingInvitationId(null);
+              }
+            } catch (_) {
+              setPendingInvitationId(null);
+            }
+            setShowUpdateModal(true);
+          }}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: 'rgba(245,158,11,0.12)', borderRadius: 14, padding: 14,
+            marginBottom: 12, borderWidth: 1.5, borderColor: 'rgba(245,158,11,0.35)',
+          }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 18 }}>⏳</Text>
+            <View>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B' }}>Awaiting Response</Text>
+              <Text style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>Tap to log what happened</Text>
+            </View>
+          </View>
+          <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 }}>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Update</Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Tabs */}
       <View style={{ flexDirection: 'row', backgroundColor: C.inputBg, borderRadius: 16, padding: 4, marginBottom: 16 }}>
@@ -884,6 +924,16 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
         prospect={prospect}
         onClose={() => setShowInviteModal(false)}
         onSaved={() => { setShowInviteModal(false); onUpdate(null); }}
+        C={C}
+      />
+
+      {/* ── Awaiting Response Update Modal ── */}
+      <AwaitingUpdateModal
+        visible={showUpdateModal}
+        prospect={prospect}
+        invitationId={pendingInvitationId}
+        onClose={() => setShowUpdateModal(false)}
+        onSaved={() => { setShowUpdateModal(false); onUpdate(null); }}
         C={C}
       />
 
@@ -1243,8 +1293,120 @@ const AddProspectModal = ({ visible, onClose, onSaved, C }) => {
   );
 };
 
-// ΓöÇΓöÇ InviteFlowModal ΓÇö Full multi-step invitation workflow ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-const INVITE_SCRIPTS = [
+// ── AwaitingUpdateModal — Quick Response Actions for Awaiting Response stage ──
+const QUICK_RESPONSES = [
+  { key: 'no_response',        label: 'No Response Yet',    emoji: '⏳', color: '#6B7280' },
+  { key: 'interested',         label: 'Interested',         emoji: '🔥', color: '#10B981' },
+  { key: 'asked_questions',    label: 'Asked Questions',    emoji: '💬', color: '#6366F1' },
+  { key: 'maybe_another_time', label: 'Maybe Another Time', emoji: '📅', color: '#F59E0B' },
+  { key: 'not_interested',     label: 'Not Interested',     emoji: '❌', color: '#EF4444' },
+];
+
+const AwaitingUpdateModal = ({ visible, prospect, invitationId, onClose, onSaved, C }) => {
+  const [saving, setSaving] = useState(false);
+  const [scoreResult, setScoreResult] = useState(null);
+  const [step, setStep] = useState('pick'); // pick | result
+  const [reminderDate, setReminderDate] = useState('');
+  const firstName = (prospect?.name || 'there').split(' ')[0];
+
+  useEffect(() => {
+    if (visible) { setStep('pick'); setScoreResult(null); setReminderDate(''); }
+  }, [visible]);
+
+  const handleResponse = async (responseKey) => {
+    if (!invitationId) {
+      Alert.alert('No pending invitation', 'Could not find a pending invitation to update.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { response: responseKey };
+      if (responseKey === 'maybe_another_time' && reminderDate) payload.reminder_date = reminderDate;
+      const res = await updateTextInvitationResponse(invitationId, payload);
+      setScoreResult({ ...res, response: responseKey });
+      setStep('result');
+    } catch (e) {
+      Alert.alert('Error', e?.message || 'Could not save response.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!visible) return null;
+
+  const doneMessages = {
+    no_response:        `${firstName} hasn't responded yet. Consider checking back tomorrow.`,
+    interested:         `${firstName} showed interest! This prospect showed high intent. A follow-up today may increase engagement.`,
+    asked_questions:    `${firstName} asked questions — strong engagement signal. Prioritize this prospect.`,
+    maybe_another_time: `${firstName} is warm but not ready yet. Reminder saved.`,
+    not_interested:     `${firstName} isn't interested right now. Moved to nurture list.`,
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 22, paddingTop: 16, paddingBottom: 44 }}>
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 16 }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: '900', color: C.text, flex: 1 }}>
+              {step === 'pick' ? `Any update from ${firstName}?` : 'Response Logged!'}
+            </Text>
+            <TouchableOpacity onPress={onClose}><X color={C.muted} size={20} /></TouchableOpacity>
+          </View>
+
+          {step === 'pick' && (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+                Select what happened after you sent the message.
+              </Text>
+              {QUICK_RESPONSES.map(r => (
+                <TouchableOpacity key={r.key} onPress={() => handleResponse(r.key)}
+                  disabled={saving}
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: r.color + '12', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1.5, borderColor: r.color + '30' }}>
+                  <Text style={{ fontSize: 22, marginRight: 14 }}>{r.emoji}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: C.text, flex: 1 }}>{r.label}</Text>
+                  {saving && <ActivityIndicator color={r.color} size="small" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {step === 'result' && scoreResult && (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20, marginBottom: 16 }}>
+                {doneMessages[scoreResult.response] || 'Response saved.'}
+              </Text>
+              {(scoreResult.score_explanations || []).length > 0 && (
+                <View style={{ backgroundColor: C.inputBg, borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: C.border }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: C.muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Score Update</Text>
+                  {scoreResult.score_explanations.map((exp, i) => (
+                    <Text key={i} style={{ fontSize: 13, color: C.text, marginBottom: 4, lineHeight: 18 }}>• {exp}</Text>
+                  ))}
+                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '900', color: (scoreResult.new_score ?? 0) >= 70 ? '#EF4444' : (scoreResult.new_score ?? 0) >= 35 ? '#F59E0B' : '#6B7280' }}>
+                      New Score: {scoreResult.new_score ?? 0}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {scoreResult.smart_message && (
+                <View style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)' }}>
+                  <Text style={{ fontSize: 13, color: '#6366F1', fontWeight: '600' }}>💡 {scoreResult.smart_message}</Text>
+                </View>
+              )}
+              <TouchableOpacity onPress={onSaved}
+                style={{ backgroundColor: '#6366F1', borderRadius: 14, height: 50, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Done</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+
   { id: 's1', text: "Hey {name}! I want to share something with you that I think you'll find really interesting. Are you open to it? ≡ƒÿè" },
   { id: 's2', text: "Hi {name}, can I send you a short video? It's only 5 minutes and I think it could change things for you." },
   { id: 's3', text: "Hey {name}! Are you open to seeing a simple business idea? No pressure at all ΓÇö just want to share something exciting." },
@@ -1277,6 +1439,7 @@ const TEXT_OUTCOMES = [
 
 const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
   const [step, setStep] = useState('method');
+  const [showTextFlow, setShowTextFlow] = useState(false);
   const [selectedScript, setSelectedScript] = useState(null);
   const [selectedApp, setSelectedApp] = useState(null);
   const [selectedOutcome, setSelectedOutcome] = useState(null);
@@ -1307,6 +1470,7 @@ const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
     if (visible) {
       setStep('method'); setSelectedScript(null);
       setSelectedApp(null); setSelectedOutcome(null); setSaving(false);
+      setShowTextFlow(false);
       setSuccessType('in_person'); setLocInput(''); setTimeInput('');
       setPlatformInput(''); setCallLaterDate(''); setCallLaterTime('');
       setCallAgainDate(''); setCallAgainTime(''); setNewPhone(phone);
@@ -1417,7 +1581,17 @@ const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {step === 'method' && (
+              {/* ── Text Invitation Flow (new full workflow) ── */}
+              {showTextFlow && (
+                <TextInviteFlow
+                  prospect={prospect}
+                  onBack={() => setShowTextFlow(false)}
+                  onDone={() => { setShowTextFlow(false); onSaved(); }}
+                  C={C}
+                />
+              )}
+
+              {!showTextFlow && step === 'method' && (
                 <View>
                   <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', marginBottom: 20 }}>How do you want to invite <Text style={{ color: C.text, fontWeight: '700' }}>{name.split(' ')[0]}</Text>?</Text>
                   <TouchableOpacity onPress={() => setStep('call_confirm')} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1.5, borderColor: 'rgba(59,130,246,0.3)' }}>
@@ -1425,7 +1599,7 @@ const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
                     <View style={{ flex: 1 }}><Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>Call Invitation</Text><Text style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>Make a live phone call</Text></View>
                     <ChevronRight color="#3B82F6" size={20} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setStep('script_select')} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.1)', borderRadius: 18, padding: 18, borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.3)' }}>
+                  <TouchableOpacity onPress={() => setShowTextFlow(true)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.1)', borderRadius: 18, padding: 18, borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.3)' }}>
                     <Text style={{ fontSize: 32, marginRight: 16 }}>💬</Text>
                     <View style={{ flex: 1 }}><Text style={{ fontSize: 16, fontWeight: '800', color: C.text }}>Text / Chat Invitation</Text><Text style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>WhatsApp, Telegram, SMS</Text></View>
                     <ChevronRight color="#10B981" size={20} />

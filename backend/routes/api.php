@@ -345,6 +345,8 @@ Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/invitations', [PerformanceController::class, 'createInvitation']);
     Route::get('/prospects/{id}/invitations', [PerformanceController::class, 'listInvitations']);
     Route::patch('/invitations/{id}/status', [PerformanceController::class, 'updateInvitationStatus']);
+    Route::patch('/invitations/{id}/response', [PerformanceController::class, 'updateTextInvitationResponse']);
+    Route::get('/invitations/{id}/smart-check', [PerformanceController::class, 'smartCheck']);
     // Automation
     Route::get('/automation-rules', [PerformanceController::class, 'listAutomationRules']);
     Route::post('/automation-rules', [PerformanceController::class, 'storeAutomationRule']);

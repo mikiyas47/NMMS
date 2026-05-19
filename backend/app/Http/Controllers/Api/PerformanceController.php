@@ -108,8 +108,14 @@ class PerformanceController extends Controller
             'prospect_id' => $data['prospect_id'],
             'distributor_id' => $distId,
             'token' => $token,
+            'token' => $token,
             'status' => 'sent',
+            'classification' => 'Warm Lead',
+            'engagement_score' => 0
         ]);
+        
+        $prospect->next_action = 'Watch Presentation';
+        $prospect->save();
         // Log activity
         ProspectActivity::create(['prospect_id' => $data['prospect_id'], 'distributor_id' => $distId, 'activity_type' => 'presentation', 'title' => 'Presentation assigned', 'description' => 'Tracked link generated', 'created_at' => now()]);
         // Onboarding milestone
@@ -209,21 +215,28 @@ class PerformanceController extends Controller
         $notifyBody = '';
         $prospectName = Prospect::find($assignment->prospect_id)->name ?? 'A prospect';
 
-        // Base Engagement Score Logic
-        $score = 5; // Opened link
-        if ($assignment->watch_percent >= 50) $score += 15;
+        $intelligence = app(\App\Services\PresentationIntelligenceService::class);
+        $nextActionSvc = app(\App\Services\PresentationNextBestActionService::class);
+
+        // Score logic based on the new spec
+        $score = 5; // Opening link
+        if ($assignment->watch_percent >= 25) $score += 10;
+        if ($assignment->watch_percent >= 50) $score += 20;
+        if ($assignment->watch_percent >= 75) $score += 30;
         if ($assignment->watch_percent >= 100) $score += 40;
         if ($assignment->rewatch_count > 0) $score += 20;
-        if ($assignment->cta_clicked_at) $score += 50;
+
+        $ctaType = $r->input('cta_type');
         
-        // Handle specific actions
         if ($action === 'cta_clicked') {
             $assignment->cta_clicked_at = now();
-            $score += 50;
+            $ctaAnalysis = $intelligence->processCta($ctaType ?? 'Watch More');
+            $score += $ctaAnalysis['boost'];
+            
             $notify = true;
             $notifyType = 'cta_clicked';
             $notifyTitle = 'CTA Clicked!';
-            $notifyBody = "$prospectName just clicked the Call to Action on your presentation!";
+            $notifyBody = "$prospectName just clicked the Call to Action (" . ($ctaType ?? 'General') . ") on your presentation!";
         } elseif ($action === 'completed') {
             if ($assignment->status !== 'completed') {
                 $assignment->status = 'completed';
@@ -232,20 +245,7 @@ class PerformanceController extends Controller
                 $notifyType = 'presentation_completed';
                 $notifyTitle = 'Presentation Completed';
                 $notifyBody = "$prospectName just finished watching the presentation!";
-                
-                // Auto Follow-up: 100% Complete
-                \App\Models\Followup::create([
-                    'distributor_id' => $assignment->distributor_id,
-                    'prospect_id' => $assignment->prospect_id,
-                    'followup_type' => 'Auto-Generated',
-                    'notes' => "Auto Reminder: $prospectName watched 100%. Suggested message: 'Glad you completed the presentation. Want me to walk you through how to get started?'",
-                    'next_action' => 'Contact via WhatsApp/Call',
-                    'next_action_date' => now()->toDateString(),
-                    'status' => 'pending'
-                ]);
-
             } else {
-                // If it was already completed, this is a rewatch
                 $assignment->rewatch_count += 1;
                 $score += 20;
                 $notify = true;
@@ -253,19 +253,7 @@ class PerformanceController extends Controller
                 $notifyTitle = 'Presentation Rewatched';
                 $notifyBody = "$prospectName is rewatching the presentation!";
             }
-        } elseif ($action === 'closed' && $assignment->watch_percent > 0 && $assignment->watch_percent < 90) {
-            // Auto Follow-up: Opened but didn't finish
-            \App\Models\Followup::create([
-                'distributor_id' => $assignment->distributor_id,
-                'prospect_id' => $assignment->prospect_id,
-                'followup_type' => 'Auto-Generated',
-                'notes' => "Auto Reminder: $prospectName didn't finish the presentation. Suggested message: 'Hey, looks like you didn't finish the presentation. The last section explains the earning model clearly.'",
-                'next_action' => 'Send Follow-up Message',
-                'next_action_date' => now()->toDateString(),
-                'status' => 'pending'
-            ]);
         } elseif (str_starts_with($action, 'watched_')) {
-            // e.g. watched_50_percent
             if (str_contains($action, '50_percent')) {
                 $notify = true;
                 $notifyType = 'presentation_50';
@@ -280,12 +268,44 @@ class PerformanceController extends Controller
         }
 
         $assignment->engagement_score = min(100, $score);
+        $assignment->classification = $intelligence->classifyEngagement($assignment->watch_percent);
 
-        // Classification
-        if ($assignment->engagement_score >= 81) $assignment->classification = 'Hot Lead';
-        elseif ($assignment->engagement_score >= 51) $assignment->classification = 'Interested';
-        elseif ($assignment->engagement_score >= 21) $assignment->classification = 'Warm';
-        else $assignment->classification = 'Cold';
+        // Next best action intelligence
+        $isExit = ($action === 'closed');
+        $nba = $nextActionSvc->generate($assignment->engagement_score, $assignment->watch_percent, $ctaType, $isExit);
+
+        if ($isExit) {
+            $exitAnalysis = $intelligence->analyzeExit($assignment->watch_percent);
+            \App\Models\Followup::create([
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'followup_type' => 'Auto-Generated (Exit)',
+                'notes' => "Exit Analysis: {$exitAnalysis['intent']}. {$exitAnalysis['recommendation']}",
+                'next_action' => $nba['recommended_action'],
+                'next_action_date' => now()->toDateString(),
+                'status' => 'pending'
+            ]);
+        } elseif ($action === 'completed') {
+             \App\Models\Followup::create([
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'followup_type' => 'Auto-Generated',
+                'notes' => "Watched 100%. NBA: " . $nba['recommended_action'],
+                'next_action' => 'Contact via WhatsApp/Call',
+                'next_action_date' => now()->toDateString(),
+                'status' => 'pending'
+            ]);
+        } elseif ($action === 'cta_clicked') {
+            \App\Models\Followup::create([
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'followup_type' => 'Auto-Generated (CTA)',
+                'notes' => "CTA Clicked: " . ($ctaType ?? 'General') . ". Action required: " . $nba['recommended_action'],
+                'next_action' => 'Immediate Follow-up',
+                'next_action_date' => now()->toDateString(),
+                'status' => 'pending'
+            ]);
+        }
 
         $assignment->save();
 
@@ -328,10 +348,17 @@ class PerformanceController extends Controller
         $prospect = Prospect::find($assignment->prospect_id);
         if ($prospect) {
             $prospect->interest_score = max($prospect->interest_score ?? 0, $assignment->engagement_score);
-            if ($prospect->interest_score >= 81) $prospect->interest_level = 'hot';
-            elseif ($prospect->interest_score >= 51) $prospect->interest_level = 'warm';
-            elseif ($prospect->interest_score >= 21) $prospect->interest_level = 'warm'; // Keep 'warm' for both since mobile only has hot/warm/cold mostly, but wait, we can just use the score.
-            else $prospect->interest_level = 'cold';
+            $prospect->interest_level = strtolower($intelligence->classifyIntent($prospect->interest_score));
+            
+            if ($action === 'cta_clicked') {
+                $ctaAnalysis = $intelligence->processCta($ctaType ?? '');
+                if ($ctaAnalysis['shift']) {
+                    $prospect->stage = $ctaAnalysis['shift'];
+                }
+            }
+            
+            $prospect->next_action = $nba['recommended_action'];
+            
             $prospect->save();
         }
 
@@ -344,10 +371,22 @@ class PerformanceController extends Controller
             $assignment->prospect_id, 
             $action, 
             $assignment->engagement_score, 
-            $watchPct
+            $watchPct,
+            [
+                'intent_label' => $intelligence->classifyIntent($assignment->engagement_score),
+                'recommended_action' => $nba['recommended_action'],
+                'urgency' => $nba['urgency']
+            ]
         );
 
-        return response()->json(['status' => 'success', 'score' => $assignment->engagement_score]);
+        return response()->json([
+            'status' => 'success', 
+            'score' => $assignment->engagement_score,
+            'intent_classification' => $intelligence->classifyIntent($assignment->engagement_score),
+            'recommended_action' => $nba['recommended_action'],
+            'urgency' => $nba['urgency'],
+            'cta_recommendation' => $nba['recommended_cta']
+        ]);
     }
 
     private function updatePresentationStats(int $presentationId): void
@@ -382,29 +421,71 @@ class PerformanceController extends Controller
     {
         $distId = $this->distId($r);
         $data = $r->validate([
-            'prospect_id' => 'required|exists:prospects,prospect_id',
-            'invitation_type' => 'required|in:zoom,webinar,hotel_event,product_demo,compensation_plan_session,one_on_one_call,live_stream',
-            'scheduled_at' => 'nullable|date',
-            'notes' => 'nullable|string',
+            'prospect_id'     => 'required|exists:prospects,prospect_id',
+            'invitation_type' => 'required|in:zoom,webinar,hotel_event,product_demo,compensation_plan_session,one_on_one_call,live_stream,text',
+            'scheduled_at'    => 'nullable|date',
+            'notes'           => 'nullable|string',
+            'script_used'     => 'nullable|string',
+            'invitation_method' => 'nullable|string|max:30',
+            'prospect_value'  => 'nullable|in:hot,warm,cold',
         ]);
         $prospect = Prospect::where('prospect_id', $data['prospect_id'])->where('distributor_id', $distId)->firstOrFail();
         $distributor = Distributor::where('distributor_id', $distId)->first();
-        $script = str_replace(['{prospect_name}', '{distributor_name}'], [$prospect->name, $distributor->name ?? 'Your Distributor'], self::INVITE_SCRIPTS[$data['invitation_type']] ?? '');
+
+        // Use provided script or fall back to system script
+        $script = $data['script_used'] ?? null;
+        if (!$script) {
+            $typeKey = $data['invitation_type'] === 'text' ? 'one_on_one_call' : $data['invitation_type'];
+            $template = self::INVITE_SCRIPTS[$typeKey] ?? self::INVITE_SCRIPTS['one_on_one_call'];
+            $script = str_replace(['{prospect_name}', '{distributor_name}'], [$prospect->name, $distributor->name ?? 'Your Distributor'], $template);
+        }
+
         $token = Str::random(16);
+
+        // Compute smart_check_at based on prospect value
+        $prospectValue = $data['prospect_value'] ?? ($prospect->interest_level ?? 'warm');
+        $checkMinutes = match($prospectValue) {
+            'hot'  => 6,
+            'cold' => 40,
+            default => 20, // warm
+        };
+
         $invitation = Invitation::create([
-            'distributor_id' => $distId,
-            'prospect_id' => $data['prospect_id'],
-            'invitation_type' => $data['invitation_type'],
-            'token' => $token,
-            'status' => 'sent',
-            'scheduled_at' => $data['scheduled_at'] ?? null,
-            'script_used' => $script,
-            'notes' => $data['notes'] ?? null,
+            'distributor_id'    => $distId,
+            'prospect_id'       => $data['prospect_id'],
+            'invitation_type'   => $data['invitation_type'],
+            'invitation_method' => $data['invitation_method'] ?? 'text',
+            'token'             => $token,
+            'status'            => 'sent',
+            'scheduled_at'      => $data['scheduled_at'] ?? null,
+            'script_used'       => $script,
+            'notes'             => $data['notes'] ?? null,
+            'sent_at'           => now(),
+            'smart_check_at'    => now()->addMinutes($checkMinutes),
+            'prospect_value'    => $prospectValue,
         ]);
-        ProspectActivity::create(['prospect_id' => $data['prospect_id'], 'distributor_id' => $distId, 'activity_type' => 'invited', 'title' => 'Invitation sent', 'description' => ucfirst(str_replace('_', ' ', $data['invitation_type'])), 'meta' => ['type' => $data['invitation_type']], 'created_at' => now()]);
+
+        // Move prospect to "Awaiting Response" immediately after text invitation
+        if (in_array($data['invitation_method'] ?? 'text', ['text', 'whatsapp', 'telegram', 'sms', 'imo', 'messenger'])) {
+            $prospect->stage  = 'Awaiting Response';
+            $prospect->status = 'Awaiting Response';
+            $prospect->save();
+        }
+
+        ProspectActivity::create([
+            'prospect_id'    => $data['prospect_id'],
+            'distributor_id' => $distId,
+            'activity_type'  => 'invited',
+            'title'          => 'Text invitation sent',
+            'description'    => 'Sent via ' . ($data['invitation_method'] ?? 'text') . '. Script: ' . mb_substr($script, 0, 80) . '…',
+            'meta'           => ['type' => $data['invitation_type'], 'method' => $data['invitation_method'] ?? 'text', 'invitation_id' => $invitation->invitation_id],
+            'created_at'     => now(),
+        ]);
+
         $this->markOnboardingMilestone($distId, 'first_invite_sent');
         $this->checkBadge($distId, 'first_invite');
         $this->incrementWeeklyGoal($distId, 'invitations_actual');
+
         $link = 'https://nmms-backend.onrender.com/api/invite/' . $token;
         return response()->json(['status' => 'success', 'data' => $invitation, 'tracked_link' => $link, 'script' => $script], 201);
     }
@@ -424,6 +505,229 @@ class PerformanceController extends Controller
         $data = $r->validate(['status' => 'required|in:ignored']);
         $inv->update($data);
         return response()->json(['status' => 'success', 'data' => $inv->fresh()]);
+    }
+
+    /**
+     * PATCH /api/invitations/{id}/response
+     * Called when the distributor logs a response to a text invitation.
+     * Handles all 5 response types with intelligent scoring and stage updates.
+     */
+    public function updateTextInvitationResponse(Request $r, $id)
+    {
+        $distId = $this->distId($r);
+        $inv = Invitation::where('invitation_id', $id)->where('distributor_id', $distId)->firstOrFail();
+        $prospect = Prospect::where('prospect_id', $inv->prospect_id)->firstOrFail();
+
+        $data = $r->validate([
+            'response'         => 'required|in:no_response,interested,asked_questions,maybe_another_time,not_interested',
+            'meeting_details'  => 'nullable|array',   // for interested + in-person/office
+            'reminder_date'    => 'nullable|date',    // for maybe_another_time
+            'reminder_time'    => 'nullable|string',
+        ]);
+
+        $response = $data['response'];
+        $now = now();
+
+        // Compute response time in minutes
+        $sentAt = $inv->sent_at ?? $inv->created_at;
+        $responseMinutes = (int) $sentAt->diffInMinutes($now);
+        $isFastResponse = $responseMinutes <= 30;
+
+        // ── Scoring rules (per spec) ──────────────────────────────────────────
+        $scoreDeltas = [];
+
+        switch ($response) {
+            case 'no_response':
+                // No immediate penalty — small decay applied later
+                $newStatus = 'sent'; // keep awaiting
+                $newStage  = 'Awaiting Response';
+                $nextCheckMinutes = match($inv->prospect_value ?? 'warm') {
+                    'hot'  => 6,
+                    'cold' => 40,
+                    default => 20,
+                };
+                $inv->smart_check_at = $now->copy()->addMinutes($nextCheckMinutes);
+                $smartMessage = "Next intelligent check in {$nextCheckMinutes} minutes";
+                $activityTitle = "No response yet from {$prospect->name}";
+                $activityDesc  = "Awaiting reply. Next check scheduled in {$nextCheckMinutes} min.";
+                break;
+
+            case 'interested':
+                $scoreDeltas[] = ['label' => 'Prospect showed interest', 'value' => 20];
+                if ($isFastResponse) {
+                    $scoreDeltas[] = ['label' => "Fast response ({$responseMinutes} min)", 'value' => 15];
+                }
+                $newStatus = 'accepted';
+                // Stage depends on invitation type
+                $isPresInvite = in_array($inv->invitation_type, ['zoom', 'webinar', 'product_demo', 'compensation_plan_session', 'live_stream', 'text', 'one_on_one_call']);
+                $isMeetingInvite = in_array($inv->invitation_type, ['hotel_event']);
+                if ($isMeetingInvite || !empty($data['meeting_details'])) {
+                    $newStage = 'Presentation Scheduled';
+                    $inv->meeting_details = $data['meeting_details'] ?? null;
+                } else {
+                    $newStage = 'Presentation Scheduled';
+                }
+                $smartMessage = null;
+                $activityTitle = "{$prospect->name} is interested!";
+                $activityDesc  = $isFastResponse
+                    ? "Responded in {$responseMinutes} min. Showing strong interest."
+                    : "Showed interest in the invitation.";
+                break;
+
+            case 'asked_questions':
+                $scoreDeltas[] = ['label' => 'Prospect asked questions (strong engagement)', 'value' => 25];
+                if ($isFastResponse) {
+                    $scoreDeltas[] = ['label' => "Fast response ({$responseMinutes} min)", 'value' => 15];
+                }
+                $newStatus = 'opened';
+                $newStage  = 'Follow-Up Needed';
+                $smartMessage = null;
+                $activityTitle = "{$prospect->name} asked questions";
+                $activityDesc  = "High engagement — prospect is asking questions. Prioritize follow-up.";
+                break;
+
+            case 'maybe_another_time':
+                $scoreDeltas[] = ['label' => 'Prospect open but not ready yet', 'value' => 5];
+                $newStatus = 'opened';
+                $newStage  = 'Follow-Up Needed';
+                $smartMessage = null;
+                $activityTitle = "{$prospect->name} said maybe another time";
+                $activityDesc  = "Prospect is warm but not ready. Reminder scheduled.";
+                // Schedule reminder
+                if (!empty($data['reminder_date'])) {
+                    $prospect->next_action      = 'Follow up — prospect said maybe another time';
+                    $prospect->next_action_date = $data['reminder_date'];
+                }
+                break;
+
+            case 'not_interested':
+                $scoreDeltas[] = ['label' => 'Prospect not interested', 'value' => -25];
+                $newStatus = 'declined';
+                $newStage  = 'Rejected';
+                $smartMessage = null;
+                $activityTitle = "{$prospect->name} is not interested";
+                $activityDesc  = "Prospect declined the invitation. Moved to nurture/rejected.";
+                break;
+
+            default:
+                $newStatus = $inv->status;
+                $newStage  = $prospect->stage;
+                $smartMessage = null;
+                $activityTitle = 'Response logged';
+                $activityDesc  = '';
+        }
+
+        // Apply score deltas
+        $totalDelta = array_sum(array_column($scoreDeltas, 'value'));
+        $newScore = max(0, min(100, ($prospect->interest_score ?? 0) + $totalDelta));
+
+        // Update invitation
+        $inv->status           = $newStatus;
+        $inv->outcome          = $response;
+        $inv->responded_at     = $response !== 'no_response' ? $now : $inv->responded_at;
+        $inv->response_minutes = $response !== 'no_response' ? $responseMinutes : $inv->response_minutes;
+        $inv->save();
+
+        // Update prospect
+        $prospect->interest_score = $newScore;
+        $prospect->interest_level = $newScore >= 70 ? 'hot' : ($newScore >= 35 ? 'warm' : 'cold');
+        $prospect->stage          = $newStage;
+        $prospect->status         = $newStage;
+        if ($newStage !== 'Awaiting Response') {
+            // Set intelligent next action
+            $prospect->next_action = match($response) {
+                'interested'       => 'Send presentation',
+                'asked_questions'  => 'Answer questions and send presentation',
+                'maybe_another_time' => 'Follow up at scheduled time',
+                'not_interested'   => 'Move to nurture list',
+                default            => $prospect->next_action,
+            };
+        }
+        $prospect->save();
+
+        // Log activity
+        ProspectActivity::create([
+            'prospect_id'    => $inv->prospect_id,
+            'distributor_id' => $distId,
+            'activity_type'  => 'invitation_response',
+            'title'          => $activityTitle,
+            'description'    => $activityDesc,
+            'meta'           => [
+                'response'         => $response,
+                'score_deltas'     => $scoreDeltas,
+                'response_minutes' => $responseMinutes,
+                'fast_response'    => $isFastResponse,
+                'invitation_id'    => $inv->invitation_id,
+            ],
+            'created_at' => $now,
+        ]);
+
+        // Recompute priority
+        $this->recomputePriority($inv->prospect_id, $distId);
+
+        // Build human-readable score explanation
+        $scoreExplanations = array_map(function ($d) {
+            $sign = $d['value'] >= 0 ? '+' : '';
+            return "{$sign}{$d['value']} because {$d['label']}.";
+        }, $scoreDeltas);
+
+        return response()->json([
+            'status'             => 'success',
+            'response'           => $response,
+            'new_score'          => $newScore,
+            'score_deltas'       => $scoreDeltas,
+            'score_explanations' => $scoreExplanations,
+            'new_stage'          => $newStage,
+            'smart_message'      => $smartMessage,
+            'fast_response'      => $isFastResponse,
+            'response_minutes'   => $responseMinutes,
+            'next_action'        => $prospect->next_action,
+        ]);
+    }
+
+    /**
+     * GET /api/invitations/{id}/smart-check
+     * Returns the intelligent follow-up prompt for a pending text invitation.
+     */
+    public function smartCheck(Request $r, $id)
+    {
+        $distId = $this->distId($r);
+        $inv = Invitation::where('invitation_id', $id)->where('distributor_id', $distId)->firstOrFail();
+        $prospect = Prospect::where('prospect_id', $inv->prospect_id)->firstOrFail();
+        $firstName = explode(' ', trim($prospect->name))[0];
+
+        $sentAt = $inv->sent_at ?? $inv->created_at;
+        $minutesSince = (int) $sentAt->diffInMinutes(now());
+
+        // Generate human-like prompt based on time elapsed
+        if ($minutesSince < 60) {
+            $prompt = "Has {$firstName} responded to your message yet?";
+        } elseif ($minutesSince < 120) {
+            $prompt = "Any update from {$firstName} regarding the invitation?";
+        } elseif ($minutesSince < 1440) {
+            $prompt = "{$firstName} hasn't responded yet. Want to log an update?";
+        } else {
+            $days = round($minutesSince / 1440);
+            $prompt = "It's been {$days} day" . ($days > 1 ? 's' : '') . " since you invited {$firstName}. Any news?";
+        }
+
+        // Compute next check time
+        $prospectValue = $inv->prospect_value ?? ($prospect->interest_level ?? 'warm');
+        $nextMinutes = match($prospectValue) {
+            'hot'  => 6,
+            'cold' => 40,
+            default => 20,
+        };
+
+        return response()->json([
+            'status'          => 'success',
+            'prompt'          => $prompt,
+            'prospect_name'   => $prospect->name,
+            'minutes_since'   => $minutesSince,
+            'next_check_in'   => $nextMinutes,
+            'invitation_id'   => $inv->invitation_id,
+            'current_status'  => $inv->status,
+        ]);
     }
 
     // Public: track invitation engagement (no auth)
