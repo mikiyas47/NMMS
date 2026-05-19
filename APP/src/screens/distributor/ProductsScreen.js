@@ -22,7 +22,7 @@ import {
   CheckCircle, Share2, ExternalLink, CreditCard, Zap, Users
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getProducts, getUser, joinNetwork, getDistributorStatus, getMyTree, refreshUserFromServer } from '../../api/authService';
+import { getProducts, getUser, getDistributorStatus, getMyTree } from '../../api/authService';
 
 const API_BASE = 'https://nmms-backend.onrender.com';
 
@@ -474,7 +474,6 @@ const ProductsScreen = ({ C, navigation }) => {
   const [joinModal, setJoinModal] = useState(false);
   const [joinProduct, setJoinProduct] = useState(null);
   const [joinQty, setJoinQty] = useState(1);
-  const [joining, setJoining] = useState(false);
   const appState = useRef(AppState.currentState);
 
   // ── Fetch from API ──────────────────────────────────────────────────────────
@@ -525,47 +524,23 @@ const ProductsScreen = ({ C, navigation }) => {
     setFiltered(result);
   }, [search, activeCategory, products]);
 
-  // ── Join Network handler ───────────────────────────────────────────────────
-  const [joinStatus, setJoinStatus] = useState('idle'); // 'idle' | 'connecting' | 'processing'
+  // ── Join Network handler — redirects to Chapa payment ─────────────────────
+  const [joinStatus, setJoinStatus] = useState('idle');
 
-  const handleJoinNetwork = async () => {
+  const handleJoinNetwork = () => {
     if (!joinProduct) return;
-    setJoining(true);
-    setJoinStatus('connecting');
-
-    const warmupTimer = setTimeout(() => {
-      setJoinStatus('processing');
-    }, 10000);
-
-    try {
-      const result = await joinNetwork({
+    // Close the modal first, then navigate to CustomerPayScreen for Chapa payment.
+    // CustomerPayScreen handles self_purchase: pre-fills distributor's own details,
+    // opens Chapa WebView, and calls joinNetwork after payment succeeds.
+    setJoinModal(false);
+    setTimeout(() => {
+      navigation.navigate('CustomerPay', {
+        distributor_id: distributorId,
         product_id: joinProduct.id,
-        sponsor_id: uplinkId || null,
+        self_purchase: true,
         quantity: joinQty,
       });
-      clearTimeout(warmupTimer);
-
-      // Refresh user in AsyncStorage so is_paid and status are up to date
-      try {
-        await refreshUserFromServer();
-      } catch (_) {}
-
-      setJoinModal(false);
-      setHasJoined(true);
-      const newCount = result?.account_count ?? result?.accounts?.length ?? joinQty;
-      setAccountCount(newCount);
-      Alert.alert(
-        '🎉 Welcome to the Network!',
-        `You joined with ${joinQty} account${joinQty > 1 ? 's' : ''}. Your node${joinQty > 1 ? 's have' : ' has'} been placed in the tree.`,
-        [{ text: 'View Tree', onPress: () => {} }, { text: 'OK' }]
-      );
-    } catch (e) {
-      clearTimeout(warmupTimer);
-      Alert.alert('Join Failed', e.message || 'Could not join the network. Please try again.');
-    } finally {
-      setJoining(false);
-      setJoinStatus('idle');
-    }
+    }, 300);
   };
 
   // ── Sell handler — now opens ShareModal instead of fake alert ───────────────
@@ -904,22 +879,17 @@ const ProductsScreen = ({ C, navigation }) => {
             {/* Confirm button */}
             <TouchableOpacity
               onPress={handleJoinNetwork}
-              disabled={!joinProduct || joining}
+              disabled={!joinProduct}
               style={{
                 borderRadius: 16, overflow: 'hidden',
-                opacity: !joinProduct || joining ? 0.6 : 1,
+                opacity: !joinProduct ? 0.6 : 1,
               }}
             >
               <LinearGradient colors={['#064E3B', '#10B981']} start={[0, 0]} end={[1, 0]}
                 style={{ paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                {joining
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Zap color="#FCD34D" size={18} />
-                }
+                <Zap color="#FCD34D" size={18} />
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 10 }}>
-                  {joining
-                    ? (joinStatus === 'processing' ? 'Server warming up…' : 'Activating…')
-                    : `Activate ${joinQty} Account${joinQty > 1 ? 's' : ''}`}
+                  {`Pay & Activate ${joinQty} Account${joinQty > 1 ? 's' : ''}`}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>

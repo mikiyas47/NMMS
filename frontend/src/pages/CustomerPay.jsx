@@ -83,6 +83,7 @@ const CustomerPay = () => {
   const preSelectedProductId = searchParams.get('product_id');
   const leg                 = searchParams.get('leg');
   const returnTxRef         = searchParams.get('tx_ref');
+  const isSelfPurchase      = searchParams.get('self_purchase') === '1';
 
   const [products, setProducts]         = useState([]);
   const [selectedProduct, setSelected]  = useState(null);
@@ -186,6 +187,7 @@ const CustomerPay = () => {
     e.preventDefault();
     if (!selectedProduct) return setError('Please select a product.');
     if (!name.trim() || !email.trim()) return setError('Name and email are required.');
+    if (!phone.trim()) return setError('Phone number is required.');
     if (!distributorId) return setError('Invalid link: missing distributor info.');
     setError('');
     setSubmitting(true);
@@ -199,7 +201,7 @@ const CustomerPay = () => {
           quantity,
           customer_name: name.trim(),
           customer_email: email.trim(),
-          customer_phone: phone.trim() || undefined,
+          customer_phone: phone.trim(),
           leg: leg || undefined,
         }),
       });
@@ -286,6 +288,7 @@ const CustomerPay = () => {
           {[
             { label: 'Customer', value: name },
             { label: 'Email', value: email },
+            { label: 'Phone', value: phone || '—' },
             { label: 'Amount', value: `ETB ${parseFloat(paymentAmount || 0).toFixed(2)}`, accent: '#10B981' },
             { label: 'Status', value: 'Verified ✓', accent: '#10B981' },
           ].map(({ label, value, accent }) => (
@@ -296,8 +299,8 @@ const CustomerPay = () => {
           ))}
         </div>
 
-        {/* Upgrade choice */}
-        {upgradeStep === 'choice' && (
+        {/* Upgrade choice — only for real customers, not distributors buying for themselves */}
+        {!isSelfPurchase && upgradeStep === 'choice' && (
           <>
             <div style={{ backgroundColor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '16px', padding: '1.25rem', marginBottom: '1.25rem' }}>
               <h3 style={{ color: '#F9FAFB', fontWeight: '900', fontSize: '1.1rem', margin: '0 0 0.75rem', textAlign: 'center' }}>🎉 Want to Earn Too?</h3>
@@ -317,8 +320,19 @@ const CustomerPay = () => {
           </>
         )}
 
-        {/* Password form */}
-        {upgradeStep === 'form' && (
+        {/* Self-purchase: just show a done message */}
+        {isSelfPurchase && (
+          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg, #10B981, #34D399)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+              <CheckCircle color="#fff" size={36} />
+            </div>
+            <h3 style={{ color: '#F9FAFB', fontWeight: '900', fontSize: '1.3rem', marginBottom: '0.5rem' }}>Account Activated!</h3>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>Your account has been added to the network. You can close this page and return to the app.</p>
+          </div>
+        )}
+
+        {/* Password form, loading, done, stayed — customer flow only */}
+        {!isSelfPurchase && upgradeStep === 'form' && (
           <>
             <h3 style={{ color: '#F9FAFB', fontWeight: '900', textAlign: 'center', marginBottom: '0.5rem' }}>Set Your Password</h3>
             <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
@@ -338,15 +352,13 @@ const CustomerPay = () => {
           </>
         )}
 
-        {/* Loading */}
-        {upgradeStep === 'loading' && (
+        {!isSelfPurchase && upgradeStep === 'loading' && (
           <div style={{ textAlign: 'center', padding: '2rem 0' }}>
             <p style={{ color: '#F9FAFB', fontWeight: '700', fontSize: '1.1rem' }}>Activating your account…</p>
           </div>
         )}
 
-        {/* Done */}
-        {upgradeStep === 'done' && (
+        {!isSelfPurchase && upgradeStep === 'done' && (
           <div style={{ textAlign: 'center', padding: '1rem 0' }}>
             <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: 'linear-gradient(135deg, #10B981, #34D399)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
               <CheckCircle color="#fff" size={36} />
@@ -356,8 +368,7 @@ const CustomerPay = () => {
           </div>
         )}
 
-        {/* Stayed as customer */}
-        {upgradeStep === 'stayed' && (
+        {!isSelfPurchase && upgradeStep === 'stayed' && (
           <div style={{ textAlign: 'center', padding: '1rem 0' }}>
             <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem' }}>
               ✅ You're registered as a customer. Enjoy your product!
@@ -417,20 +428,10 @@ const CustomerPay = () => {
               </div>
             )}
 
-            {/* Quantity + Total */}
+            {/* Total */}
             {selectedProduct && (
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={S.label}>Quantity</label>
-                  <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '0.4rem' }}>
-                    <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                      style={{ width: '38px', height: '38px', borderRadius: '8px', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>−</button>
-                    <span style={{ flex: 1, textAlign: 'center', color: '#fff', fontWeight: '800', fontSize: '1.2rem' }}>{quantity}</span>
-                    <button type="button" onClick={() => setQuantity(q => q + 1)}
-                      style={{ width: '38px', height: '38px', borderRadius: '8px', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>+</button>
-                  </div>
-                </div>
-                <div style={{ flex: 1, backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '12px', padding: '0.9rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ backgroundColor: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '12px', padding: '0.9rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <span style={{ color: '#818CF8', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total Due</span>
                   <span style={{ color: '#818CF8', fontSize: '1.4rem', fontWeight: '900' }}>ETB {total}</span>
                 </div>
@@ -450,8 +451,8 @@ const CustomerPay = () => {
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="john@example.com" style={S.input} />
               </div>
               <div>
-                <label style={S.label}>Phone Number</label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+251 911 234 567" style={S.input} />
+                <label style={S.label}>Phone Number *</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="+251 911 234 567" style={S.input} />
               </div>
             </div>
 

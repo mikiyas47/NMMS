@@ -27,9 +27,10 @@ class PaymentController extends Controller
             'quantity' => 'required|integer|min:1',
             'customer_name' => 'required|string|max:120',
             'customer_email' => 'required|email|max:120',
-            'customer_phone' => 'nullable|string|max:20',
+            'customer_phone' => 'required|string|max:20',
             'prospect_id' => 'nullable|exists:prospects,prospect_id',
             'leg' => 'nullable|integer|between:1,4',
+            'self_purchase' => 'nullable|boolean',
         ]);
 
         // Lock price from backend — distributor cannot override
@@ -80,7 +81,7 @@ class PaymentController extends Controller
             'phone_number' => $data['customer_phone'] ?? '',
             'tx_ref' => $txRef,
             'callback_url' => env('APP_URL') . '/api/payments/webhook',
-            'return_url'   => env('FRONTEND_URL', 'https://nmms-ochre.vercel.app') . '/pay?tx_ref=' . $txRef . '&distributor_id=' . $data['distributor_id'] . '&product_id=' . $product->id . '&leg=' . ($data['leg'] ?? ''),
+            'return_url'   => env('FRONTEND_URL', 'https://nmms-ochre.vercel.app') . '/pay?tx_ref=' . $txRef . '&distributor_id=' . $data['distributor_id'] . '&product_id=' . $product->id . '&leg=' . ($data['leg'] ?? '') . '&self_purchase=' . ($data['self_purchase'] ?? '0'),
             'customization' => [
                 'title' => 'NMMS Purchase',
                 'description' => preg_replace('/[^a-zA-Z0-9\-_ .]/', '', $data['quantity'] . 'x ' . Str::limit($product->name, 20)),
@@ -517,6 +518,7 @@ class PaymentController extends Controller
                 'commission'       => $p->commission_amount,
                 'customer_name'    => $p->customer_name,
                 'customer_email'   => $p->customer_email,
+                'customer_phone'   => $p->customer_phone,
                 'distributor_name' => $p->distributor_name_join ?? $p->distributor?->name ?? 'Unknown',
                 'status'           => $p->status,
                 'created_at'       => $p->created_at,

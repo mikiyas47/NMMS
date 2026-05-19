@@ -353,7 +353,6 @@ const SalesPage = ({ dark }) => {
                 <th style={{ padding: '12px' }}>Product</th>
                 <th style={{ padding: '12px' }}>Distributor</th>
                 <th style={{ padding: '12px' }}>Customer</th>
-                <th style={{ padding: '12px' }}>Qty</th>
                 <th style={{ padding: '12px' }}>Amount</th>
                 <th style={{ padding: '12px' }}>Status</th>
                 <th style={{ padding: '12px' }}>Date</th>
@@ -366,7 +365,6 @@ const SalesPage = ({ dark }) => {
                   <td style={{ padding: '12px', fontWeight: '500', color: 'var(--text)' }}>{s.product}</td>
                   <td style={{ padding: '12px', color: 'var(--text)' }}>{s.distributor_name}</td>
                   <td style={{ padding: '12px', color: 'var(--text)' }}>{s.customer_name}</td>
-                  <td style={{ padding: '12px', color: 'var(--text)' }}>{s.quantity}</td>
                   <td style={{ padding: '12px', fontWeight: '600', color: '#10B981' }}>{s.amount} ETB</td>
                   <td style={{ padding: '12px' }}>
                     <span style={{

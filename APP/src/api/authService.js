@@ -3,6 +3,43 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = 'https://nmms-backend.onrender.com/api';
 
+import Pusher from 'pusher-js/react-native';
+import Echo from 'laravel-echo';
+
+// Global echo instance
+let echoInstance = null;
+
+export const initEcho = async () => {
+  if (echoInstance) return echoInstance;
+  
+  const token = await AsyncStorage.getItem('userToken');
+  if (!token) return null;
+
+
+
+  echoInstance = new Echo({
+    broadcaster: 'pusher',
+    Pusher: Pusher,
+    key: 'reverbkey123',
+    wsHost: 'nmms-backend.onrender.com', // Replace with Reverb prod URL when deployed
+    wsPort: 443,
+    wssPort: 443,
+    forceTLS: true,
+    disableStats: true,
+    enabledTransports: ['ws', 'wss'],
+    authEndpoint: `${API_BASE_URL.replace('/api', '')}/broadcasting/auth`,
+    auth: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  });
+
+  return echoInstance;
+};
+
+export const getEcho = () => echoInstance;
+
 // ── Simple in-memory cache for GET requests ───────────────────────────────────
 // Prevents hammering the server when multiple screens mount simultaneously.
 const _cache = {};
@@ -178,12 +215,12 @@ export const refreshUserFromServer = async () => {
 };
 
 // ── Prospects ─────────────────────────────────────────────────────────────────
-export const getProspectDashboard = async () => (await apiClient.get('/prospects/dashboard')).data;
+export const getProspectDashboard = async () => (await apiClient.get('/prospect-dashboard')).data;
 export const getProspects = async (params) => (await apiClient.get('/prospects', { params })).data;
 export const createProspect = async (data) => (await apiClient.post('/prospects', data)).data;
 export const updateProspect = async (id, data) => (await apiClient.put(`/prospects/${id}`, data)).data;
 export const deleteProspect = async (id) => (await apiClient.delete(`/prospects/${id}`)).data;
-export const moveProspectStage = async (id, stage) => (await apiClient.patch(`/prospects/${id}/stage`, { stage })).data;
+export const moveProspectStage = async (id, payload) => (await apiClient.patch(`/prospects/${id}/stage`, typeof payload === 'string' ? { stage: payload } : payload)).data;
 export const addProspectFollowup = async (id, data) => (await apiClient.post(`/prospects/${id}/followups`, data)).data;
 export const addProspectClosing = async (id, data) => (await apiClient.post(`/prospects/${id}/closings`, data)).data;
 export const addProspectNote = async (id, data) => (await apiClient.post(`/prospects/${id}/notes`, data)).data;
@@ -206,6 +243,8 @@ export const assignPresentation = async (data) => (await apiClient.post('/presen
 export const logPresentationCallOutcome = async (data) => (await apiClient.post('/presentations/call-outcome', data)).data;
 export const getPresentationLibrary = async () => (await apiClient.get('/presentations/library')).data;
 export const getProspectAssignments = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/assignments`)).data;
+export const getProspectWatchingStatus = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/watching`)).data;
+export const getProspectScoreBreakdown = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/score`)).data;
 
 // ── Invitations ───────────────────────────────────────────────────────────────
 export const createInvitation = async (data) => (await apiClient.post('/invitations', data)).data;

@@ -539,7 +539,7 @@ const UpgradeModal = ({ visible, customerName, customerEmail, txRef, onStay, onU
 // Shown after payment is confirmed. Includes the upgrade prompt for non-self-purchases.
 const SuccessScreen = ({
   txRef, amount, product, customerName, customerEmail,
-  isSelfPurchase, productId, distributorId, preferredLeg, navigation, onNewCheckout,
+  isSelfPurchase, productId, distributorId, preferredLeg, quantity, navigation, onNewCheckout,
 }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -562,7 +562,7 @@ const SuccessScreen = ({
             return joinNetwork({
               product_id: productId,
               sponsor_id: statusRes?.upline_id ?? null,
-              quantity: 1,
+              quantity: quantity ?? 1,
               preferred_leg: preferredLeg ?? null,
             });
           })
@@ -643,7 +643,7 @@ const SuccessScreen = ({
 
             {/* ── Self-purchase: show node registration status ── */}
             {isSelfPurchase && (
-              <View style={{ width: '100%', borderRadius: 16, padding: 16, marginBottom: 16,
+              <View style={{ width: '100%', borderRadius: 16, padding: 16, marginBottom: 24,
                 backgroundColor: joiningNetwork ? 'rgba(99,102,241,0.1)' : joinDone ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
                 borderWidth: 1, borderColor: joiningNetwork ? 'rgba(99,102,241,0.3)' : joinDone ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)',
                 flexDirection: 'row', alignItems: 'center' }}>
@@ -667,7 +667,27 @@ const SuccessScreen = ({
               </View>
             )}
 
-            {/* ── Upgrade prompt (only for real customer purchases) ── */}
+            {/* ── Self-purchase: Go to Dashboard only ── */}
+            {isSelfPurchase && (
+              <TouchableOpacity
+                onPress={() => navigation.replace('UserDashboard')}
+                style={{ width: '100%', borderRadius: 16, overflow: 'hidden' }}
+              >
+                <LinearGradient
+                  colors={[ACCENT, '#8B5CF6']}
+                  start={[0, 0]} end={[1, 0]}
+                  style={{ paddingVertical: 16, alignItems: 'center',
+                    flexDirection: 'row', justifyContent: 'center' }}
+                >
+                  <CheckCircle color="#fff" size={20} />
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginLeft: 10 }}>
+                    Go to My Dashboard
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+
+            {/* ── Customer purchase: upgrade prompt ── */}
             {!isSelfPurchase && !alreadyDist && (
               <TouchableOpacity
                 onPress={() => setShowUpgrade(true)}
@@ -687,7 +707,7 @@ const SuccessScreen = ({
               </TouchableOpacity>
             )}
 
-            {/* Already a distributor — go to dashboard */}
+            {/* ── Customer already a distributor — go to dashboard ── */}
             {!isSelfPurchase && alreadyDist && (
               <TouchableOpacity
                 onPress={() => navigation.replace('UserDashboard')}
@@ -707,48 +727,32 @@ const SuccessScreen = ({
               </TouchableOpacity>
             )}
 
-            {/* Go to dashboard after self-purchase */}
-            {isSelfPurchase && (
+            {/* ── New Checkout (customer flow only) ── */}
+            {!isSelfPurchase && (
               <TouchableOpacity
-                onPress={() => navigation.replace('UserDashboard')}
-                style={{ width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12 }}
+                onPress={onNewCheckout}
+                style={{ width: '100%', paddingVertical: 14, alignItems: 'center', borderRadius: 16,
+                  marginTop: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: BORDER }}
               >
-                <LinearGradient
-                  colors={[ACCENT, '#8B5CF6']}
-                  start={[0, 0]} end={[1, 0]}
-                  style={{ paddingVertical: 16, alignItems: 'center',
-                    flexDirection: 'row', justifyContent: 'center' }}
-                >
-                  <TrendingUp color="#fff" size={20} />
-                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15, marginLeft: 10 }}>
-                    Go to My Dashboard
-                  </Text>
-                </LinearGradient>
+                <Text style={{ color: TEXT, fontWeight: '700', fontSize: 15 }}>New Checkout</Text>
               </TouchableOpacity>
             )}
-
-            {/* New checkout */}
-            <TouchableOpacity
-              onPress={onNewCheckout}
-              style={{ width: '100%', paddingVertical: 14, alignItems: 'center', borderRadius: 16,
-                backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: BORDER }}
-            >
-              <Text style={{ color: TEXT, fontWeight: '700', fontSize: 15 }}>New Checkout</Text>
-            </TouchableOpacity>
 
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
 
-      {/* Upgrade modal */}
-      <UpgradeModal
-        visible={showUpgrade}
-        customerName={customerName}
-        customerEmail={customerEmail}
-        txRef={txRef}
-        onStay={() => setShowUpgrade(false)}
-        onUpgraded={handleUpgraded}
-      />
+      {/* Upgrade modal — only for customer purchases */}
+      {!isSelfPurchase && (
+        <UpgradeModal
+          visible={showUpgrade}
+          customerName={customerName}
+          customerEmail={customerEmail}
+          txRef={txRef}
+          onStay={() => setShowUpgrade(false)}
+          onUpgraded={handleUpgraded}
+        />
+      )}
     </LinearGradient>
   );
 };
@@ -793,11 +797,12 @@ const CustomerPayScreen = ({ route, navigation }) => {
     product_id: preSelectedProductId,
     leg,
     self_purchase,
+    quantity: initialQuantity,
   } = route?.params ?? {};
 
   const [products, setProducts]               = useState([]);
   const [selectedProduct, setSelected]        = useState(null);
-  const [quantity, setQuantity]               = useState(1);
+  const [quantity, setQuantity]               = useState(initialQuantity ?? 1);
   const [name, setName]                       = useState('');
   const [email, setEmail]                     = useState('');
   const [phone, setPhone]                     = useState('');
@@ -883,6 +888,7 @@ const CustomerPayScreen = ({ route, navigation }) => {
         customer_email: email.trim(),
         customer_phone: phone.trim() || undefined,
         leg:            leg,
+        self_purchase:  self_purchase ? 1 : 0,
       });
       if (res.payment_url && res.tx_ref) {
         setTxRef(res.tx_ref);
@@ -932,6 +938,7 @@ const CustomerPayScreen = ({ route, navigation }) => {
         productId={selectedProduct?.id}
         distributorId={distributor_id}
         preferredLeg={leg ?? null}
+        quantity={quantity}
         navigation={navigation}
         onNewCheckout={resetForm}
       />
@@ -965,11 +972,14 @@ const CustomerPayScreen = ({ route, navigation }) => {
         <WebView
           source={{ uri: paymentUrl }}
           style={{ flex: 1 }}
-          // Intercept BEFORE the return URL page loads — this fires instantly
-          // when Chapa redirects, without waiting for the page to render.
+          // Intercept ALL return/redirect URLs from Chapa — block them from
+          // loading so the web CustomerPay page never appears inside the app.
           onShouldStartLoadWithRequest={(request) => {
-            if (request.url && request.url.includes('/api/payments/return')) {
-              // Don't load the return page — jump straight to success screen
+            const url = request.url || '';
+            const isReturnUrl =
+              url.includes('/api/payments/return') ||
+              url.includes('nmms-ochre.vercel.app/pay');
+            if (isReturnUrl) {
               setPaymentUrl(null);
               setPaymentStatus('success');
               setPolling(false);
@@ -980,7 +990,11 @@ const CustomerPayScreen = ({ route, navigation }) => {
           }}
           // Backup: also catch it in navigation state change
           onNavigationStateChange={(state) => {
-            if (state.url && state.url.includes('/api/payments/return')) {
+            const url = state.url || '';
+            const isReturnUrl =
+              url.includes('/api/payments/return') ||
+              url.includes('nmms-ochre.vercel.app/pay');
+            if (isReturnUrl) {
               setPaymentUrl(null);
               setPaymentStatus('success');
               setPolling(false);
@@ -1081,33 +1095,8 @@ const CustomerPayScreen = ({ route, navigation }) => {
 
             {selectedProduct && (
               <>
-                <Text style={{ color: MUTED, fontSize: 11, fontWeight: '700',
-                  letterSpacing: 0.8, marginBottom: 10 }}>QUANTITY</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20,
-                  backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16,
-                  borderWidth: 1.5, borderColor: BORDER, padding: 10, justifyContent: 'center' }}>
-                  <TouchableOpacity
-                    onPress={() => setQuantity(q => Math.max(1, q - 1))}
-                    style={{ width: 40, height: 40, borderRadius: 12,
-                      backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: TEXT, fontSize: 22, fontWeight: '300' }}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={{ color: TEXT, fontSize: 26, fontWeight: '800', width: 60, textAlign: 'center' }}>
-                    {quantity}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setQuantity(q => q + 1)}
-                    style={{ width: 40, height: 40, borderRadius: 12,
-                      backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: TEXT, fontSize: 22, fontWeight: '300' }}>+</Text>
-                  </TouchableOpacity>
-                </View>
-
                 <View style={{ backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 16,
                   padding: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)' }}>
-                  <Row label={`Unit price x ${quantity}`}
-                    value={`ETB ${parseFloat(selectedProduct.price).toFixed(2)} x ${quantity}`} />
-                  <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 10 }} />
                   <Row label="Total Due" value={`ETB ${total}`} accent={ACCENT} last />
                 </View>
               </>

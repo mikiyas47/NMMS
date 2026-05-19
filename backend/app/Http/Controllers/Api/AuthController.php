@@ -152,7 +152,7 @@ class AuthController extends Controller
 
     public function index()
     {
-        $users = \App\Models\User::all();
+        $users = \App\Models\User::select('userid', 'name', 'email', 'phone', 'role', 'status', 'created_at')->get();
         $distributors = \App\Models\Distributor::all()->map(function ($d) {
             // Distributors might not have a role column, so we assign it dynamically
             $d->role = 'distributor';

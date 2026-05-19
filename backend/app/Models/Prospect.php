@@ -10,24 +10,40 @@ class Prospect extends Model
 
     protected $fillable = [
         'distributor_id',
-        'name', 'phone', 'email',
-        'source', 'status', 'relationship',
+        'name',
+        'phone',
+        'email',
+        'source',
+        'status',
+        'relationship',
         // Pipeline fields
-        'stage', 'interest_level', 'interest_score',
-        'next_action', 'next_action_date',
+        'stage',
+        'interest_level',
+        'interest_score',
+        'next_action',
+        'next_action_date',
         // Profile fields
-        'occupation', 'location', 'age_range',
-        'telegram', 'whatsapp', 'tags', 'notes',
-        'priority', 'stage_updated_at', 'joined_at',
+        'occupation',
+        'location',
+        'age_range',
+        'telegram',
+        'whatsapp',
+        'tags',
+        'notes',
+        'priority',
+        'stage_updated_at',
+        'joined_at',
     ];
 
     protected $casts = [
-        'tags'              => 'array',
-        'interest_score'    => 'integer',
-        'next_action_date'  => 'date',
-        'stage_updated_at'  => 'datetime',
-        'joined_at'         => 'datetime',
+        'tags' => 'array',
+        'interest_score' => 'integer',
+        'next_action_date' => 'date',
+        'stage_updated_at' => 'datetime',
+        'joined_at' => 'datetime',
     ];
+
+    protected $appends = [];
 
     // Pipeline stages in order
     public const STAGES = [
@@ -45,7 +61,7 @@ class Prospect extends Model
     ];
 
     public const INTEREST_LEVELS = ['cold', 'warm', 'hot'];
-    public const PRIORITIES       = ['low', 'normal', 'high', 'urgent'];
+    public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 
     public function followups()
     {
@@ -60,7 +76,7 @@ class Prospect extends Model
     public function activities()
     {
         return $this->hasMany(ProspectActivity::class, 'prospect_id', 'prospect_id')
-                    ->orderBy('created_at', 'desc');
+            ->orderBy('created_at', 'desc');
     }
 
     public function distributor()
@@ -68,44 +84,21 @@ class Prospect extends Model
         return $this->belongsTo(Distributor::class, 'distributor_id', 'distributor_id');
     }
 
+    public function getScoreBreakdownAttribute(): array
+    {
+        return app(\App\Services\Scoring\InterestScoreService::class)->calculate($this);
+    }
+
     /**
-     * Recalculate interest score based on activity history.
-     * Called whenever a significant event happens.
+     * Updates interest level based on the dynamically set score.
+     * Score calculation is now strictly handled by deterministic events
+     * and the AI Intelligence Layer.
      */
     public function recalculateScore(): void
     {
-        $score = 0;
-        $activities = $this->activities()->get();
-
-        foreach ($activities as $act) {
-            switch ($act->activity_type) {
-                case 'invited':          $score += 5;  break;
-                case 'presentation':     $score += 20; break;
-                case 'followup':
-                    $meta = $act->meta ?? [];
-                    if (in_array($meta['outcome'] ?? '', ['Interested', 'Replied with interest', 'Positive'])) $score += 15;
-                    if (in_array($meta['outcome'] ?? '', ['Not interested', 'Negative'])) $score -= 10;
-                    break;
-                case 'closing':
-                    $meta = $act->meta ?? [];
-                    if (in_array($meta['outcome'] ?? '', ['Positive', 'Closed'])) $score += 25;
-                    break;
-                case 'stage_change':
-                    $meta = $act->meta ?? [];
-                    if (($meta['new_stage'] ?? '') === 'Joined') $score = 100;
-                    if (($meta['new_stage'] ?? '') === 'Rejected') $score = max(0, $score - 20);
-                    break;
-                case 'inactive':         $score -= 10; break;
-            }
-        }
-
-        $score = max(0, min(100, $score));
-        $this->interest_score = $score;
-
-        // Auto-set interest level from score
-        if ($score >= 70)      $this->interest_level = 'hot';
-        elseif ($score >= 35)  $this->interest_level = 'warm';
-        else                   $this->interest_level = 'cold';
+        $breakdown = $this->score_breakdown;
+        $this->interest_score = $breakdown['final_score'];
+        $this->interest_level = $breakdown['level'];
 
         $this->saveQuietly();
     }

@@ -45,19 +45,20 @@ Route::middleware('auth:sanctum,api')->group(function () {
 use App\Http\Controllers\Api\ProspectController;
 // Use distinct top-level paths to avoid any {id} wildcard collision
 Route::middleware('auth:sanctum,api')->get('/prospect-dashboard', [ProspectController::class, 'dashboard']);
-Route::middleware('auth:sanctum,api')->get('/prospect-pipeline',  [ProspectController::class, 'pipeline']);
+Route::middleware('auth:sanctum,api')->get('/prospect-pipeline', [ProspectController::class, 'pipeline']);
 
 Route::middleware('auth:sanctum,api')->group(function () {
-    Route::get('/prospects',           [ProspectController::class, 'index']);
-    Route::post('/prospects',          [ProspectController::class, 'store']);
-    Route::get('/prospects/{id}',      [ProspectController::class, 'show']);
-    Route::put('/prospects/{id}',      [ProspectController::class, 'update']);
-    Route::delete('/prospects/{id}',   [ProspectController::class, 'destroy']);
-    Route::patch('/prospects/{id}/stage',     [ProspectController::class, 'moveStage']);
-    Route::post('/prospects/{id}/followups',  [ProspectController::class, 'storeFollowup']);
-    Route::post('/prospects/{id}/closings',   [ProspectController::class, 'storeClosing']);
-    Route::post('/prospects/{id}/notes',      [ProspectController::class, 'addNote']);
-    Route::get('/prospects/{id}/activities',  [ProspectController::class, 'activities']);
+    Route::get('/prospects', [ProspectController::class, 'index']);
+    Route::post('/prospects', [ProspectController::class, 'store']);
+    Route::get('/prospects/{id}', [ProspectController::class, 'show']);
+    Route::put('/prospects/{id}', [ProspectController::class, 'update']);
+    Route::delete('/prospects/{id}', [ProspectController::class, 'destroy']);
+    Route::patch('/prospects/{id}/stage', [ProspectController::class, 'moveStage']);
+    Route::post('/prospects/{id}/followups', [ProspectController::class, 'storeFollowup']);
+    Route::post('/prospects/{id}/closings', [ProspectController::class, 'storeClosing']);
+    Route::post('/prospects/{id}/notes', [ProspectController::class, 'addNote']);
+    Route::get('/prospects/{id}/activities', [ProspectController::class, 'activities']);
+    Route::get('/prospects/{id}/score', [ProspectController::class, 'scoreBreakdown']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,16 +67,16 @@ Route::get('/cleanup-nodes/{id1}/{id2}', function ($id1, $id2) {
     if (function_exists('opcache_reset')) {
         opcache_reset();
     }
-    $ids = [(int)$id1, (int)$id2];
+    $ids = [(int) $id1, (int) $id2];
     $accounts = \App\Models\Account::whereIn('id', $ids)->delete();
     $nodes = \App\Models\Node::whereIn('id', $ids)->delete();
-    
+
     $stat = \App\Models\Stat::where('distributor_id', 41)->first();
     if ($stat) {
         $stat->own_points = 800;
         $stat->save();
     }
-    
+
     return response()->json([
         'message' => "Cleaned up",
         'accounts_deleted' => $accounts,
@@ -91,14 +92,16 @@ Route::get('/backfill-wallets', function () {
     $credited = [];
 
     foreach ($payments as $payment) {
-        if ($payment->commission_amount <= 0) continue;
+        if ($payment->commission_amount <= 0)
+            continue;
 
         $wallet = \App\Models\Wallet::firstOrCreate(['distributor_id' => $payment->distributor_id]);
 
         // Only backfill if wallet balance is less than what income_monthly shows
         // to avoid double-crediting distributors who already have correct wallets
         $dist = \App\Models\Distributor::where('distributor_id', $payment->distributor_id)->first();
-        if (!$dist) continue;
+        if (!$dist)
+            continue;
 
         $credited[$payment->distributor_id] = ($credited[$payment->distributor_id] ?? 0) + $payment->commission_amount;
     }
@@ -109,15 +112,15 @@ Route::get('/backfill-wallets', function () {
         // Only update if wallet is lower than total commissions earned
         if ($wallet->total_earned < $totalCommission) {
             $diff = $totalCommission - $wallet->total_earned;
-            $wallet->balance      += $diff;
-            $wallet->total_earned  = $totalCommission;
+            $wallet->balance += $diff;
+            $wallet->total_earned = $totalCommission;
             $wallet->save();
             $updated++;
         }
     }
 
     return response()->json([
-        'message'  => "Backfilled {$updated} wallets",
+        'message' => "Backfilled {$updated} wallets",
         'total_distributors_with_commissions' => count($credited),
     ]);
 });
@@ -139,7 +142,8 @@ Route::get('/clear-cache', function () {
 Route::get('/test-prospects/{email}', function ($email) {
     try {
         $dist = \App\Models\Distributor::where('email', $email)->first();
-        if (!$dist) return response()->json(['error' => 'Not found']);
+        if (!$dist)
+            return response()->json(['error' => 'Not found']);
         $distId = $dist->distributor_id;
 
         $all = \App\Models\Prospect::where('distributor_id', $distId)->get();
@@ -149,12 +153,12 @@ Route::get('/test-prospects/{email}', function ($email) {
         }
 
         return response()->json([
-            'ok'           => true,
-            'distributor'  => $dist->name,
+            'ok' => true,
+            'distributor' => $dist->name,
             'total_prospects' => $all->count(),
             'stage_counts' => $stageCounts,
             'new_columns_exist' => \Illuminate\Support\Facades\Schema::hasColumn('prospects', 'stage'),
-            'activities_table'  => \Illuminate\Support\Facades\Schema::hasTable('prospect_activities'),
+            'activities_table' => \Illuminate\Support\Facades\Schema::hasTable('prospect_activities'),
         ]);
     } catch (\Throwable $e) {
         return response()->json(['error' => $e->getMessage(), 'line' => $e->getLine()], 500);
@@ -166,18 +170,21 @@ Route::get('/test-prospects/{email}', function ($email) {
 Route::get('/test-dashboard/{email}', function ($email) {
     try {
         $dist = \App\Models\Distributor::where('email', $email)->first();
-        if (!$dist) return response()->json(['error' => 'Not found']);
+        if (!$dist)
+            return response()->json(['error' => 'Not found']);
         $distId = $dist->distributor_id;
-        $today  = \Carbon\Carbon::today();
+        $today = \Carbon\Carbon::today();
 
         $all = \App\Models\Prospect::where('distributor_id', $distId)->get();
 
-        $hotLeads = $all->filter(fn($p) =>
+        $hotLeads = $all->filter(
+            fn($p) =>
             $p->interest_score >= 70 &&
             !in_array($p->stage, ['Joined', 'Rejected', 'Inactive'])
         )->sortByDesc('interest_score')->take(5)->values();
 
-        $overdue = $all->filter(fn($p) =>
+        $overdue = $all->filter(
+            fn($p) =>
             $p->next_action_date &&
             \Carbon\Carbon::parse($p->next_action_date)->isPast() &&
             !\Carbon\Carbon::parse($p->next_action_date)->isToday() &&
@@ -190,17 +197,17 @@ Route::get('/test-dashboard/{email}', function ($email) {
         }
 
         return response()->json([
-            'ok'          => true,
-            'total'       => $all->count(),
-            'hot_leads'   => $hotLeads->count(),
-            'overdue'     => $overdue->count(),
-            'stage_counts'=> $stageCounts,
+            'ok' => true,
+            'total' => $all->count(),
+            'hot_leads' => $hotLeads->count(),
+            'overdue' => $overdue->count(),
+            'stage_counts' => $stageCounts,
         ]);
     } catch (\Throwable $e) {
         return response()->json([
             'error' => $e->getMessage(),
-            'file'  => basename($e->getFile()),
-            'line'  => $e->getLine(),
+            'file' => basename($e->getFile()),
+            'line' => $e->getLine(),
             'trace' => collect(explode("\n", $e->getTraceAsString()))->take(5)->toArray(),
         ], 500);
     }
@@ -209,16 +216,17 @@ Route::get('/test-dashboard/{email}', function ($email) {
 Route::get('/test-engine/{email}', function ($email) {
     try {
         $dist = \App\Models\Distributor::where('email', $email)->first();
-        if (!$dist) return response()->json(['error' => 'Distributor not found']);
+        if (!$dist)
+            return response()->json(['error' => 'Distributor not found']);
 
         $distributorId = $dist->distributor_id;
-        $stat   = \App\Models\Stat::where('distributor_id', $distributorId)->first();
+        $stat = \App\Models\Stat::where('distributor_id', $distributorId)->first();
         $wallet = \App\Models\Wallet::where('distributor_id', $distributorId)->first();
-        $mlm    = new \App\Services\MlmEngineService();
+        $mlm = new \App\Services\MlmEngineService();
 
         $currentRank = $stat?->rank ?? 'CT';
-        $ownPoints   = (int)($stat?->own_points ?? 0);
-        $rootNode    = \App\Models\Node::where('distributor_id', $distributorId)->orderBy('id')->first();
+        $ownPoints = (int) ($stat?->own_points ?? 0);
+        $rootNode = \App\Models\Node::where('distributor_id', $distributorId)->orderBy('id')->first();
         $totalPoints = $rootNode ? $mlm->getSubtreeVolume($rootNode->id) : $ownPoints;
         $directCount = $rootNode ? $rootNode->children()->count() : 0;
 
@@ -243,8 +251,8 @@ Route::get('/test-engine/{email}', function ($email) {
     } catch (\Throwable $e) {
         return response()->json([
             'error' => $e->getMessage(),
-            'file'  => $e->getFile(),
-            'line'  => $e->getLine(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
             'trace' => collect(explode("\n", $e->getTraceAsString()))->take(8)->toArray(),
         ], 500);
     }
@@ -254,7 +262,7 @@ Route::get('/debug-login', function (\Illuminate\Http\Request $r) {
     try {
         $email = $r->query('email');
         $password = $r->query('password');
-        
+
         $user = \App\Models\User::where('email', $email)->first();
         if ($user) {
             if (\Illuminate\Support\Facades\Hash::check($password, $user->password)) {
@@ -272,13 +280,13 @@ Route::get('/debug-login', function (\Illuminate\Http\Request $r) {
             }
             return response()->json(['error' => 'Wrong password for distributor']);
         }
-        
+
         return response()->json(['error' => 'User not found']);
     } catch (\Throwable $e) {
         return response()->json([
             'error' => $e->getMessage(),
-            'file'  => $e->getFile(),
-            'line'  => $e->getLine(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
             'trace' => collect(explode("\n", $e->getTraceAsString()))->take(5)->toArray(),
         ], 500);
     }
@@ -305,10 +313,10 @@ Route::middleware('auth:sanctum,api')->group(function () {
 use App\Http\Controllers\Api\OwnerPresentationController;
 // Owner-only routes (protected by auth:sanctum — owner role checked in controller)
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/owner/presentations',        [OwnerPresentationController::class, 'index']);
-    Route::post('/owner/presentations',       [OwnerPresentationController::class, 'store']);
-    Route::put('/owner/presentations/{id}',   [OwnerPresentationController::class, 'update']);
-    Route::delete('/owner/presentations/{id}',[OwnerPresentationController::class, 'destroy']);
+    Route::get('/owner/presentations', [OwnerPresentationController::class, 'index']);
+    Route::post('/owner/presentations', [OwnerPresentationController::class, 'store']);
+    Route::put('/owner/presentations/{id}', [OwnerPresentationController::class, 'update']);
+    Route::delete('/owner/presentations/{id}', [OwnerPresentationController::class, 'destroy']);
 });
 // Distributor library — all global presentations
 Route::middleware('auth:sanctum,api')->get('/presentations/library', [OwnerPresentationController::class, 'library']);
@@ -316,49 +324,49 @@ Route::middleware('auth:sanctum,api')->get('/presentations/library', [OwnerPrese
 use App\Http\Controllers\Api\PerformanceController;
 
 // Public tracked links (no auth)
-Route::get('/p/{token}',      [PerformanceController::class, 'publicPresentationPage']);
+Route::get('/p/{token}', [PerformanceController::class, 'publicPresentationPage']);
 Route::get('/invite/{token}', [PerformanceController::class, 'publicInvitePage']);
-Route::post('/p/{token}/track',      [PerformanceController::class, 'trackPresentation']);
+Route::post('/p/{token}/track', [PerformanceController::class, 'trackPresentation']);
 Route::post('/invite/{token}/track', [PerformanceController::class, 'trackInvitation']);
-Route::post('/p/{token}/lead',       [PerformanceController::class, 'capturePublicLead']);
-Route::post('/invite/{token}/lead',  [PerformanceController::class, 'capturePublicLead']);
+Route::post('/p/{token}/lead', [PerformanceController::class, 'capturePublicLead']);
+Route::post('/invite/{token}/lead', [PerformanceController::class, 'capturePublicLead']);
 
 Route::middleware('auth:sanctum,api')->group(function () {
     // Presentations
-    Route::get('/presentations',           [PerformanceController::class, 'listPresentations']);
-    Route::post('/presentations',          [PerformanceController::class, 'storePresentation']);
-    Route::put('/presentations/{id}',      [PerformanceController::class, 'updatePresentation']);
-    Route::delete('/presentations/{id}',   [PerformanceController::class, 'deletePresentation']);
-    Route::post('/presentations/assign',   [PerformanceController::class, 'assignPresentation']);
+    Route::get('/presentations', [PerformanceController::class, 'listPresentations']);
+    Route::post('/presentations', [PerformanceController::class, 'storePresentation']);
+    Route::put('/presentations/{id}', [PerformanceController::class, 'updatePresentation']);
+    Route::delete('/presentations/{id}', [PerformanceController::class, 'deletePresentation']);
+    Route::post('/presentations/assign', [PerformanceController::class, 'assignPresentation']);
     Route::post('/presentations/call-outcome', [PerformanceController::class, 'logPresentationCallOutcome']);
     Route::get('/prospects/{id}/assignments', [PerformanceController::class, 'listAssignments']);
-    Route::get('/prospects/{id}/watching',    [PerformanceController::class, 'watchingStatus']);
+    Route::get('/prospects/{id}/watching', [PerformanceController::class, 'watchingStatus']);
     // Invitations
-    Route::post('/invitations',                    [PerformanceController::class, 'createInvitation']);
-    Route::get('/prospects/{id}/invitations',      [PerformanceController::class, 'listInvitations']);
-    Route::patch('/invitations/{id}/status',       [PerformanceController::class, 'updateInvitationStatus']);
+    Route::post('/invitations', [PerformanceController::class, 'createInvitation']);
+    Route::get('/prospects/{id}/invitations', [PerformanceController::class, 'listInvitations']);
+    Route::patch('/invitations/{id}/status', [PerformanceController::class, 'updateInvitationStatus']);
     // Automation
-    Route::get('/automation-rules',          [PerformanceController::class, 'listAutomationRules']);
-    Route::post('/automation-rules',         [PerformanceController::class, 'storeAutomationRule']);
+    Route::get('/automation-rules', [PerformanceController::class, 'listAutomationRules']);
+    Route::post('/automation-rules', [PerformanceController::class, 'storeAutomationRule']);
     Route::patch('/automation-rules/{id}/toggle', [PerformanceController::class, 'toggleAutomationRule']);
     // Priority
-    Route::get('/prospect-priority',         [PerformanceController::class, 'priorityLeads']);
+    Route::get('/prospect-priority', [PerformanceController::class, 'priorityLeads']);
     // Daily dashboard
-    Route::get('/daily-dashboard',           [PerformanceController::class, 'dailyDashboard']);
+    Route::get('/daily-dashboard', [PerformanceController::class, 'dailyDashboard']);
     Route::post('/daily-dashboard/complete', [PerformanceController::class, 'completeTask']);
     // Behavioral intelligence
-    Route::get('/recommendations/active',              [PerformanceController::class, 'activeRecommendations']);
-    Route::get('/prospects/{id}/recommendations',      [PerformanceController::class, 'prospectRecommendations']);
-    Route::patch('/recommendations/{id}/read',         [PerformanceController::class, 'markRecommendationRead']);
+    Route::get('/recommendations/active', [PerformanceController::class, 'activeRecommendations']);
+    Route::get('/prospects/{id}/recommendations', [PerformanceController::class, 'prospectRecommendations']);
+    Route::patch('/recommendations/{id}/read', [PerformanceController::class, 'markRecommendationRead']);
     // Onboarding
-    Route::get('/onboarding/status',         [PerformanceController::class, 'onboardingStatus']);
+    Route::get('/onboarding/status', [PerformanceController::class, 'onboardingStatus']);
     // Playbooks & duplication
-    Route::get('/playbooks',                 [PerformanceController::class, 'listPlaybooks']);
-    Route::post('/playbooks',                [PerformanceController::class, 'storePlaybook']);
-    Route::get('/scripts',                   [PerformanceController::class, 'getScript']);
-    Route::get('/duplication/weekly-goals',  [PerformanceController::class, 'weeklyGoals']);
+    Route::get('/playbooks', [PerformanceController::class, 'listPlaybooks']);
+    Route::post('/playbooks', [PerformanceController::class, 'storePlaybook']);
+    Route::get('/scripts', [PerformanceController::class, 'getScript']);
+    Route::get('/duplication/weekly-goals', [PerformanceController::class, 'weeklyGoals']);
     // Funnel analytics
-    Route::get('/funnel/report',             [PerformanceController::class, 'funnelReport']);
+    Route::get('/funnel/report', [PerformanceController::class, 'funnelReport']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\PaymentController;
@@ -402,14 +410,14 @@ Route::middleware('auth:sanctum,api')->group(function () {
 // ── Account Product Upgrade ───────────────────────────────────────────────────
 use App\Http\Controllers\Api\AccountUpgradeController;
 Route::middleware('auth:sanctum,api')->group(function () {
-    Route::get('/account/upgrade/options',    [AccountUpgradeController::class, 'options']);
-    Route::post('/account/upgrade/initiate',  [AccountUpgradeController::class, 'initiate']);
-    Route::post('/account/upgrade/complete',  [AccountUpgradeController::class, 'complete']);
+    Route::get('/account/upgrade/options', [AccountUpgradeController::class, 'options']);
+    Route::post('/account/upgrade/initiate', [AccountUpgradeController::class, 'initiate']);
+    Route::post('/account/upgrade/complete', [AccountUpgradeController::class, 'complete']);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 use App\Http\Controllers\Api\CustomerUpgradeController;
 Route::post('/customer/upgrade', [CustomerUpgradeController::class, 'upgrade']);
-Route::get('/customer/status',   [CustomerUpgradeController::class, 'status']);
+Route::get('/customer/status', [CustomerUpgradeController::class, 'status']);
 // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -740,9 +748,10 @@ Route::get('/reset-tree/{email}', function ($email) {
 // Moves all secondary nodes to be proper children of the main node
 Route::get('/fix-doubling/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
-    if (!$dist) return response()->json(['error' => 'Not found'], 404);
+    if (!$dist)
+        return response()->json(['error' => 'Not found'], 404);
 
-    $distId   = $dist->distributor_id;
+    $distId = $dist->distributor_id;
     $allNodes = \App\Models\Node::where('distributor_id', $distId)->orderBy('id')->get();
 
     if ($allNodes->count() < 2) {
@@ -750,7 +759,7 @@ Route::get('/fix-doubling/{email}', function ($email) {
     }
 
     $mainNode = $allNodes->first();
-    $fixed    = [];
+    $fixed = [];
 
     foreach ($allNodes->skip(1) as $secondary) {
         // If this secondary node is NOT a child of the main node, move it there
@@ -759,13 +768,14 @@ Route::get('/fix-doubling/{email}', function ($email) {
                 ->where('id', '!=', $secondary->id)
                 ->pluck('leg')->toArray();
             $nextLeg = 1;
-            while (in_array($nextLeg, $usedLegs) && $nextLeg <= 4) $nextLeg++;
+            while (in_array($nextLeg, $usedLegs) && $nextLeg <= 4)
+                $nextLeg++;
             if ($nextLeg > 4) {
                 $fixed[] = "Node {$secondary->id}: no free leg under main node";
                 continue;
             }
             $secondary->parent_id = $mainNode->id;
-            $secondary->leg       = $nextLeg;
+            $secondary->leg = $nextLeg;
             $secondary->save();
             $fixed[] = "Node {$secondary->id}: moved to parent={$mainNode->id} leg={$nextLeg}";
         } else {
@@ -785,13 +795,13 @@ Route::get('/fix-doubling/{email}', function ($email) {
 
 // Full end-to-end upgrade flow test (creates payment + runs upgrade + verifies tree)
 Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
-    $custEmail   = $request->input('email');
-    $txRef       = $request->input('tx_ref');
+    $custEmail = $request->input('email');
+    $txRef = $request->input('tx_ref');
     $distributorId = (int) $request->input('distributor_id');
-    $productId   = (int) $request->input('product_id', 1);
-    $amount      = (float) $request->input('amount', 7690);
-    $leg         = (int) $request->input('leg', 2);
-    $password    = $request->input('password', 'testpass123');
+    $productId = (int) $request->input('product_id', 1);
+    $amount = (float) $request->input('amount', 7690);
+    $leg = (int) $request->input('leg', 2);
+    $password = $request->input('password', 'testpass123');
 
     if (!$custEmail || !$txRef || !$distributorId) {
         return response()->json(['error' => 'Missing required fields'], 422);
@@ -799,20 +809,20 @@ Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
 
     // Step 1: Create a pending payment record (bypasses Chapa)
     $payment = \App\Models\Payment::create([
-        'product_id'        => $productId,
-        'distributor_id'    => $distributorId,
-        'customer_name'     => 'Flow Test Customer',
-        'customer_email'    => $custEmail,
-        'customer_phone'    => '0944444444',
-        'tx_ref'            => $txRef,
-        'amount'            => $amount,
-        'currency'          => 'ETB',
-        'quantity'          => 1,
+        'product_id' => $productId,
+        'distributor_id' => $distributorId,
+        'customer_name' => 'Flow Test Customer',
+        'customer_email' => $custEmail,
+        'customer_phone' => '0944444444',
+        'tx_ref' => $txRef,
+        'amount' => $amount,
+        'currency' => 'ETB',
+        'quantity' => 1,
         'commission_amount' => round($amount * 0.16, 2),
-        'status'            => 'pending',
-        'commission_paid'   => false,
-        'webhook_verified'  => false,
-        'leg'               => $leg,
+        'status' => 'pending',
+        'commission_paid' => false,
+        'webhook_verified' => false,
+        'leg' => $leg,
     ]);
 
     // Step 2: Run the upgrade (same logic as CustomerUpgradeController)
@@ -821,53 +831,53 @@ Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
         $p = \App\Models\Payment::where('tx_ref', $txRef)->lockForUpdate()->first();
 
         $dist = \App\Models\Distributor::create([
-            'name'      => $p->customer_name,
-            'email'     => $custEmail,
-            'phone'     => $p->customer_phone,
-            'password'  => \Illuminate\Support\Facades\Hash::make($password),
+            'name' => $p->customer_name,
+            'email' => $custEmail,
+            'phone' => $p->customer_phone,
+            'password' => \Illuminate\Support\Facades\Hash::make($password),
             'upline_id' => $p->distributor_id,
-            'is_paid'   => true,
-            'status'    => 'active',
+            'is_paid' => true,
+            'status' => 'active',
             'join_date' => now()->toDateString(),
         ]);
 
         \App\Models\Wallet::firstOrCreate(['distributor_id' => $dist->distributor_id]);
-        \App\Models\Stat::firstOrCreate(['distributor_id'   => $dist->distributor_id]);
+        \App\Models\Stat::firstOrCreate(['distributor_id' => $dist->distributor_id]);
 
         $sponsorNode = \App\Models\Node::where('distributor_id', $p->distributor_id)->orderBy('id')->first();
         $nodeCreated = null;
         if ($sponsorNode) {
-            $mlm          = new \App\Services\MlmEngineService();
+            $mlm = new \App\Services\MlmEngineService();
             $preferredLeg = $p->leg ?? null;
             $placementNode = null;
-            $legNum        = null;
+            $legNum = null;
 
             if ($preferredLeg) {
                 $existingLegChild = \App\Models\Node::where('parent_id', $sponsorNode->id)
                     ->where('leg', $preferredLeg)->first();
                 if ($existingLegChild) {
                     $placementNode = $mlm->findPlacementNode($existingLegChild->id);
-                    $legNum        = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                    $legNum = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
                 } else {
                     $placementNode = $sponsorNode;
-                    $legNum        = $preferredLeg;
+                    $legNum = $preferredLeg;
                 }
             } else {
                 $placementNode = $mlm->findPlacementNode($sponsorNode->id);
-                $legNum        = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                $legNum = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
             }
 
             if ($placementNode) {
                 $newNode = \App\Models\Node::create([
-                    'parent_id'      => $placementNode->id,
+                    'parent_id' => $placementNode->id,
                     'distributor_id' => $dist->distributor_id,
-                    'leg'            => $legNum,
+                    'leg' => $legNum,
                 ]);
                 \App\Models\Account::create([
                     'distributor_id' => $dist->distributor_id,
-                    'node_id'        => $newNode->id,
-                    'product_id'     => $p->product_id,
-                    'sponsor_id'     => $p->distributor_id,
+                    'node_id' => $newNode->id,
+                    'product_id' => $p->product_id,
+                    'sponsor_id' => $p->distributor_id,
                 ]);
                 $nodeCreated = ['node_id' => $newNode->id, 'parent_id' => $newNode->parent_id, 'leg' => $newNode->leg];
                 $mlm->runRankCheckForAncestors($newNode, $dist->distributor_id);
@@ -875,7 +885,9 @@ Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
         }
 
         \Illuminate\Support\Facades\DB::table('payments')->where('id', $p->id)->update([
-            'status' => 'success', 'commission_paid' => true, 'updated_at' => now(),
+            'status' => 'success',
+            'commission_paid' => true,
+            'updated_at' => now(),
         ]);
 
         \Illuminate\Support\Facades\DB::commit();
@@ -883,25 +895,26 @@ Route::post('/test-upgrade-flow', function (\Illuminate\Http\Request $request) {
         $token = $dist->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'status'           => 'success',
-            'distributor_id'   => $dist->distributor_id,
-            'email'            => $dist->email,
-            'dist_status'      => $dist->status,
-            'is_paid'          => $dist->is_paid,
-            'node_created'     => $nodeCreated,
-            'access_token'     => $token,
+            'status' => 'success',
+            'distributor_id' => $dist->distributor_id,
+            'email' => $dist->email,
+            'dist_status' => $dist->status,
+            'is_paid' => $dist->is_paid,
+            'node_created' => $nodeCreated,
+            'access_token' => $token,
         ]);
     } catch (\Throwable $e) {
         \Illuminate\Support\Facades\DB::rollBack();
         \App\Models\Payment::where('tx_ref', $txRef)->delete();
-        return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile().':'.$e->getLine()], 500);
+        return response()->json(['error' => $e->getMessage(), 'file' => $e->getFile() . ':' . $e->getLine()], 500);
     }
 });
 
 // Cleanup test distributor by email
 Route::delete('/test-cleanup/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
-    if (!$dist) return response()->json(['message' => 'Not found']);
+    if (!$dist)
+        return response()->json(['message' => 'Not found']);
     $did = $dist->distributor_id;
     \App\Models\Account::where('distributor_id', $did)->delete();
     $nids = \App\Models\Node::where('distributor_id', $did)->pluck('id');
@@ -931,28 +944,30 @@ Route::get('/fix-is-paid', function () {
 // Diagnostic: test processPurchase directly and return the real error
 Route::get('/test-join/{email}', function ($email) {
     $dist = \App\Models\Distributor::where('email', $email)->first();
-    if (!$dist) return response()->json(['error' => 'Not found'], 404);
+    if (!$dist)
+        return response()->json(['error' => 'Not found'], 404);
 
     $product = \App\Models\Product::find(1);
-    if (!$product) return response()->json(['error' => 'No product'], 404);
+    if (!$product)
+        return response()->json(['error' => 'No product'], 404);
 
     $mlm = new \App\Services\MlmEngineService();
     try {
         $account = $mlm->processPurchase($dist->distributor_id, $product->id, null, 1);
         $node = \App\Models\Node::find($account->node_id);
         return response()->json([
-            'status'   => 'success',
-            'account'  => $account->id,
-            'node_id'  => $node->id,
-            'parent_id'=> $node->parent_id,
-            'leg'      => $node->leg,
-            'is_paid'  => \App\Models\Distributor::find($dist->distributor_id)->is_paid,
+            'status' => 'success',
+            'account' => $account->id,
+            'node_id' => $node->id,
+            'parent_id' => $node->parent_id,
+            'leg' => $node->leg,
+            'is_paid' => \App\Models\Distributor::find($dist->distributor_id)->is_paid,
         ]);
     } catch (\Throwable $e) {
         return response()->json([
-            'error'   => $e->getMessage(),
-            'file'    => $e->getFile() . ':' . $e->getLine(),
-            'trace'   => collect(explode("\n", $e->getTraceAsString()))->take(8)->toArray(),
+            'error' => $e->getMessage(),
+            'file' => $e->getFile() . ':' . $e->getLine(),
+            'trace' => collect(explode("\n", $e->getTraceAsString()))->take(8)->toArray(),
         ], 500);
     }
 });
@@ -987,34 +1002,37 @@ Route::get('/check-tree-integrity', function () {
             $visited[] = $current->id;
             $path[] = $current->id;
             $current = $nodeMap->get($current->parent_id);
-            if (count($path) > 100) { $cycles[] = "Deep chain from node {$startNode->id}"; break; }
+            if (count($path) > 100) {
+                $cycles[] = "Deep chain from node {$startNode->id}";
+                break;
+            }
         }
     }
     return response()->json([
         'total_nodes' => $nodes->count(),
-        'issues'      => $issues,
-        'cycles'      => array_unique($cycles),
-        'root_nodes'  => $nodes->whereNull('parent_id')->pluck('id'),
+        'issues' => $issues,
+        'cycles' => array_unique($cycles),
+        'root_nodes' => $nodes->whereNull('parent_id')->pluck('id'),
     ]);
 });
 
 // Insert a pending payment record only (for testing stay-as-customer)
 Route::post('/insert-test-payment', function (\Illuminate\Http\Request $request) {
     $payment = \App\Models\Payment::create([
-        'product_id'        => $request->input('product_id', 1),
-        'distributor_id'    => $request->input('distributor_id'),
-        'customer_name'     => $request->input('customer_name', 'Test Customer'),
-        'customer_email'    => $request->input('customer_email'),
-        'customer_phone'    => $request->input('customer_phone', '0911111111'),
-        'tx_ref'            => $request->input('tx_ref'),
-        'amount'            => $request->input('amount', 7690),
-        'currency'          => 'ETB',
-        'quantity'          => 1,
+        'product_id' => $request->input('product_id', 1),
+        'distributor_id' => $request->input('distributor_id'),
+        'customer_name' => $request->input('customer_name', 'Test Customer'),
+        'customer_email' => $request->input('customer_email'),
+        'customer_phone' => $request->input('customer_phone', '0911111111'),
+        'tx_ref' => $request->input('tx_ref'),
+        'amount' => $request->input('amount', 7690),
+        'currency' => 'ETB',
+        'quantity' => 1,
         'commission_amount' => round($request->input('amount', 7690) * 0.16, 2),
-        'status'            => 'pending',
-        'commission_paid'   => false,
-        'webhook_verified'  => false,
-        'leg'               => $request->input('leg', null),
+        'status' => 'pending',
+        'commission_paid' => false,
+        'webhook_verified' => false,
+        'leg' => $request->input('leg', null),
     ]);
     return response()->json(['payment_id' => $payment->id, 'tx_ref' => $payment->tx_ref]);
 });
@@ -1039,7 +1057,7 @@ Route::get('/backfill-node-ranks', function () {
 Route::get('/run-rank-check/{distributorId}', function ($distributorId) {
     $mlm = new \App\Services\MlmEngineService();
     try {
-        $mlm->runRankCheck((int)$distributorId);
+        $mlm->runRankCheck((int) $distributorId);
         $nodes = \App\Models\Node::where('distributor_id', $distributorId)->orderBy('id')->get(['id', 'rank', 'leg', 'parent_id']);
         return response()->json(['status' => 'ok', 'distributor_id' => $distributorId, 'nodes' => $nodes]);
     } catch (\Exception $e) {
@@ -1050,34 +1068,36 @@ Route::get('/run-rank-check/{distributorId}', function ($distributorId) {
 // Check payment details by tx_ref (for debugging return_url)
 Route::get('/check-payment/{txRef}', function ($txRef) {
     $p = \App\Models\Payment::where('tx_ref', $txRef)->first();
-    if (!$p) return response()->json(['error' => 'Not found'], 404);
+    if (!$p)
+        return response()->json(['error' => 'Not found'], 404);
     return response()->json([
-        'tx_ref'         => $p->tx_ref,
-        'status'         => $p->status,
+        'tx_ref' => $p->tx_ref,
+        'status' => $p->status,
         'customer_email' => $p->customer_email,
-        'customer_name'  => $p->customer_name,
-        'amount'         => $p->amount,
-        'product_id'     => $p->product_id,
+        'customer_name' => $p->customer_name,
+        'amount' => $p->amount,
+        'product_id' => $p->product_id,
         'distributor_id' => $p->distributor_id,
-        'leg'            => $p->leg,
-        'commission_paid'=> $p->commission_paid,
+        'leg' => $p->leg,
+        'commission_paid' => $p->commission_paid,
     ]);
 });
 
 // Check distributor status by email (for debugging)
 Route::get('/check-distributor/{email}', function ($email) {
     $d = \App\Models\Distributor::where('email', $email)->first();
-    if (!$d) return response()->json(['error' => 'Not found'], 404);
+    if (!$d)
+        return response()->json(['error' => 'Not found'], 404);
     $hasAccount = \App\Models\Account::where('distributor_id', $d->distributor_id)->exists();
     return response()->json([
         'distributor_id' => $d->distributor_id,
-        'name'           => $d->name,
-        'email'          => $d->email,
-        'status'         => $d->status,
-        'is_paid'        => $d->is_paid,
-        'rank'           => $d->rank,
-        'has_account'    => $hasAccount,
-        'upline_id'      => $d->upline_id,
+        'name' => $d->name,
+        'email' => $d->email,
+        'status' => $d->status,
+        'is_paid' => $d->is_paid,
+        'rank' => $d->rank,
+        'has_account' => $hasAccount,
+        'upline_id' => $d->upline_id,
     ]);
 });
 
@@ -1089,10 +1109,12 @@ Route::post('/test-upgrade-complete', function (\Illuminate\Http\Request $reques
         $newProductId = $request->input('new_product_id');
 
         $account = \App\Models\Account::with(['product', 'distributor'])->where('node_id', $nodeId)->first();
-        if (!$account) return response()->json(['error' => 'Account not found for node ' . $nodeId], 404);
+        if (!$account)
+            return response()->json(['error' => 'Account not found for node ' . $nodeId], 404);
 
         $newProduct = \App\Models\Product::find($newProductId);
-        if (!$newProduct) return response()->json(['error' => 'Product not found'], 404);
+        if (!$newProduct)
+            return response()->json(['error' => 'Product not found'], 404);
 
         $currentPoints = $account->product->point ?? 0;
         if ($newProduct->point <= $currentPoints) {
@@ -1106,14 +1128,15 @@ Route::post('/test-upgrade-complete', function (\Illuminate\Http\Request $reques
         $mlm = new \App\Services\MlmEngineService();
         $mlm->recalcAndRankForDistributor($account->distributor_id);
 
-        $account->refresh(); $account->load('product');
+        $account->refresh();
+        $account->load('product');
 
         return response()->json([
-            'status'       => 'success',
-            'account_id'   => $account->id,
-            'new_product'  => $newProduct->name,
+            'status' => 'success',
+            'account_id' => $account->id,
+            'new_product' => $newProduct->name,
             'new_category' => $newProduct->category,
-            'new_points'   => $newProduct->point,
+            'new_points' => $newProduct->point,
             'distributor_id' => $account->distributor_id,
         ]);
     } catch (\Throwable $e) {
@@ -1124,14 +1147,15 @@ Route::post('/test-upgrade-complete', function (\Illuminate\Http\Request $reques
 // Debug account distributor relationship
 Route::get('/debug-account/{nodeId}', function ($nodeId) {
     $account = \App\Models\Account::with(['product', 'distributor'])->where('node_id', $nodeId)->first();
-    if (!$account) return response()->json(['error' => 'Not found']);
+    if (!$account)
+        return response()->json(['error' => 'Not found']);
     return response()->json([
-        'account_id'     => $account->id,
+        'account_id' => $account->id,
         'distributor_id' => $account->distributor_id,
-        'distributor'    => $account->distributor ? [
-            'id'     => $account->distributor->distributor_id,
-            'name'   => $account->distributor->name,
-            'email'  => $account->distributor->email,
+        'distributor' => $account->distributor ? [
+            'id' => $account->distributor->distributor_id,
+            'name' => $account->distributor->name,
+            'email' => $account->distributor->email,
             'status' => $account->distributor->status,
         ] : null,
         'product' => $account->product ? $account->product->name : null,
