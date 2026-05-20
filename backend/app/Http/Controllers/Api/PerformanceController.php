@@ -419,6 +419,7 @@ class PerformanceController extends Controller
 
     public function createInvitation(Request $r)
     {
+        try {
         $distId = $this->distId($r);
         $data = $r->validate([
             'prospect_id'     => 'required|exists:prospects,prospect_id',
@@ -507,6 +508,10 @@ class PerformanceController extends Controller
 
         $link = 'https://nmms-backend.onrender.com/api/invite/' . $token;
         return response()->json(['status' => 'success', 'data' => $invitation, 'tracked_link' => $link, 'script' => $script], 201);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('createInvitation error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
     }
 
     public function listInvitations(Request $r, $prospectId)

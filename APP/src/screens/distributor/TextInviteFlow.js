@@ -97,12 +97,16 @@ const TextInviteFlow = ({ prospect, onBack, onDone, C }) => {
   const saveInvitationAndProceed = async (app) => {
     setSaving(true);
     try {
+      // Sanitize prospect_value — must be hot/warm/cold or omitted
+      const validLevels = ['hot', 'warm', 'cold'];
+      const prospectValue = validLevels.includes(prospect.interest_level) ? prospect.interest_level : 'warm';
+
       const res = await createInvitation({
         prospect_id:       prospect.prospect_id,
         invitation_type:   'text',
         invitation_method: app?.key || 'text',
-        script_used:       finalScript,
-        prospect_value:    prospect.interest_level || 'warm',
+        script_used:       finalScript || undefined,
+        prospect_value:    prospectValue,
       });
       setInvitationId(res.data?.invitation_id);
       setStep('awaiting');
