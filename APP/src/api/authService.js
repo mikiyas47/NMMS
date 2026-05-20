@@ -123,6 +123,20 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+const throwApiError = (error, fallbackMessage = 'Request failed.') => {
+  if (error.response) {
+    const data = error.response.data;
+    const msg =
+      data?.message ||
+      data?.error ||
+      (data?.errors ? Object.values(data.errors).flat()[0] : null) ||
+      fallbackMessage;
+    throw new Error(msg);
+  }
+
+  throw new Error(error.message || fallbackMessage);
+};
+
 export const login = async (email, password) => {
   try {
     const response = await apiClient.post('/login', { email, password });
@@ -248,10 +262,22 @@ export const getProspectWatchingStatus = async (prospectId) => (await apiClient.
 export const getProspectScoreBreakdown = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/score`)).data;
 
 // ── Invitations ───────────────────────────────────────────────────────────────
-export const createInvitation = async (data) => (await apiClient.post('/invitations', data)).data;
+export const createInvitation = async (data) => {
+  try {
+    return (await apiClient.post('/invitations', data)).data;
+  } catch (error) {
+    throwApiError(error, 'Could not save invitation.');
+  }
+};
 export const getProspectInvitations = async (prospectId) => (await apiClient.get(`/prospects/${prospectId}/invitations`)).data;
 export const updateInvitationStatus = async (id, status) => (await apiClient.patch(`/invitations/${id}/status`, { status })).data;
-export const updateTextInvitationResponse = async (id, data) => (await apiClient.patch(`/invitations/${id}/response`, data)).data;
+export const updateTextInvitationResponse = async (id, data) => {
+  try {
+    return (await apiClient.patch(`/invitations/${id}/response`, data)).data;
+  } catch (error) {
+    throwApiError(error, 'Could not save response.');
+  }
+};
 export const getInvitationSmartCheck = async (id) => (await apiClient.get(`/invitations/${id}/smart-check`)).data;
 export const getScript = async (invitationType, prospectId) => (await apiClient.get('/scripts', { params: { invitation_type: invitationType, prospect_id: prospectId } })).data;
 

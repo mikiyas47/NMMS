@@ -1,36 +1,60 @@
 <?php
+
 namespace App\Http\Controllers\Api;
+
+use App\Events\PresentationEngaged;
 use App\Http\Controllers\Controller;
+use App\Models\AutomationLog;
+use App\Models\AutomationRule;
+use App\Models\Badge;
+use App\Models\ClosingAttempt;
+use App\Models\Distributor;
+use App\Models\DistributorStreak;
+use App\Models\EngagementEvent;
+use App\Models\EngagementNotification;
+use App\Models\Followup;
+use App\Models\Invitation;
+use App\Models\OnboardingProgress;
+use App\Models\Playbook;
+use App\Models\Presentation;
+use App\Models\PresentationAssignment;
+use App\Models\Prospect;
+use App\Models\ProspectActivity;
+use App\Models\ProspectPriority;
+use App\Models\Recommendation;
+use App\Models\WeeklyGoal;
+use App\Services\PresentationIntelligenceService;
+use App\Services\PresentationNextBestActionService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
-use App\Models\Presentation;
-use App\Models\PresentationAssignment;
-use App\Models\Invitation;
-use App\Models\AutomationRule;
-use App\Models\AutomationLog;
-use App\Models\EngagementEvent;
-use App\Models\Recommendation;
-use App\Models\Badge;
-use App\Models\DistributorStreak;
-use App\Models\OnboardingProgress;
-use App\Models\Playbook;
-use App\Models\ProspectPriority;
-use App\Models\WeeklyGoal;
-use App\Models\Prospect;
-use App\Models\Distributor;
-use App\Models\ProspectActivity;
-use App\Events\PresentationEngaged;
-use App\Events\ProspectVideoActivity;
 
 class PerformanceController extends Controller
 {
+    private static array $invitationColumnCache = [];
+
     private function distId(Request $r): int
     {
         $u = $r->user();
+
         return (int) ($u->distributor_id ?? $u->id);
+    }
+
+    private function invitationHasColumn(string $column): bool
+    {
+        return self::$invitationColumnCache[$column] ??= Schema::hasColumn('invitations', $column);
+    }
+
+    private function invitationDateValue(mixed $value): Carbon
+    {
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        return $value ? Carbon::parse($value) : now();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -45,6 +69,7 @@ class PerformanceController extends Controller
             $q->where('distributor_id', $id)
                 ->orWhere('is_global', true);
         })->where('is_active', true)->orderByDesc('created_at')->get();
+
         return response()->json(['status' => 'success', 'data' => $items]);
     }
 
@@ -66,6 +91,7 @@ class PerformanceController extends Controller
         }
         $data['distributor_id'] = $id;
         $p = Presentation::create($data);
+
         return response()->json(['status' => 'success', 'data' => $p], 201);
     }
 
@@ -80,6 +106,7 @@ class PerformanceController extends Controller
             'external_url' => 'nullable|string',
         ]);
         $p->update($data);
+
         return response()->json(['status' => 'success', 'data' => $p->fresh()]);
     }
 
@@ -87,6 +114,7 @@ class PerformanceController extends Controller
     {
         $distId = $this->distId($r);
         Presentation::where('id', $id)->where('distributor_id', $distId)->firstOrFail()->delete();
+
         return response()->json(['status' => 'success', 'message' => 'Deleted']);
     }
 
@@ -111,9 +139,9 @@ class PerformanceController extends Controller
             'token' => $token,
             'status' => 'sent',
             'classification' => 'Warm Lead',
-            'engagement_score' => 0
+            'engagement_score' => 0,
         ]);
-        
+
         $prospect->next_action = 'Watch Presentation';
         $prospect->save();
         // Log activity
@@ -122,7 +150,8 @@ class PerformanceController extends Controller
         $this->markOnboardingMilestone($distId, 'first_presentation_assigned');
         // Weekly goal
         $this->incrementWeeklyGoal($distId, 'presentations_actual');
-        $link = 'https://nmms-backend.onrender.com/api/p/' . $token;
+        $link = 'https://nmms-backend.onrender.com/api/p/'.$token;
+
         return response()->json(['status' => 'success', 'data' => $assignment, 'tracked_link' => $link], 201);
     }
 
@@ -142,7 +171,7 @@ class PerformanceController extends Controller
             'prospect_id' => $data['prospect_id'],
             'distributor_id' => $distId,
             'activity_type' => 'presentation',
-            'title' => 'Presentation call — ' . $data['outcome'],
+            'title' => 'Presentation call — '.$data['outcome'],
             'description' => $data['notes'] ?? '',
             'meta' => ['outcome' => $data['outcome'], 'method' => 'call'],
             'created_at' => now(),
@@ -151,7 +180,7 @@ class PerformanceController extends Controller
         // Auto-advance stage based on outcome
         $positiveOutcomes = ['Understood Presentation', 'Interested', 'Asked About Pricing', 'Asked About Business Opportunity'];
         if (in_array($data['outcome'], $positiveOutcomes)) {
-            if (!in_array($prospect->stage, ['Closing', 'Joined'])) {
+            if (! in_array($prospect->stage, ['Closing', 'Joined'])) {
                 $prospect->stage = 'Follow-Up Needed';
                 $prospect->status = 'Follow-Up Needed';
                 $prospect->save();
@@ -172,6 +201,7 @@ class PerformanceController extends Controller
         $distId = $this->distId($r);
         Prospect::where('prospect_id', $prospectId)->where('distributor_id', $distId)->firstOrFail();
         $items = PresentationAssignment::where('prospect_id', $prospectId)->where('distributor_id', $distId)->with('presentation')->orderByDesc('created_at')->get();
+
         return response()->json(['status' => 'success', 'data' => $items]);
     }
 
@@ -179,22 +209,23 @@ class PerformanceController extends Controller
     public function trackPresentation(Request $r, $token)
     {
         $assignment = PresentationAssignment::where('token', $token)->first();
-        if (!$assignment)
+        if (! $assignment) {
             return response()->json(['message' => 'Not found'], 404);
+        }
 
         $action = $r->input('action', 'heartbeat');
         $watchPct = (int) $r->input('watch_percent', 0);
         $timeSpent = (int) $r->input('time_spent', 0);
         $deviceType = $r->input('device_type');
 
-        if ($deviceType && !$assignment->device_type) {
+        if ($deviceType && ! $assignment->device_type) {
             $assignment->device_type = $deviceType;
         }
 
         if ($watchPct > $assignment->watch_percent) {
             $assignment->watch_percent = $watchPct;
         }
-        
+
         if ($timeSpent > $assignment->time_spent_seconds) {
             $assignment->time_spent_seconds = $timeSpent;
         }
@@ -215,28 +246,38 @@ class PerformanceController extends Controller
         $notifyBody = '';
         $prospectName = Prospect::find($assignment->prospect_id)->name ?? 'A prospect';
 
-        $intelligence = app(\App\Services\PresentationIntelligenceService::class);
-        $nextActionSvc = app(\App\Services\PresentationNextBestActionService::class);
+        $intelligence = app(PresentationIntelligenceService::class);
+        $nextActionSvc = app(PresentationNextBestActionService::class);
 
         // Score logic based on the new spec
         $score = 5; // Opening link
-        if ($assignment->watch_percent >= 25) $score += 10;
-        if ($assignment->watch_percent >= 50) $score += 20;
-        if ($assignment->watch_percent >= 75) $score += 30;
-        if ($assignment->watch_percent >= 100) $score += 40;
-        if ($assignment->rewatch_count > 0) $score += 20;
+        if ($assignment->watch_percent >= 25) {
+            $score += 10;
+        }
+        if ($assignment->watch_percent >= 50) {
+            $score += 20;
+        }
+        if ($assignment->watch_percent >= 75) {
+            $score += 30;
+        }
+        if ($assignment->watch_percent >= 100) {
+            $score += 40;
+        }
+        if ($assignment->rewatch_count > 0) {
+            $score += 20;
+        }
 
         $ctaType = $r->input('cta_type');
-        
+
         if ($action === 'cta_clicked') {
             $assignment->cta_clicked_at = now();
             $ctaAnalysis = $intelligence->processCta($ctaType ?? 'Watch More');
             $score += $ctaAnalysis['boost'];
-            
+
             $notify = true;
             $notifyType = 'cta_clicked';
             $notifyTitle = 'CTA Clicked!';
-            $notifyBody = "$prospectName just clicked the Call to Action (" . ($ctaType ?? 'General') . ") on your presentation!";
+            $notifyBody = "$prospectName just clicked the Call to Action (".($ctaType ?? 'General').') on your presentation!';
         } elseif ($action === 'completed') {
             if ($assignment->status !== 'completed') {
                 $assignment->status = 'completed';
@@ -276,34 +317,34 @@ class PerformanceController extends Controller
 
         if ($isExit) {
             $exitAnalysis = $intelligence->analyzeExit($assignment->watch_percent);
-            \App\Models\Followup::create([
+            Followup::create([
                 'distributor_id' => $assignment->distributor_id,
                 'prospect_id' => $assignment->prospect_id,
                 'followup_type' => 'Auto-Generated (Exit)',
                 'notes' => "Exit Analysis: {$exitAnalysis['intent']}. {$exitAnalysis['recommendation']}",
                 'next_action' => $nba['recommended_action'],
                 'next_action_date' => now()->toDateString(),
-                'status' => 'pending'
+                'status' => 'pending',
             ]);
         } elseif ($action === 'completed') {
-             \App\Models\Followup::create([
+            Followup::create([
                 'distributor_id' => $assignment->distributor_id,
                 'prospect_id' => $assignment->prospect_id,
                 'followup_type' => 'Auto-Generated',
-                'notes' => "Watched 100%. NBA: " . $nba['recommended_action'],
+                'notes' => 'Watched 100%. NBA: '.$nba['recommended_action'],
                 'next_action' => 'Contact via WhatsApp/Call',
                 'next_action_date' => now()->toDateString(),
-                'status' => 'pending'
+                'status' => 'pending',
             ]);
         } elseif ($action === 'cta_clicked') {
-            \App\Models\Followup::create([
+            Followup::create([
                 'distributor_id' => $assignment->distributor_id,
                 'prospect_id' => $assignment->prospect_id,
                 'followup_type' => 'Auto-Generated (CTA)',
-                'notes' => "CTA Clicked: " . ($ctaType ?? 'General') . ". Action required: " . $nba['recommended_action'],
+                'notes' => 'CTA Clicked: '.($ctaType ?? 'General').'. Action required: '.$nba['recommended_action'],
                 'next_action' => 'Immediate Follow-up',
                 'next_action_date' => now()->toDateString(),
-                'status' => 'pending'
+                'status' => 'pending',
             ]);
         }
 
@@ -326,7 +367,7 @@ class PerformanceController extends Controller
 
         // Send Notification
         if ($notify) {
-            \App\Models\EngagementNotification::create([
+            EngagementNotification::create([
                 'distributor_id' => $assignment->distributor_id,
                 'prospect_id' => $assignment->prospect_id,
                 'type' => $notifyType,
@@ -334,7 +375,7 @@ class PerformanceController extends Controller
                 'body' => $notifyBody,
             ]);
 
-            \App\Models\ProspectActivity::create([
+            ProspectActivity::create([
                 'prospect_id' => $assignment->prospect_id,
                 'distributor_id' => $assignment->distributor_id,
                 'activity_type' => 'presentation',
@@ -349,16 +390,16 @@ class PerformanceController extends Controller
         if ($prospect) {
             $prospect->interest_score = max($prospect->interest_score ?? 0, $assignment->engagement_score);
             $prospect->interest_level = strtolower($intelligence->classifyIntent($prospect->interest_score));
-            
+
             if ($action === 'cta_clicked') {
                 $ctaAnalysis = $intelligence->processCta($ctaType ?? '');
                 if ($ctaAnalysis['shift']) {
                     $prospect->stage = $ctaAnalysis['shift'];
                 }
             }
-            
+
             $prospect->next_action = $nba['recommended_action'];
-            
+
             $prospect->save();
         }
 
@@ -367,25 +408,25 @@ class PerformanceController extends Controller
 
         // Broadcast real-time event for Live Pulse
         PresentationEngaged::dispatch(
-            $assignment->distributor_id, 
-            $assignment->prospect_id, 
-            $action, 
-            $assignment->engagement_score, 
+            $assignment->distributor_id,
+            $assignment->prospect_id,
+            $action,
+            $assignment->engagement_score,
             $watchPct,
             [
                 'intent_label' => $intelligence->classifyIntent($assignment->engagement_score),
                 'recommended_action' => $nba['recommended_action'],
-                'urgency' => $nba['urgency']
+                'urgency' => $nba['urgency'],
             ]
         );
 
         return response()->json([
-            'status' => 'success', 
+            'status' => 'success',
             'score' => $assignment->engagement_score,
             'intent_classification' => $intelligence->classifyIntent($assignment->engagement_score),
             'recommended_action' => $nba['recommended_action'],
             'urgency' => $nba['urgency'],
-            'cta_recommendation' => $nba['recommended_cta']
+            'cta_recommendation' => $nba['recommended_cta'],
         ]);
     }
 
@@ -393,8 +434,9 @@ class PerformanceController extends Controller
     {
         $assignments = PresentationAssignment::where('presentation_id', $presentationId)->get();
         $total = $assignments->count();
-        if ($total === 0)
+        if ($total === 0) {
             return;
+        }
         $completed = $assignments->where('status', 'completed')->count();
         $avgScore = $assignments->avg('engagement_score') ?? 0;
         Presentation::where('id', $presentationId)->update([
@@ -420,96 +462,110 @@ class PerformanceController extends Controller
     public function createInvitation(Request $r)
     {
         try {
-        $distId = $this->distId($r);
-        $data = $r->validate([
-            'prospect_id'     => 'required|exists:prospects,prospect_id',
-            'invitation_type' => 'required|in:zoom,webinar,hotel_event,product_demo,compensation_plan_session,one_on_one_call,live_stream,text',
-            'scheduled_at'    => 'nullable|date',
-            'notes'           => 'nullable|string',
-            'script_used'     => 'nullable|string',
-            'invitation_method' => 'nullable|string|max:30',
-            'prospect_value'  => 'nullable|in:hot,warm,cold',
-            'outcome'         => 'nullable|string|max:60',
-        ]);
-        $prospect = Prospect::where('prospect_id', $data['prospect_id'])->where('distributor_id', $distId)->firstOrFail();
-        $distributor = Distributor::where('distributor_id', $distId)->first();
+            $distId = $this->distId($r);
+            $data = $r->validate([
+                'prospect_id' => 'required|exists:prospects,prospect_id',
+                'invitation_type' => 'required|in:zoom,webinar,hotel_event,product_demo,compensation_plan_session,one_on_one_call,live_stream,text',
+                'scheduled_at' => 'nullable|date',
+                'notes' => 'nullable|string',
+                'script_used' => 'nullable|string',
+                'invitation_method' => 'nullable|string|max:30',
+                'prospect_value' => 'nullable|in:hot,warm,cold',
+                'outcome' => 'nullable|string|max:60',
+            ]);
+            $prospect = Prospect::where('prospect_id', $data['prospect_id'])->where('distributor_id', $distId)->firstOrFail();
+            $distributor = Distributor::where('distributor_id', $distId)->first();
 
-        // Use provided script or fall back to system script
-        $script = $data['script_used'] ?? null;
-        if (!$script) {
-            $typeKey = $data['invitation_type'] === 'text' ? 'one_on_one_call' : $data['invitation_type'];
-            $template = self::INVITE_SCRIPTS[$typeKey] ?? self::INVITE_SCRIPTS['one_on_one_call'];
-            $script = str_replace(['{prospect_name}', '{distributor_name}'], [$prospect->name, $distributor->name ?? 'Your Distributor'], $template);
-        }
+            // Use provided script or fall back to system script
+            $script = $data['script_used'] ?? null;
+            if (! $script) {
+                $typeKey = $data['invitation_type'] === 'text' ? 'one_on_one_call' : $data['invitation_type'];
+                $template = self::INVITE_SCRIPTS[$typeKey] ?? self::INVITE_SCRIPTS['one_on_one_call'];
+                $script = str_replace(['{prospect_name}', '{distributor_name}'], [$prospect->name, $distributor->name ?? 'Your Distributor'], $template);
+            }
 
-        $token = Str::random(16);
+            $token = Str::random(16);
+            $outcome = $data['outcome'] ?? null;
+            $data['outcome'] = $outcome;
 
-        // Compute smart_check_at based on prospect value
-        $prospectValue = $data['prospect_value'] ?? ($prospect->interest_level ?? 'warm');
-        $checkMinutes = match($prospectValue) {
-            'hot'  => 6,
-            'cold' => 40,
-            default => 20, // warm
-        };
+            // Compute smart_check_at based on prospect value
+            $prospectValue = $data['prospect_value'] ?? ($prospect->interest_level ?? 'warm');
+            $checkMinutes = match ($prospectValue) {
+                'hot' => 6,
+                'cold' => 40,
+                default => 20, // warm
+            };
 
-        $invitation = Invitation::create([
-            'distributor_id'    => $distId,
-            'prospect_id'       => $data['prospect_id'],
-            'invitation_type'   => $data['invitation_type'],
-            'invitation_method' => $data['invitation_method'] ?? ($data['invitation_type'] === 'one_on_one_call' ? 'call' : 'text'),
-            'token'             => $token,
-            'status'            => !empty($data['outcome']) ? 'accepted' : 'sent',
-            'outcome'           => $data['outcome'] ?? null,
-            'responded_at'      => !empty($data['outcome']) ? now() : null,
-            'scheduled_at'      => $data['scheduled_at'] ?? null,
-            'script_used'       => $script,
-            'notes'             => $data['notes'] ?? null,
-            'sent_at'           => now(),
-            'smart_check_at'    => now()->addMinutes($checkMinutes),
-            'prospect_value'    => $prospectValue,
-        ]);
+            $sentAt = now();
+            $invitationData = [
+                'distributor_id' => $distId,
+                'prospect_id' => $data['prospect_id'],
+                'invitation_type' => $data['invitation_type'],
+                'invitation_method' => $data['invitation_method'] ?? ($data['invitation_type'] === 'one_on_one_call' ? 'call' : 'text'),
+                'token' => $token,
+                'status' => ! empty($outcome) ? 'accepted' : 'sent',
+                'outcome' => $outcome,
+                'responded_at' => ! empty($outcome) ? now() : null,
+                'scheduled_at' => $data['scheduled_at'] ?? null,
+                'script_used' => $script,
+                'notes' => $data['notes'] ?? null,
+            ];
 
-        // Move prospect to "Awaiting Response" only for text invitations with no immediate outcome
-        $isCall = in_array($data['invitation_method'] ?? '', ['call']) ||
-                  str_contains(strtolower($data['invitation_type'] ?? ''), 'call') ||
-                  str_contains(strtolower($data['invitation_type'] ?? ''), 'one_on_one');
+            if ($this->invitationHasColumn('sent_at')) {
+                $invitationData['sent_at'] = $sentAt;
+            }
+            if ($this->invitationHasColumn('smart_check_at')) {
+                $invitationData['smart_check_at'] = $sentAt->copy()->addMinutes($checkMinutes);
+            }
+            if ($this->invitationHasColumn('prospect_value')) {
+                $invitationData['prospect_value'] = $prospectValue;
+            }
 
-        if (!$isCall && empty($data['outcome'])) {
-            $prospect->stage  = 'Awaiting Response';
-            $prospect->status = 'Awaiting Response';
-            $prospect->save();
-        }
+            $invitation = Invitation::create($invitationData);
 
-        $methodLabel = $isCall ? 'Call' : 'Text';
-        $outcomeLabel = $data['outcome'] ? ' · Outcome: ' . $data['outcome'] : '';
+            // Move prospect to "Awaiting Response" only for text invitations with no immediate outcome
+            $isCall = in_array($data['invitation_method'] ?? '', ['call']) ||
+                      str_contains(strtolower($data['invitation_type'] ?? ''), 'call') ||
+                      str_contains(strtolower($data['invitation_type'] ?? ''), 'one_on_one');
 
-        ProspectActivity::create([
-            'prospect_id'    => $data['prospect_id'],
-            'distributor_id' => $distId,
-            'activity_type'  => 'invited',
-            'title'          => "{$methodLabel} invitation sent" . ($data['outcome'] ? " — {$data['outcome']}" : ''),
-            'description'    => "Sent via {$methodLabel}{$outcomeLabel}",
-            'meta'           => [
-                'type'          => $data['invitation_type'],
-                'method'        => $data['invitation_method'] ?? ($isCall ? 'call' : 'text'),
-                'outcome'       => $data['outcome'] ?? null,
-                'invitation_id' => $invitation->invitation_id,
-            ],
-            'created_at'     => now(),
-        ]);
+            if (! $isCall && empty($outcome)) {
+                $prospect->stage = 'Awaiting Response';
+                $prospect->status = 'Awaiting Response';
+                $prospect->save();
+            }
 
-        $this->markOnboardingMilestone($distId, 'first_invite_sent');
-        $this->checkBadge($distId, 'first_invite');
-        $this->incrementWeeklyGoal($distId, 'invitations_actual');
+            $methodLabel = $isCall ? 'Call' : 'Text';
+            $outcomeLabel = $data['outcome'] ? ' · Outcome: '.$data['outcome'] : '';
 
-        // Recalculate score so the scoreboard reflects this invitation immediately
-        $prospect->refresh();
-        $prospect->recalculateScore();
+            ProspectActivity::create([
+                'prospect_id' => $data['prospect_id'],
+                'distributor_id' => $distId,
+                'activity_type' => 'invited',
+                'title' => "{$methodLabel} invitation sent".($data['outcome'] ? " — {$data['outcome']}" : ''),
+                'description' => "Sent via {$methodLabel}{$outcomeLabel}",
+                'meta' => [
+                    'type' => $data['invitation_type'],
+                    'method' => $data['invitation_method'] ?? ($isCall ? 'call' : 'text'),
+                    'outcome' => $data['outcome'] ?? null,
+                    'invitation_id' => $invitation->invitation_id,
+                ],
+                'created_at' => now(),
+            ]);
 
-        $link = 'https://nmms-backend.onrender.com/api/invite/' . $token;
-        return response()->json(['status' => 'success', 'data' => $invitation, 'tracked_link' => $link, 'script' => $script], 201);
+            $this->markOnboardingMilestone($distId, 'first_invite_sent');
+            $this->checkBadge($distId, 'first_invite');
+            $this->incrementWeeklyGoal($distId, 'invitations_actual');
+
+            // Recalculate score so the scoreboard reflects this invitation immediately
+            $prospect->refresh();
+            $prospect->recalculateScore();
+
+            $link = 'https://nmms-backend.onrender.com/api/invite/'.$token;
+
+            return response()->json(['status' => 'success', 'data' => $invitation, 'tracked_link' => $link, 'script' => $script], 201);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('createInvitation error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+            Log::error('createInvitation error: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
+
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
@@ -519,15 +575,17 @@ class PerformanceController extends Controller
         $distId = $this->distId($r);
         Prospect::where('prospect_id', $prospectId)->where('distributor_id', $distId)->firstOrFail();
         $items = Invitation::where('prospect_id', $prospectId)->where('distributor_id', $distId)->orderByDesc('created_at')->get();
+
         return response()->json(['status' => 'success', 'data' => $items]);
     }
 
     public function updateInvitationStatus(Request $r, $id)
     {
         $distId = $this->distId($r);
-        $inv = Invitation::where('id', $id)->where('distributor_id', $distId)->firstOrFail();
+        $inv = Invitation::where('invitation_id', $id)->where('distributor_id', $distId)->firstOrFail();
         $data = $r->validate(['status' => 'required|in:ignored']);
         $inv->update($data);
+
         return response()->json(['status' => 'success', 'data' => $inv->fresh()]);
     }
 
@@ -538,175 +596,196 @@ class PerformanceController extends Controller
      */
     public function updateTextInvitationResponse(Request $r, $id)
     {
-        $distId = $this->distId($r);
-        $inv = Invitation::where('invitation_id', $id)->where('distributor_id', $distId)->firstOrFail();
-        $prospect = Prospect::where('prospect_id', $inv->prospect_id)->firstOrFail();
+        try {
+            $distId = $this->distId($r);
+            $inv = Invitation::where('invitation_id', $id)->where('distributor_id', $distId)->firstOrFail();
+            $prospect = Prospect::where('prospect_id', $inv->prospect_id)->firstOrFail();
 
-        $data = $r->validate([
-            'response'         => 'required|in:no_response,interested,asked_questions,maybe_another_time,not_interested',
-            'meeting_details'  => 'nullable|array',   // for interested + in-person/office
-            'reminder_date'    => 'nullable|date',    // for maybe_another_time
-            'reminder_time'    => 'nullable|string',
-        ]);
+            $data = $r->validate([
+                'response' => 'required|in:no_response,interested,asked_questions,maybe_another_time,not_interested',
+                'meeting_details' => 'nullable|array',   // for interested + in-person/office
+                'reminder_date' => 'nullable|date',    // for maybe_another_time
+                'reminder_time' => 'nullable|string',
+            ]);
 
-        $response = $data['response'];
-        $now = now();
+            $response = $data['response'];
+            $now = now();
 
-        // Compute response time in minutes
-        $sentAt = $inv->sent_at ?? $inv->created_at;
-        $responseMinutes = (int) $sentAt->diffInMinutes($now);
-        $isFastResponse = $responseMinutes <= 30;
+            // Compute response time in minutes
+            $sentAt = $this->invitationDateValue(
+                $this->invitationHasColumn('sent_at')
+                    ? ($inv->sent_at ?? $inv->created_at)
+                    : $inv->created_at
+            );
+            $responseMinutes = (int) $sentAt->diffInMinutes($now);
+            $isFastResponse = $responseMinutes <= 30;
 
-        // ── Scoring rules (per spec) ──────────────────────────────────────────
-        $scoreDeltas = [];
+            // ── Scoring rules (per spec) ──────────────────────────────────────────
+            $nextCheckMinutes = null;
+            $scoreDeltas = [];
 
-        switch ($response) {
-            case 'no_response':
-                // No immediate penalty — small decay applied later
-                $newStatus = 'sent'; // keep awaiting
-                $newStage  = 'Awaiting Response';
-                $nextCheckMinutes = match($inv->prospect_value ?? 'warm') {
-                    'hot'  => 6,
-                    'cold' => 40,
-                    default => 20,
+            switch ($response) {
+                case 'no_response':
+                    // No immediate penalty — small decay applied later
+                    $newStatus = 'sent'; // keep awaiting
+                    $newStage = 'Awaiting Response';
+                    $nextCheckMinutes = match (
+                        $this->invitationHasColumn('prospect_value')
+                            ? ($inv->prospect_value ?? 'warm')
+                            : ($prospect->interest_level ?? 'warm')
+                    ) {
+                        'hot' => 6,
+                        'cold' => 40,
+                        default => 20,
+                    };
+                    if ($this->invitationHasColumn('smart_check_at')) {
+                        $inv->smart_check_at = $now->copy()->addMinutes($nextCheckMinutes);
+                    }
+                    $smartMessage = "Next intelligent check in {$nextCheckMinutes} minutes";
+                    $activityTitle = "No response yet from {$prospect->name}";
+                    $activityDesc = "Awaiting reply. Next check scheduled in {$nextCheckMinutes} min.";
+                    break;
+
+                case 'interested':
+                    $scoreDeltas[] = ['label' => 'Prospect showed interest', 'value' => 20];
+                    if ($isFastResponse) {
+                        $scoreDeltas[] = ['label' => "Fast response ({$responseMinutes} min)", 'value' => 15];
+                    }
+                    $newStatus = 'accepted';
+                    // Stage depends on invitation type
+                    $isPresInvite = in_array($inv->invitation_type, ['zoom', 'webinar', 'product_demo', 'compensation_plan_session', 'live_stream', 'text', 'one_on_one_call']);
+                    $isMeetingInvite = in_array($inv->invitation_type, ['hotel_event']);
+                    if (($isMeetingInvite || ! empty($data['meeting_details'])) && $this->invitationHasColumn('meeting_details')) {
+                        $newStage = 'Presentation Scheduled';
+                        $inv->meeting_details = $data['meeting_details'] ?? null;
+                    } else {
+                        $newStage = 'Presentation Scheduled';
+                    }
+                    $smartMessage = null;
+                    $activityTitle = "{$prospect->name} is interested!";
+                    $activityDesc = $isFastResponse
+                        ? "Responded in {$responseMinutes} min. Showing strong interest."
+                        : 'Showed interest in the invitation.';
+                    break;
+
+                case 'asked_questions':
+                    $scoreDeltas[] = ['label' => 'Prospect asked questions (strong engagement)', 'value' => 25];
+                    if ($isFastResponse) {
+                        $scoreDeltas[] = ['label' => "Fast response ({$responseMinutes} min)", 'value' => 15];
+                    }
+                    $newStatus = 'opened';
+                    $newStage = 'Follow-Up Needed';
+                    $smartMessage = null;
+                    $activityTitle = "{$prospect->name} asked questions";
+                    $activityDesc = 'High engagement — prospect is asking questions. Prioritize follow-up.';
+                    break;
+
+                case 'maybe_another_time':
+                    $scoreDeltas[] = ['label' => 'Prospect open but not ready yet', 'value' => 5];
+                    $newStatus = 'opened';
+                    $newStage = 'Follow-Up Needed';
+                    $smartMessage = null;
+                    $activityTitle = "{$prospect->name} said maybe another time";
+                    $activityDesc = 'Prospect is warm but not ready. Reminder scheduled.';
+                    // Schedule reminder
+                    if (! empty($data['reminder_date'])) {
+                        $prospect->next_action = 'Follow up — prospect said maybe another time';
+                        $prospect->next_action_date = $data['reminder_date'];
+                    }
+                    break;
+
+                case 'not_interested':
+                    $scoreDeltas[] = ['label' => 'Prospect not interested', 'value' => -25];
+                    $newStatus = 'declined';
+                    $newStage = 'Rejected';
+                    $smartMessage = null;
+                    $activityTitle = "{$prospect->name} is not interested";
+                    $activityDesc = 'Prospect declined the invitation. Moved to nurture/rejected.';
+                    break;
+
+                default:
+                    $newStatus = $inv->status;
+                    $newStage = $prospect->stage;
+                    $smartMessage = null;
+                    $activityTitle = 'Response logged';
+                    $activityDesc = '';
+            }
+
+            // Apply score deltas
+            $totalDelta = array_sum(array_column($scoreDeltas, 'value'));
+            $newScore = max(0, min(100, ($prospect->interest_score ?? 0) + $totalDelta));
+
+            // Update invitation
+            $inv->status = $newStatus;
+            $inv->outcome = $response;
+            $inv->responded_at = $response !== 'no_response' ? $now : $inv->responded_at;
+            if ($response !== 'no_response' && $this->invitationHasColumn('response_minutes')) {
+                $inv->response_minutes = $responseMinutes;
+            }
+            $inv->save();
+
+            // Update prospect
+            $prospect->interest_score = $newScore;
+            $prospect->interest_level = $newScore >= 70 ? 'hot' : ($newScore >= 35 ? 'warm' : 'cold');
+            $prospect->stage = $newStage;
+            $prospect->status = $newStage;
+            if ($newStage !== 'Awaiting Response') {
+                // Set intelligent next action
+                $prospect->next_action = match ($response) {
+                    'interested' => 'Send presentation',
+                    'asked_questions' => 'Answer questions and send presentation',
+                    'maybe_another_time' => 'Follow up at scheduled time',
+                    'not_interested' => 'Move to nurture list',
+                    default => $prospect->next_action,
                 };
-                $inv->smart_check_at = $now->copy()->addMinutes($nextCheckMinutes);
-                $smartMessage = "Next intelligent check in {$nextCheckMinutes} minutes";
-                $activityTitle = "No response yet from {$prospect->name}";
-                $activityDesc  = "Awaiting reply. Next check scheduled in {$nextCheckMinutes} min.";
-                break;
+            }
+            $prospect->save();
 
-            case 'interested':
-                $scoreDeltas[] = ['label' => 'Prospect showed interest', 'value' => 20];
-                if ($isFastResponse) {
-                    $scoreDeltas[] = ['label' => "Fast response ({$responseMinutes} min)", 'value' => 15];
-                }
-                $newStatus = 'accepted';
-                // Stage depends on invitation type
-                $isPresInvite = in_array($inv->invitation_type, ['zoom', 'webinar', 'product_demo', 'compensation_plan_session', 'live_stream', 'text', 'one_on_one_call']);
-                $isMeetingInvite = in_array($inv->invitation_type, ['hotel_event']);
-                if ($isMeetingInvite || !empty($data['meeting_details'])) {
-                    $newStage = 'Presentation Scheduled';
-                    $inv->meeting_details = $data['meeting_details'] ?? null;
-                } else {
-                    $newStage = 'Presentation Scheduled';
-                }
-                $smartMessage = null;
-                $activityTitle = "{$prospect->name} is interested!";
-                $activityDesc  = $isFastResponse
-                    ? "Responded in {$responseMinutes} min. Showing strong interest."
-                    : "Showed interest in the invitation.";
-                break;
+            // Log activity
+            ProspectActivity::create([
+                'prospect_id' => $inv->prospect_id,
+                'distributor_id' => $distId,
+                'activity_type' => 'invitation_response',
+                'title' => $activityTitle,
+                'description' => $activityDesc,
+                'meta' => [
+                    'response' => $response,
+                    'score_deltas' => $scoreDeltas,
+                    'response_minutes' => $responseMinutes,
+                    'fast_response' => $isFastResponse,
+                    'invitation_id' => $inv->invitation_id,
+                ],
+                'created_at' => $now,
+            ]);
 
-            case 'asked_questions':
-                $scoreDeltas[] = ['label' => 'Prospect asked questions (strong engagement)', 'value' => 25];
-                if ($isFastResponse) {
-                    $scoreDeltas[] = ['label' => "Fast response ({$responseMinutes} min)", 'value' => 15];
-                }
-                $newStatus = 'opened';
-                $newStage  = 'Follow-Up Needed';
-                $smartMessage = null;
-                $activityTitle = "{$prospect->name} asked questions";
-                $activityDesc  = "High engagement — prospect is asking questions. Prioritize follow-up.";
-                break;
+            // Recompute priority
+            $this->recomputePriority($inv->prospect_id, $distId);
 
-            case 'maybe_another_time':
-                $scoreDeltas[] = ['label' => 'Prospect open but not ready yet', 'value' => 5];
-                $newStatus = 'opened';
-                $newStage  = 'Follow-Up Needed';
-                $smartMessage = null;
-                $activityTitle = "{$prospect->name} said maybe another time";
-                $activityDesc  = "Prospect is warm but not ready. Reminder scheduled.";
-                // Schedule reminder
-                if (!empty($data['reminder_date'])) {
-                    $prospect->next_action      = 'Follow up — prospect said maybe another time';
-                    $prospect->next_action_date = $data['reminder_date'];
-                }
-                break;
+            // Build human-readable score explanation
+            $scoreExplanations = array_map(function ($d) {
+                $sign = $d['value'] >= 0 ? '+' : '';
 
-            case 'not_interested':
-                $scoreDeltas[] = ['label' => 'Prospect not interested', 'value' => -25];
-                $newStatus = 'declined';
-                $newStage  = 'Rejected';
-                $smartMessage = null;
-                $activityTitle = "{$prospect->name} is not interested";
-                $activityDesc  = "Prospect declined the invitation. Moved to nurture/rejected.";
-                break;
+                return "{$sign}{$d['value']} because {$d['label']}.";
+            }, $scoreDeltas);
 
-            default:
-                $newStatus = $inv->status;
-                $newStage  = $prospect->stage;
-                $smartMessage = null;
-                $activityTitle = 'Response logged';
-                $activityDesc  = '';
-        }
-
-        // Apply score deltas
-        $totalDelta = array_sum(array_column($scoreDeltas, 'value'));
-        $newScore = max(0, min(100, ($prospect->interest_score ?? 0) + $totalDelta));
-
-        // Update invitation
-        $inv->status           = $newStatus;
-        $inv->outcome          = $response;
-        $inv->responded_at     = $response !== 'no_response' ? $now : $inv->responded_at;
-        $inv->response_minutes = $response !== 'no_response' ? $responseMinutes : $inv->response_minutes;
-        $inv->save();
-
-        // Update prospect
-        $prospect->interest_score = $newScore;
-        $prospect->interest_level = $newScore >= 70 ? 'hot' : ($newScore >= 35 ? 'warm' : 'cold');
-        $prospect->stage          = $newStage;
-        $prospect->status         = $newStage;
-        if ($newStage !== 'Awaiting Response') {
-            // Set intelligent next action
-            $prospect->next_action = match($response) {
-                'interested'       => 'Send presentation',
-                'asked_questions'  => 'Answer questions and send presentation',
-                'maybe_another_time' => 'Follow up at scheduled time',
-                'not_interested'   => 'Move to nurture list',
-                default            => $prospect->next_action,
-            };
-        }
-        $prospect->save();
-
-        // Log activity
-        ProspectActivity::create([
-            'prospect_id'    => $inv->prospect_id,
-            'distributor_id' => $distId,
-            'activity_type'  => 'invitation_response',
-            'title'          => $activityTitle,
-            'description'    => $activityDesc,
-            'meta'           => [
-                'response'         => $response,
-                'score_deltas'     => $scoreDeltas,
+            return response()->json([
+                'status' => 'success',
+                'response' => $response,
+                'new_score' => $newScore,
+                'score_deltas' => $scoreDeltas,
+                'score_explanations' => $scoreExplanations,
+                'new_stage' => $newStage,
+                'smart_message' => $smartMessage,
+                'fast_response' => $isFastResponse,
                 'response_minutes' => $responseMinutes,
-                'fast_response'    => $isFastResponse,
-                'invitation_id'    => $inv->invitation_id,
-            ],
-            'created_at' => $now,
-        ]);
+                'next_check_in' => $nextCheckMinutes,
+                'next_action' => $prospect->next_action,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('updateTextInvitationResponse error: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
 
-        // Recompute priority
-        $this->recomputePriority($inv->prospect_id, $distId);
-
-        // Build human-readable score explanation
-        $scoreExplanations = array_map(function ($d) {
-            $sign = $d['value'] >= 0 ? '+' : '';
-            return "{$sign}{$d['value']} because {$d['label']}.";
-        }, $scoreDeltas);
-
-        return response()->json([
-            'status'             => 'success',
-            'response'           => $response,
-            'new_score'          => $newScore,
-            'score_deltas'       => $scoreDeltas,
-            'score_explanations' => $scoreExplanations,
-            'new_stage'          => $newStage,
-            'smart_message'      => $smartMessage,
-            'fast_response'      => $isFastResponse,
-            'response_minutes'   => $responseMinutes,
-            'next_action'        => $prospect->next_action,
-        ]);
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -720,7 +799,11 @@ class PerformanceController extends Controller
         $prospect = Prospect::where('prospect_id', $inv->prospect_id)->firstOrFail();
         $firstName = explode(' ', trim($prospect->name))[0];
 
-        $sentAt = $inv->sent_at ?? $inv->created_at;
+        $sentAt = $this->invitationDateValue(
+            $this->invitationHasColumn('sent_at')
+                ? ($inv->sent_at ?? $inv->created_at)
+                : $inv->created_at
+        );
         $minutesSince = (int) $sentAt->diffInMinutes(now());
 
         // Generate human-like prompt based on time elapsed
@@ -732,25 +815,27 @@ class PerformanceController extends Controller
             $prompt = "{$firstName} hasn't responded yet. Want to log an update?";
         } else {
             $days = round($minutesSince / 1440);
-            $prompt = "It's been {$days} day" . ($days > 1 ? 's' : '') . " since you invited {$firstName}. Any news?";
+            $prompt = "It's been {$days} day".($days > 1 ? 's' : '')." since you invited {$firstName}. Any news?";
         }
 
         // Compute next check time
-        $prospectValue = $inv->prospect_value ?? ($prospect->interest_level ?? 'warm');
-        $nextMinutes = match($prospectValue) {
-            'hot'  => 6,
+        $prospectValue = $this->invitationHasColumn('prospect_value')
+            ? ($inv->prospect_value ?? ($prospect->interest_level ?? 'warm'))
+            : ($prospect->interest_level ?? 'warm');
+        $nextMinutes = match ($prospectValue) {
+            'hot' => 6,
             'cold' => 40,
             default => 20,
         };
 
         return response()->json([
-            'status'          => 'success',
-            'prompt'          => $prompt,
-            'prospect_name'   => $prospect->name,
-            'minutes_since'   => $minutesSince,
-            'next_check_in'   => $nextMinutes,
-            'invitation_id'   => $inv->invitation_id,
-            'current_status'  => $inv->status,
+            'status' => 'success',
+            'prompt' => $prompt,
+            'prospect_name' => $prospect->name,
+            'minutes_since' => $minutesSince,
+            'next_check_in' => $nextMinutes,
+            'invitation_id' => $inv->invitation_id,
+            'current_status' => $inv->status,
         ]);
     }
 
@@ -758,11 +843,12 @@ class PerformanceController extends Controller
     public function trackInvitation(Request $r, $token)
     {
         $inv = Invitation::where('token', $token)->first();
-        if (!$inv)
+        if (! $inv) {
             return response()->json(['message' => 'Not found'], 404);
+        }
         $action = $r->input('action', 'open'); // open, accept, decline
         EngagementEvent::create(['distributor_id' => $inv->distributor_id, 'prospect_id' => $inv->prospect_id, 'token' => $token, 'event_type' => $action, 'source_type' => 'invitation', 'source_id' => $inv->id, 'visitor_ip' => $r->ip(), 'user_agent' => $r->userAgent()]);
-        if ($action === 'open' && !$inv->opened_at) {
+        if ($action === 'open' && ! $inv->opened_at) {
             $inv->status = 'opened';
             $inv->opened_at = now();
         }
@@ -779,7 +865,7 @@ class PerformanceController extends Controller
                     ProspectActivity::create(['prospect_id' => $inv->prospect_id, 'distributor_id' => $inv->distributor_id, 'activity_type' => 'stage_change', 'title' => 'Moved to Invited', 'description' => 'Invitation accepted', 'meta' => ['old_stage' => $prospect->stage, 'new_stage' => 'Invited'], 'created_at' => now()]);
                 }
             } catch (\Throwable $e) {
-                Log::error('Invitation stage advance failed: ' . $e->getMessage());
+                Log::error('Invitation stage advance failed: '.$e->getMessage());
             }
             $this->fireAutomation($inv->distributor_id, $inv->prospect_id, 'invitation_status_changed', ['status' => 'accepted']);
         }
@@ -792,6 +878,7 @@ class PerformanceController extends Controller
         // Return public page data
         $distributor = Distributor::where('distributor_id', $inv->distributor_id)->first();
         $prospect = Prospect::find($inv->prospect_id);
+
         return response()->json(['status' => 'success', 'distributor_name' => $distributor?->name, 'prospect_name' => $prospect?->name, 'invitation_type' => $inv->invitation_type, 'scheduled_at' => $inv->scheduled_at]);
     }
 
@@ -802,6 +889,7 @@ class PerformanceController extends Controller
     public function listAutomationRules(Request $r)
     {
         $id = $this->distId($r);
+
         return response()->json(['status' => 'success', 'data' => AutomationRule::where('distributor_id', $id)->get()]);
     }
 
@@ -818,6 +906,7 @@ class PerformanceController extends Controller
         ]);
         $data['distributor_id'] = $id;
         $rule = AutomationRule::create($data);
+
         return response()->json(['status' => 'success', 'data' => $rule], 201);
     }
 
@@ -825,8 +914,9 @@ class PerformanceController extends Controller
     {
         $distId = $this->distId($r);
         $rule = AutomationRule::where('id', $id)->where('distributor_id', $distId)->firstOrFail();
-        $rule->is_active = !$rule->is_active;
+        $rule->is_active = ! $rule->is_active;
         $rule->save();
+
         return response()->json(['status' => 'success', 'data' => $rule]);
     }
 
@@ -849,8 +939,9 @@ class PerformanceController extends Controller
     public function executeAutomationAction(AutomationRule $rule, int $prospectId, int $distId, string $trigger, array $ctx): void
     {
         $prospect = Prospect::find($prospectId);
-        if (!$prospect)
+        if (! $prospect) {
             return;
+        }
         $cfg = $rule->action_config ?? [];
         switch ($rule->action_type) {
             case 'set_interest_level':
@@ -877,7 +968,7 @@ class PerformanceController extends Controller
             case 'add_tag':
                 $tags = $prospect->tags ?? [];
                 $tag = $cfg['tag'] ?? 'auto-tagged';
-                if (!in_array($tag, $tags)) {
+                if (! in_array($tag, $tags)) {
                     $tags[] = $tag;
                     $prospect->tags = $tags;
                     $prospect->save();
@@ -885,7 +976,7 @@ class PerformanceController extends Controller
                 break;
             case 'send_push_notification':
                 // Push notification placeholder — integrate with FCM when tokens are available
-                Log::info("Push notification for distributor {$distId}: " . ($cfg['message'] ?? 'Automation triggered'));
+                Log::info("Push notification for distributor {$distId}: ".($cfg['message'] ?? 'Automation triggered'));
                 break;
         }
         AutomationLog::create(['rule_id' => $rule->id, 'prospect_id' => $prospectId, 'distributor_id' => $distId, 'trigger_event' => $trigger, 'action_taken' => $rule->action_type, 'details' => $ctx, 'success' => true, 'executed_at' => now()]);
@@ -920,7 +1011,8 @@ class PerformanceController extends Controller
             ProspectPriority::updateOrCreate(['prospect_id' => $p->prospect_id], ['distributor_id' => $distId, 'priority_score' => $score, 'recommendation' => $rec, 'computed_at' => now()]);
             $results[] = array_merge($p->toArray(), ['priority_score' => $score, 'recommendation' => $rec]);
         }
-        usort($results, fn($a, $b) => $b['priority_score'] <=> $a['priority_score']);
+        usort($results, fn ($a, $b) => $b['priority_score'] <=> $a['priority_score']);
+
         return response()->json(['status' => 'success', 'data' => array_slice($results, 0, 10)]);
     }
 
@@ -928,8 +1020,9 @@ class PerformanceController extends Controller
     {
         try {
             $p = Prospect::find($prospectId);
-            if (!$p)
+            if (! $p) {
                 return;
+            }
             $score = $this->computePriorityScore($p, $distId);
             $rec = $this->generateRecommendation($p, $score, $distId);
             ProspectPriority::updateOrCreate(['prospect_id' => $prospectId], ['distributor_id' => $distId, 'priority_score' => $score, 'recommendation' => $rec, 'computed_at' => now()]);
@@ -939,7 +1032,7 @@ class PerformanceController extends Controller
                 $p->save();
             }
         } catch (\Throwable $e) {
-            Log::error('Priority recompute failed: ' . $e->getMessage());
+            Log::error('Priority recompute failed: '.$e->getMessage());
         }
     }
 
@@ -953,8 +1046,8 @@ class PerformanceController extends Controller
         $daysSinceLast = $lastActivity ? Carbon::parse($lastActivity)->diffInDays(now()) : 30;
         $recencyScore = 100 / (1 + $daysSinceLast);
         // Responsiveness (20%) — ratio of responded invitations
-        $totalInvites = \App\Models\Invitation::where('prospect_id', $p->prospect_id)->count();
-        $responded = \App\Models\Invitation::where('prospect_id', $p->prospect_id)->whereIn('status', ['accepted', 'declined'])->count();
+        $totalInvites = Invitation::where('prospect_id', $p->prospect_id)->count();
+        $responded = Invitation::where('prospect_id', $p->prospect_id)->whereIn('status', ['accepted', 'declined'])->count();
         $responsivenessScore = $totalInvites > 0 ? ($responded / $totalInvites) * 100 : 0;
         // Presentation completion (15%)
         $totalAssign = PresentationAssignment::where('prospect_id', $p->prospect_id)->count();
@@ -964,10 +1057,11 @@ class PerformanceController extends Controller
         $webinarCount = EngagementEvent::where('prospect_id', $p->prospect_id)->where('event_type', 'webinar_attended')->count();
         $webinarScore = min(100, $webinarCount * 20);
         // Follow-up gap (5%) — days since last follow-up
-        $lastFollowup = \App\Models\Followup::where('prospect_id', $p->prospect_id)->max('created_at');
+        $lastFollowup = Followup::where('prospect_id', $p->prospect_id)->max('created_at');
         $followupGap = $lastFollowup ? Carbon::parse($lastFollowup)->diffInDays(now()) : 14;
         $followupScore = 100 / (1 + $followupGap);
         $total = ($engagementScore * 0.30) + ($recencyScore * 0.20) + ($responsivenessScore * 0.20) + ($presentationScore * 0.15) + ($webinarScore * 0.10) + ($followupScore * 0.05);
+
         return max(0, (int) round($total));
     }
 
@@ -976,15 +1070,20 @@ class PerformanceController extends Controller
         $lastEngagement = EngagementEvent::where('prospect_id', $p->prospect_id)->max('created_at');
         $hoursSince = $lastEngagement ? Carbon::parse($lastEngagement)->diffInHours(now()) : 999;
         $daysSince = $hoursSince / 24;
-        $ignoredFollowups = \App\Models\Followup::where('prospect_id', $p->prospect_id)->where('outcome', 'like', '%ignored%')->count();
-        if ($score >= 80 && $hoursSince <= 24)
+        $ignoredFollowups = Followup::where('prospect_id', $p->prospect_id)->where('outcome', 'like', '%ignored%')->count();
+        if ($score >= 80 && $hoursSince <= 24) {
             return 'Highly engaged. Call now.';
-        if ($score >= 60 && $daysSince >= 2)
+        }
+        if ($score >= 60 && $daysSince >= 2) {
             return 'High intent. Follow up today.';
-        if ($score < 30 && $ignoredFollowups >= 3)
+        }
+        if ($score < 30 && $ignoredFollowups >= 3) {
             return 'Pause outreach. Re-engage in 7 days.';
-        if ($score < 20 && $daysSince > 14)
+        }
+        if ($score < 20 && $daysSince > 14) {
             return 'Low engagement. Consider removing from active pipeline.';
+        }
+
         return 'Keep nurturing. Stay consistent.';
     }
 
@@ -998,15 +1097,16 @@ class PerformanceController extends Controller
         $today = Carbon::today();
         // Follow-up tasks
         $followupTasks = Prospect::where('distributor_id', $distId)->whereNotIn('stage', ['Joined', 'Rejected', 'Inactive'])->where(function ($q) use ($today) {
-            $q->whereDate('next_action_date', '<=', $today)->orWhereDate('next_action_date', $today); })->whereNotNull('next_action_date')->orderByDesc('next_action_date')->limit(5)->get()->map(fn($p) => ['type' => 'followup', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => $p->next_action ?? 'Follow up', 'due_date' => $p->next_action_date, 'priority_score' => $p->interest_score ?? 0]);
+            $q->whereDate('next_action_date', '<=', $today)->orWhereDate('next_action_date', $today);
+        })->whereNotNull('next_action_date')->orderByDesc('next_action_date')->limit(5)->get()->map(fn ($p) => ['type' => 'followup', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => $p->next_action ?? 'Follow up', 'due_date' => $p->next_action_date, 'priority_score' => $p->interest_score ?? 0]);
         // Invitation tasks — New Lead/Contacted with no invite in 7+ days
-        $invitedIds = \App\Models\Invitation::where('distributor_id', $distId)->where('created_at', '>=', now()->subDays(7))->pluck('prospect_id')->toArray();
-        $inviteTasks = Prospect::where('distributor_id', $distId)->whereIn('stage', ['New Lead', 'Contacted'])->whereNotIn('prospect_id', $invitedIds)->orderByDesc('interest_score')->limit(3)->get()->map(fn($p) => ['type' => 'invite', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => 'Send invitation', 'stage' => $p->stage]);
+        $invitedIds = Invitation::where('distributor_id', $distId)->where('created_at', '>=', now()->subDays(7))->pluck('prospect_id')->toArray();
+        $inviteTasks = Prospect::where('distributor_id', $distId)->whereIn('stage', ['New Lead', 'Contacted'])->whereNotIn('prospect_id', $invitedIds)->orderByDesc('interest_score')->limit(3)->get()->map(fn ($p) => ['type' => 'invite', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => 'Send invitation', 'stage' => $p->stage]);
         // Presentation tasks — Invited/Awaiting Response with no presentation
         $assignedIds = PresentationAssignment::where('distributor_id', $distId)->pluck('prospect_id')->toArray();
-        $presentTasks = Prospect::where('distributor_id', $distId)->whereIn('stage', ['Invited', 'Awaiting Response'])->whereNotIn('prospect_id', $assignedIds)->orderByDesc('interest_score')->limit(3)->get()->map(fn($p) => ['type' => 'presentation', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => 'Send presentation', 'stage' => $p->stage]);
+        $presentTasks = Prospect::where('distributor_id', $distId)->whereIn('stage', ['Invited', 'Awaiting Response'])->whereNotIn('prospect_id', $assignedIds)->orderByDesc('interest_score')->limit(3)->get()->map(fn ($p) => ['type' => 'presentation', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => 'Send presentation', 'stage' => $p->stage]);
         // Closing tasks
-        $closingTasks = Prospect::where('distributor_id', $distId)->where('stage', 'Closing')->orderByDesc('interest_score')->limit(3)->get()->map(fn($p) => ['type' => 'closing', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => 'Close the deal', 'stage' => $p->stage]);
+        $closingTasks = Prospect::where('distributor_id', $distId)->where('stage', 'Closing')->orderByDesc('interest_score')->limit(3)->get()->map(fn ($p) => ['type' => 'closing', 'prospect_id' => $p->prospect_id, 'prospect_name' => $p->name, 'action' => 'Close the deal', 'stage' => $p->stage]);
         $allTasks = array_merge($followupTasks->toArray(), $inviteTasks->toArray(), $presentTasks->toArray(), $closingTasks->toArray());
         // Streak
         $streak = DistributorStreak::firstOrCreate(['distributor_id' => $distId], ['current_streak' => 0, 'longest_streak' => 0]);
@@ -1018,15 +1118,20 @@ class PerformanceController extends Controller
         $pCount = count($presentTasks);
         $cCount = count($closingTasks);
         $parts = [];
-        if ($fCount > 0)
-            $parts[] = "Follow up {$fCount} hot lead" . ($fCount > 1 ? 's' : '');
-        if ($iCount > 0)
-            $parts[] = "Invite {$iCount} new " . ($iCount > 1 ? 'people' : 'person');
-        if ($pCount > 0)
-            $parts[] = "Send {$pCount} presentation" . ($pCount > 1 ? 's' : '');
-        if ($cCount > 0)
-            $parts[] = "Close {$cCount} prospect" . ($cCount > 1 ? 's' : '');
-        $headline = count($parts) > 0 ? implode(', ', $parts) . '.' : 'Great job! You are all caught up today.';
+        if ($fCount > 0) {
+            $parts[] = "Follow up {$fCount} hot lead".($fCount > 1 ? 's' : '');
+        }
+        if ($iCount > 0) {
+            $parts[] = "Invite {$iCount} new ".($iCount > 1 ? 'people' : 'person');
+        }
+        if ($pCount > 0) {
+            $parts[] = "Send {$pCount} presentation".($pCount > 1 ? 's' : '');
+        }
+        if ($cCount > 0) {
+            $parts[] = "Close {$cCount} prospect".($cCount > 1 ? 's' : '');
+        }
+        $headline = count($parts) > 0 ? implode(', ', $parts).'.' : 'Great job! You are all caught up today.';
+
         return response()->json(['status' => 'success', 'data' => ['action_list' => $allTasks, 'streak' => $streak->current_streak, 'longest_streak' => $streak->longest_streak, 'badges' => $badges, 'headline' => $headline, 'total_tasks' => count($allTasks)]]);
     }
 
@@ -1045,14 +1150,17 @@ class PerformanceController extends Controller
             $streak->current_streak = 1;
         }
         $streak->last_completed_date = $today;
-        if ($streak->current_streak > $streak->longest_streak)
+        if ($streak->current_streak > $streak->longest_streak) {
             $streak->longest_streak = $streak->current_streak;
+        }
         $streak->save();
         // Check streak badges
         foreach ([3 => 'streak_3', 7 => 'streak_7', 30 => 'streak_30'] as $days => $badge) {
-            if ($streak->current_streak >= $days)
+            if ($streak->current_streak >= $days) {
                 $this->checkBadge($distId, $badge);
+            }
         }
+
         return response()->json(['status' => 'success', 'streak' => $streak->current_streak]);
     }
 
@@ -1064,6 +1172,7 @@ class PerformanceController extends Controller
     {
         $distId = $this->distId($r);
         $recs = Recommendation::where('distributor_id', $distId)->whereNull('read_at')->with('prospect:prospect_id,name,phone,stage')->orderByDesc('created_at')->get();
+
         return response()->json(['status' => 'success', 'data' => $recs]);
     }
 
@@ -1072,6 +1181,7 @@ class PerformanceController extends Controller
         $distId = $this->distId($r);
         Prospect::where('prospect_id', $prospectId)->where('distributor_id', $distId)->firstOrFail();
         $recs = Recommendation::where('prospect_id', $prospectId)->orderByDesc('created_at')->get();
+
         return response()->json(['status' => 'success', 'data' => $recs]);
     }
 
@@ -1081,6 +1191,7 @@ class PerformanceController extends Controller
         $rec = Recommendation::where('id', $id)->where('distributor_id', $distId)->firstOrFail();
         $rec->read_at = now();
         $rec->save();
+
         return response()->json(['status' => 'success']);
     }
 
@@ -1091,24 +1202,30 @@ class PerformanceController extends Controller
             $pid = $p->prospect_id;
             // High-intent signals
             $highWatchAssignment = PresentationAssignment::where('prospect_id', $pid)->where('watch_percent', '>=', 80)->exists();
-            if ($highWatchAssignment)
+            if ($highWatchAssignment) {
                 $this->createRecommendation($distId, $pid, 'high_intent', 'high_watch', 'Presentation watched 80%+. Call now to close.');
-            $recentAccept = \App\Models\Invitation::where('prospect_id', $pid)->where('status', 'accepted')->where('responded_at', '>=', now()->subHours(2))->exists();
-            if ($recentAccept)
+            }
+            $recentAccept = Invitation::where('prospect_id', $pid)->where('status', 'accepted')->where('responded_at', '>=', now()->subHours(2))->exists();
+            if ($recentAccept) {
                 $this->createRecommendation($distId, $pid, 'high_intent', 'quick_accept', 'Invitation accepted within 2 hours. Strike while hot!');
+            }
             $pageVisits = EngagementEvent::where('prospect_id', $pid)->where('event_type', 'page_visit')->where('created_at', '>=', now()->subHours(24))->count();
-            if ($pageVisits >= 3)
+            if ($pageVisits >= 3) {
                 $this->createRecommendation($distId, $pid, 'high_intent', 'multiple_page_visits', "Visited your page {$pageVisits} times today. High buying intent.");
+            }
             // Disengagement patterns
-            $ignoredFollowups = \App\Models\Followup::where('prospect_id', $pid)->where('outcome', 'like', '%no answer%')->orWhere('outcome', 'like', '%ignored%')->count();
-            if ($ignoredFollowups >= 3)
+            $ignoredFollowups = Followup::where('prospect_id', $pid)->where('outcome', 'like', '%no answer%')->orWhere('outcome', 'like', '%ignored%')->count();
+            if ($ignoredFollowups >= 3) {
                 $this->createRecommendation($distId, $pid, 'disengagement', 'ignored_followups', '3+ follow-ups ignored. Consider pausing outreach for 7 days.');
-            $openedNotAccepted = \App\Models\Invitation::where('prospect_id', $pid)->where('status', 'opened')->where('opened_at', '<=', now()->subHours(48))->exists();
-            if ($openedNotAccepted)
+            }
+            $openedNotAccepted = Invitation::where('prospect_id', $pid)->where('status', 'opened')->where('opened_at', '<=', now()->subHours(48))->exists();
+            if ($openedNotAccepted) {
                 $this->createRecommendation($distId, $pid, 'disengagement', 'opened_not_accepted', 'Invitation opened but not accepted in 48h. Send a gentle follow-up.');
+            }
             $notOpenedPresentation = PresentationAssignment::where('prospect_id', $pid)->where('status', 'sent')->where('created_at', '<=', now()->subHours(72))->exists();
-            if ($notOpenedPresentation)
+            if ($notOpenedPresentation) {
                 $this->createRecommendation($distId, $pid, 'disengagement', 'presentation_not_opened', 'Presentation not opened in 72h. Try a different approach.');
+            }
         }
     }
 
@@ -1116,7 +1233,7 @@ class PerformanceController extends Controller
     {
         // Avoid duplicate active recommendations for same signal
         $exists = Recommendation::where('distributor_id', $distId)->where('prospect_id', $prospectId)->where('signal', $signal)->whereNull('read_at')->exists();
-        if (!$exists) {
+        if (! $exists) {
             Recommendation::create(['distributor_id' => $distId, 'prospect_id' => $prospectId, 'type' => $type, 'signal' => $signal, 'suggestion' => $suggestion]);
         }
     }
@@ -1131,25 +1248,27 @@ class PerformanceController extends Controller
         $progress = OnboardingProgress::firstOrCreate(['distributor_id' => $distId]);
         $badges = Badge::where('distributor_id', $distId)->get();
         $contactCount = Prospect::where('distributor_id', $distId)->count();
+
         return response()->json(['status' => 'success', 'data' => ['milestones' => $progress, 'contacts_added' => $contactCount, 'badges' => $badges, 'first_10_progress' => min(10, $contactCount)]]);
     }
 
     public function markOnboardingMilestone(int $distId, string $milestone): void
     {
         $progress = OnboardingProgress::firstOrCreate(['distributor_id' => $distId]);
-        if (!$progress->$milestone) {
+        if (! $progress->$milestone) {
             $progress->$milestone = true;
             $progress->save();
             // Check if all 5 milestones complete
             if ($progress->first_invite_sent && $progress->first_presentation_assigned && $progress->first_prospect_added && $progress->first_recruit_joined && $progress->checklist_completed) {
-                if (!$progress->onboarding_complete) {
+                if (! $progress->onboarding_complete) {
                     $progress->onboarding_complete = true;
                     $progress->save();
                     $this->checkBadge($distId, 'onboarding_complete');
                     // Notify sponsor
                     $dist = Distributor::where('distributor_id', $distId)->first();
-                    if ($dist && $dist->upline_id)
+                    if ($dist && $dist->upline_id) {
                         Log::info("Sponsor {$dist->upline_id} notified: distributor {$distId} completed onboarding.");
+                    }
                 }
             }
         }
@@ -1158,22 +1277,26 @@ class PerformanceController extends Controller
     public function checkFirstTenChallenge(int $distId): void
     {
         $progress = OnboardingProgress::firstOrCreate(['distributor_id' => $distId]);
-        if ($progress->first_10_challenge_complete)
+        if ($progress->first_10_challenge_complete) {
             return;
+        }
         $joinDate = Distributor::where('distributor_id', $distId)->value('join_date');
-        if (!$joinDate)
+        if (! $joinDate) {
             return;
+        }
         $withinWindow = Carbon::parse($joinDate)->addDays(7)->isFuture();
-        if (!$withinWindow)
+        if (! $withinWindow) {
             return;
+        }
         $count = Prospect::where('distributor_id', $distId)->count();
         if ($count >= 10) {
             $progress->first_10_challenge_complete = true;
             $progress->save();
             $this->checkBadge($distId, 'first_10_challenge');
             $dist = Distributor::where('distributor_id', $distId)->first();
-            if ($dist && $dist->upline_id)
+            if ($dist && $dist->upline_id) {
                 Log::info("Sponsor {$dist->upline_id} notified: distributor {$distId} completed First 10 Challenge.");
+            }
         }
     }
 
@@ -1187,6 +1310,7 @@ class PerformanceController extends Controller
         $global = Playbook::where('visibility', 'global')->get();
         $personal = Playbook::where('distributor_id', $distId)->where('visibility', 'personal')->get();
         $all = $global->concat($personal)->sortBy(['category', 'title'])->values();
+
         return response()->json(['status' => 'success', 'data' => $all]);
     }
 
@@ -1197,6 +1321,7 @@ class PerformanceController extends Controller
         $data['distributor_id'] = $distId;
         $data['visibility'] = 'personal';
         $pb = Playbook::create($data);
+
         return response()->json(['status' => 'success', 'data' => $pb], 201);
     }
 
@@ -1206,8 +1331,9 @@ class PerformanceController extends Controller
         $data = $r->validate(['invitation_type' => 'required|string', 'prospect_id' => 'required|exists:prospects,prospect_id']);
         $prospect = Prospect::where('prospect_id', $data['prospect_id'])->where('distributor_id', $distId)->firstOrFail();
         $distributor = Distributor::where('distributor_id', $distId)->first();
-        $template = self::INVITE_SCRIPTS[$data['invitation_type']] ?? "Hi {prospect_name}, I have something exciting to share with you. — {distributor_name}";
+        $template = self::INVITE_SCRIPTS[$data['invitation_type']] ?? 'Hi {prospect_name}, I have something exciting to share with you. — {distributor_name}';
         $script = str_replace(['{prospect_name}', '{distributor_name}'], [$prospect->name, $distributor->name ?? 'Your Distributor'], $template);
+
         return response()->json(['status' => 'success', 'script' => $script]);
     }
 
@@ -1222,12 +1348,13 @@ class PerformanceController extends Controller
             'presentations' => $goal->presentations_target > 0 ? round(($goal->presentations_actual / $goal->presentations_target) * 100) : 0,
         ];
         $overall = round(array_sum($progress) / 3);
-        if ($overall >= 100 && !$goal->goal_achieved) {
+        if ($overall >= 100 && ! $goal->goal_achieved) {
             $goal->goal_achieved = true;
             $goal->save();
             $this->checkBadge($distId, 'weekly_goal');
             Log::info("Weekly goal push notification for distributor {$distId}");
         }
+
         return response()->json(['status' => 'success', 'data' => ['goal' => $goal, 'progress' => $progress, 'overall_percent' => $overall]]);
     }
 
@@ -1247,22 +1374,22 @@ class PerformanceController extends Controller
         $distId = $this->distId($r);
         $dateFrom = $r->query('start_date');
         $dateTo = $r->query('end_date');
-        $q = fn($model) => $model::where('distributor_id', $distId);
-        $pq = fn() => Prospect::where('distributor_id', $distId);
+        $q = fn ($model) => $model::where('distributor_id', $distId);
+        $pq = fn () => Prospect::where('distributor_id', $distId);
         if ($dateFrom) {
-            $pq = fn() => Prospect::where('distributor_id', $distId)->whereDate('created_at', '>=', $dateFrom);
+            $pq = fn () => Prospect::where('distributor_id', $distId)->whereDate('created_at', '>=', $dateFrom);
         }
         if ($dateTo) {
-            $pq = fn() => Prospect::where('distributor_id', $distId)->whereDate('created_at', '<=', $dateTo);
+            $pq = fn () => Prospect::where('distributor_id', $distId)->whereDate('created_at', '<=', $dateTo);
         }
         $contacts = Prospect::where('distributor_id', $distId)->count(); // all contacts = prospects
         $prospects = $contacts; // same table
-        $invitations = \App\Models\Invitation::where('distributor_id', $distId)->count();
+        $invitations = Invitation::where('distributor_id', $distId)->count();
         $presentations = PresentationAssignment::where('distributor_id', $distId)->count();
-        $followups = \App\Models\Followup::where('distributor_id', $distId)->count();
-        $closings = \App\Models\ClosingAttempt::where('distributor_id', $distId)->count();
+        $followups = Followup::where('distributor_id', $distId)->count();
+        $closings = ClosingAttempt::where('distributor_id', $distId)->count();
         $joined = Prospect::where('distributor_id', $distId)->where('stage', 'Joined')->count();
-        $rate = fn($a, $b) => $a > 0 ? round(($b / $a) * 100, 1) : 0.0;
+        $rate = fn ($a, $b) => $a > 0 ? round(($b / $a) * 100, 1) : 0.0;
         $transitions = [
             'contacts_to_prospects' => $rate($contacts, $prospects),
             'prospects_to_invitations' => $rate($prospects, $invitations),
@@ -1273,16 +1400,17 @@ class PerformanceController extends Controller
         ];
         // Weakest stage (exclude contacts count itself)
         $checkTransitions = array_slice($transitions, 1); // skip contacts_to_prospects
-        $weakestKey = array_key_first(array_filter($checkTransitions, fn($v) => $v === min($checkTransitions)));
+        $weakestKey = array_key_first(array_filter($checkTransitions, fn ($v) => $v === min($checkTransitions)));
         $insights = [
-            'prospects_to_invitations' => "Low invitation rate. Use the Invitation System to send more structured invites.",
+            'prospects_to_invitations' => 'Low invitation rate. Use the Invitation System to send more structured invites.',
             'invitations_to_presentations' => "Prospects aren't engaging with presentations. Try a different content type.",
-            'presentations_to_followups' => "Follow-up rate is low. Set next actions immediately after every presentation.",
-            'followups_to_closings' => "Weak closing rate. Review the Closing Playbook.",
+            'presentations_to_followups' => 'Follow-up rate is low. Set next actions immediately after every presentation.',
+            'followups_to_closings' => 'Weak closing rate. Review the Closing Playbook.',
             'closings_to_joined' => "Closing attempts aren't converting. Practice objection handling scripts.",
         ];
-        $insight = $insights[$weakestKey] ?? "Keep improving your funnel consistency.";
+        $insight = $insights[$weakestKey] ?? 'Keep improving your funnel consistency.';
         $overall = $contacts > 0 ? round(($joined / $contacts) * 100, 1) : 0.0;
+
         return response()->json(['status' => 'success', 'data' => ['funnel' => ['contacts' => $contacts, 'prospects' => $prospects, 'invitations' => $invitations, 'presentations' => $presentations, 'followups' => $followups, 'closings' => $closings, 'joined' => $joined], 'transitions' => $transitions, 'overall_conversion' => $overall, 'weakest_stage' => $weakestKey, 'insight' => $insight]]);
     }
 
@@ -1293,11 +1421,13 @@ class PerformanceController extends Controller
     public function checkBadge(int $distId, string $badgeType): bool
     {
         $exists = Badge::where('distributor_id', $distId)->where('badge_type', $badgeType)->exists();
-        if (!$exists) {
+        if (! $exists) {
             Badge::create(['distributor_id' => $distId, 'badge_type' => $badgeType, 'earned_at' => now()]);
             Log::info("Badge earned: {$badgeType} for distributor {$distId}");
+
             return true;
         }
+
         return false;
     }
 
@@ -1307,12 +1437,14 @@ class PerformanceController extends Controller
 
     public function publicInvitePage(Request $r, $token)
     {
-        $inv = \App\Models\Invitation::where('token', $token)->first();
-        if (!$inv)
+        $inv = Invitation::where('token', $token)->first();
+        if (! $inv) {
             return response()->json(['message' => 'This link is no longer active.'], 404);
+        }
         $distributor = Distributor::where('distributor_id', $inv->distributor_id)->first();
         $prospect = Prospect::find($inv->prospect_id);
         EngagementEvent::create(['distributor_id' => $inv->distributor_id, 'prospect_id' => $inv->prospect_id, 'token' => $token, 'event_type' => 'page_visit', 'source_type' => 'invitation', 'source_id' => $inv->id, 'visitor_ip' => $r->ip(), 'user_agent' => $r->userAgent()]);
+
         return response()->json(['status' => 'success', 'page_type' => 'invitation', 'distributor_name' => $distributor?->name, 'prospect_name' => $prospect?->name, 'invitation_type' => $inv->invitation_type, 'scheduled_at' => $inv->scheduled_at, 'script' => $inv->script_used]);
     }
 
@@ -1334,7 +1466,7 @@ class PerformanceController extends Controller
             ->exists();
 
         // Also count recent closes (within last 5 mins) to show "just closed"
-        $recentlyClosed = !$watching && PresentationAssignment::where('prospect_id', $prospectId)
+        $recentlyClosed = ! $watching && PresentationAssignment::where('prospect_id', $prospectId)
             ->where('distributor_id', $distId)
             ->where('is_watching', false)
             ->where('last_heartbeat_at', '>=', now()->subMinutes(5))
@@ -1342,37 +1474,38 @@ class PerformanceController extends Controller
             ->exists();
 
         return response()->json([
-            'status'          => 'success',
-            'is_watching'     => $watching,
+            'status' => 'success',
+            'is_watching' => $watching,
             'recently_closed' => $recentlyClosed,
-            'checked_at'      => now()->toISOString(),
+            'checked_at' => now()->toISOString(),
         ]);
     }
 
     public function publicPresentationPage(Request $r, $token)
     {
         $assignment = PresentationAssignment::where('token', $token)->with('presentation')->first();
-        if (!$assignment)
+        if (! $assignment) {
             return response()->json(['message' => 'This link is no longer active.'], 404);
+        }
 
         $distributor = Distributor::where('distributor_id', $assignment->distributor_id)->first();
         $pres = $assignment->presentation;
 
         // Note: The view's JS will trigger the 'opened' event immediately, but we can also log it here if it's the first time
-        if (!$assignment->opened_at) {
+        if (! $assignment->opened_at) {
             $assignment->status = 'opened';
             $assignment->opened_at = now();
             $assignment->save();
 
             EngagementEvent::create([
-                'distributor_id' => $assignment->distributor_id, 
-                'prospect_id' => $assignment->prospect_id, 
-                'token' => $token, 
-                'event_type' => 'opened', 
-                'source_type' => 'presentation', 
-                'source_id' => $assignment->id, 
-                'visitor_ip' => $r->ip(), 
-                'user_agent' => $r->userAgent()
+                'distributor_id' => $assignment->distributor_id,
+                'prospect_id' => $assignment->prospect_id,
+                'token' => $token,
+                'event_type' => 'opened',
+                'source_type' => 'presentation',
+                'source_id' => $assignment->id,
+                'visitor_ip' => $r->ip(),
+                'user_agent' => $r->userAgent(),
             ]);
             $this->recomputePriority($assignment->prospect_id, $assignment->distributor_id);
         }
@@ -1381,19 +1514,21 @@ class PerformanceController extends Controller
             'assignment' => $assignment,
             'presentation' => $pres,
             'distributor' => $distributor,
-            'token' => $token
+            'token' => $token,
         ]);
     }
 
     public function capturePublicLead(Request $r, $token)
     {
         $data = $r->validate(['name' => 'required|string', 'phone' => 'required|string']);
-        $inv = \App\Models\Invitation::where('token', $token)->first();
+        $inv = Invitation::where('token', $token)->first();
         $assignment = $inv ? null : PresentationAssignment::where('token', $token)->first();
         $source = $inv ?? $assignment;
-        if (!$source)
+        if (! $source) {
             return response()->json(['message' => 'Invalid link'], 404);
+        }
         EngagementEvent::create(['distributor_id' => $source->distributor_id, 'prospect_id' => $source->prospect_id, 'token' => $token, 'event_type' => 'lead_captured', 'visitor_ip' => $r->ip(), 'meta' => ['name' => $data['name'], 'phone' => $data['phone']]]);
+
         return response()->json(['status' => 'success', 'message' => 'Thank you! Your distributor will be in touch.']);
     }
 }
