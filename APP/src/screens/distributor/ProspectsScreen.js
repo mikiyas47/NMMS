@@ -1245,13 +1245,14 @@ const AddProspectModal = ({ visible, onClose, onSaved, C }) => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [source, setSource] = useState('');
-  const [stage, setStage] = useState('New Lead');
   const [nextAction, setNextAction] = useState('');
   const [nextDate, setNextDate] = useState('');
   const [tags, setTags] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  const PRESET_TAGS = ['Warm Lead', 'Cold Lead', 'Entrepreneur', 'Student', 'High Potential', 'Friend', 'Colleague'];
+  // Status/stage/interest_level are all auto-calculated by the system from the score.
+  // Only contact info is collected here.
+  const PRESET_TAGS = ['Entrepreneur', 'Student', 'High Potential', 'Friend', 'Colleague', 'Family', 'Online'];
 
   const toggleTag = (t) => setTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
 
@@ -1263,12 +1264,12 @@ const AddProspectModal = ({ visible, onClose, onSaved, C }) => {
         name: name.trim(), phone: phone.trim(),
         email: email.trim() || undefined,
         source: source.trim() || undefined,
-        stage, next_action: nextAction || undefined,
+        next_action: nextAction || undefined,
         next_action_date: nextDate || undefined,
         tags: tags.length > 0 ? tags : undefined,
       });
       setName(''); setPhone(''); setEmail(''); setSource('');
-      setStage('New Lead'); setNextAction(''); setNextDate(''); setTags([]);
+      setNextAction(''); setNextDate(''); setTags([]);
       onSaved();
       onClose();
     } catch (e) { Alert.alert('Error', e?.message || 'Failed to create prospect'); }
