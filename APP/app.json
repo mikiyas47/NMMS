@@ -43,7 +43,13 @@
           "contactsPermission": "Allow $(PRODUCT_NAME) to access your contacts so you can import them as prospects."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow the app to schedule follow-up reminders in your calendar."
+        }
+      ]
     ]
   }
 }

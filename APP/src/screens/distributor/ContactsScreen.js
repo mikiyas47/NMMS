@@ -41,9 +41,7 @@ import {
 import {
   getContacts,
   createContact,
-  getFollowups,
   createFollowup,
-  getClosings,
   createClosing,
 } from '../../api/authService';
 import FollowUpModal from '../../components/FollowUpModal';
@@ -133,8 +131,6 @@ const ContactsScreen = ({ C }) => {
   const [tab, setTab]           = useState('contacts');   // contacts | followups | closing
   const [search, setSearch]     = useState('');
   const [contacts, setContacts] = useState([]);
-  const [followups, setFollowups] = useState([]);
-  const [closings, setClosings]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -185,10 +181,8 @@ const ContactsScreen = ({ C }) => {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [c, f, cl] = await Promise.all([getContacts(), getFollowups(), getClosings()]);
+      const c = await getContacts();
       setContacts(c.data ?? []);
-      setFollowups(f.data ?? []);
-      setClosings(cl.data ?? []);
     } catch (e) {
       console.log('Contacts load error:', e);
     } finally {
@@ -426,8 +420,6 @@ const ContactsScreen = ({ C }) => {
   // ── Filter ────────────────────────────────────────────────────────
   const q = search.toLowerCase();
   const filteredContacts  = contacts.filter(c  => c.name?.toLowerCase().includes(q) || c.phone?.includes(q));
-  const filteredFollowups = followups.filter(f  => f.prospect?.name?.toLowerCase().includes(q) || f.method?.toLowerCase().includes(q));
-  const filteredClosings  = closings.filter(cl => cl.prospect?.name?.toLowerCase().includes(q) || cl.closing_method?.toLowerCase().includes(q));
 
   // ── Summary cards ─────────────────────────────────────────────────
   const hotCount    = contacts.filter(c => c.status === 'Hot').length;
@@ -469,7 +461,6 @@ const ContactsScreen = ({ C }) => {
           { label: 'Total', value: contacts.length, color: C.blue },
           { label: 'Hot 🔥', value: hotCount, color: C.red },
           { label: 'Closed ✓', value: closedCount, color: C.green },
-          { label: 'Follow-ups', value: followups.length, color: C.purple },
         ].map(s => (
           <View key={s.label} style={{ flex: 1, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10, alignItems: 'center' }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: s.color }}>{s.value}</Text>
@@ -495,26 +486,6 @@ const ContactsScreen = ({ C }) => {
         )}
       </View>
 
-      {/* ── Tabs ── */}
-      <View style={{ flexDirection: 'row', backgroundColor: C.inputBg, borderRadius: 14, padding: 4, marginBottom: 14 }}>
-        {[
-          { key: 'contacts',  label: 'Contacts',   count: contacts.length },
-          { key: 'followups', label: 'Follow-ups',  count: followups.length },
-          { key: 'closing',   label: 'Closing',     count: closings.length },
-        ].map(t => (
-          <TouchableOpacity
-            key={t.key}
-            onPress={() => setTab(t.key)}
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 11, backgroundColor: tab === t.key ? C.accent : 'transparent', gap: 5 }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: '700', color: tab === t.key ? '#fff' : C.muted }}>{t.label}</Text>
-            <View style={{ backgroundColor: tab === t.key ? 'rgba(255,255,255,0.25)' : C.card, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: tab === t.key ? '#fff' : C.muted }}>{t.count}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* ── Content ── */}
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -527,9 +498,7 @@ const ContactsScreen = ({ C }) => {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
         >
 
-          {/* ══ CONTACTS TAB ══ */}
-          {tab === 'contacts' && (
-            <>
+          {/* ══ CONTACTS ══ */}
               {filteredContacts.length === 0 ? (
                 <EmptyState icon={<BookUser color={C.muted} size={40} />} label="No contacts yet" sub="Tap Add to create your first contact" C={C} />
               ) : filteredContacts.map(contact => {
@@ -571,96 +540,11 @@ const ContactsScreen = ({ C }) => {
                         {contact.source ? <MetaChip label={`Source: ${contact.source}`} C={C} /> : null}
                         {contact.relationship ? <MetaChip label={contact.relationship} C={C} /> : null}
                         <View style={{ flex: 1 }} />
-                        <TouchableOpacity
-                          onPress={() => openFollowupModal(contact.prospect_id, contact.name, contact.phone)}
-                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(99,102,241,0.12)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, gap: 5 }}
-                        >
-                          <MessageSquare color={C.accent} size={14} />
-                          <Text style={{ fontSize: 12, color: C.accent, fontWeight: '700' }}>Follow-up</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => openClosingModal(contact.prospect_id)}
-                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, gap: 5 }}
-                        >
-                          <Target color={C.green} size={14} />
-                          <Text style={{ fontSize: 12, color: C.green, fontWeight: '700' }}>Close</Text>
-                        </TouchableOpacity>
                       </View>
                     )}
                   </View>
                 );
               })}
-            </>
-          )}
-
-          {/* ══ FOLLOW-UPS TAB ══ */}
-          {tab === 'followups' && (
-            <>
-              {filteredFollowups.length === 0 ? (
-                <EmptyState icon={<MessageSquare color={C.muted} size={40} />} label="No follow-ups yet" sub="Expand a contact and tap Follow-up" C={C} />
-              ) : filteredFollowups.map(f => {
-                const oc = OUTCOME_COLOR[f.outcome] ?? C.muted;
-                return (
-                  <View key={f.followup_id} style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(99,102,241,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                        <MessageSquare color={C.accent} size={16} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={{ fontWeight: '700', fontSize: 14, color: C.text }}>{f.prospect?.name ?? '—'}</Text>
-                        <Text style={{ fontSize: 11, color: C.muted }}>{f.prospect?.phone}</Text>
-                      </View>
-                      {f.outcome ? (
-                        <View style={{ backgroundColor: oc + '22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: oc }}>{f.outcome}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: f.notes ? 8 : 0 }}>
-                      {f.followup_type ? <MetaChip label={`Type: ${f.followup_type}`} C={C} /> : null}
-                      {f.method ? <MetaChip label={`Via: ${f.method}`} C={C} /> : null}
-                    </View>
-                    {f.notes ? <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>{f.notes}</Text> : null}
-                    <Text style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>
-                      <Clock size={10} color={C.muted} /> {fmt(f.created_at)}
-                    </Text>
-                  </View>
-                );
-              })}
-            </>
-          )}
-
-          {/* ══ CLOSING TAB ══ */}
-          {tab === 'closing' && (
-            <>
-              {filteredClosings.length === 0 ? (
-                <EmptyState icon={<Target color={C.muted} size={40} />} label="No closing attempts yet" sub="Expand a contact and tap Close" C={C} />
-              ) : filteredClosings.map(cl => {
-                const oc = OUTCOME_COLOR[cl.outcome] ?? C.muted;
-                return (
-                  <View key={cl.closing_id} style={{ backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(16,185,129,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                        <Target color={C.green} size={16} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={{ fontWeight: '700', fontSize: 14, color: C.text }}>{cl.prospect?.name ?? '—'}</Text>
-                        <Text style={{ fontSize: 11, color: C.muted }}>{cl.prospect?.phone}</Text>
-                      </View>
-                      {cl.outcome ? (
-                        <View style={{ backgroundColor: oc + '22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: oc }}>{cl.outcome}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {cl.closing_method ? <MetaChip label={`Method: ${cl.closing_method}`} C={C} /> : null}
-                    {cl.notes ? <Text style={{ fontSize: 12, color: C.sub, marginTop: 8, lineHeight: 18 }}>{cl.notes}</Text> : null}
-                    <Text style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>{fmt(cl.created_at)}</Text>
-                  </View>
-                );
-              })}
-            </>
-          )}
 
           <View style={{ height: 40 }} />
         </ScrollView>

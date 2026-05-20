@@ -11,7 +11,7 @@ import {
   ShoppingBag, BookUser, Zap, Network,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { logout as logoutApi, getUser, getWallet, getWalletCached } from '../api/authService';
+import { logout as logoutApi, getUser, getWallet } from '../api/authService';
 import DistributorOverview from './distributor/DistributorOverview';
 import MyNetwork          from './distributor/MyNetwork';
 import TreeScreen         from './distributor/TreeScreen';
@@ -76,11 +76,12 @@ const DistributorDashboard = ({ navigation }) => {
   const RANK_LABELS = { None:'Customer Trainee(CT)', CT:'Customer Trainee(CT)', MT:'Market Trainee', TT:'Team Trainee', NTB:'Natl. Team Builder', IBB:'Intl. Business Builder', GEB:'Global Empire Builder', CA:'Crown Achiever', C_AWARD:'Crown Award', AL:'Alpha Legend' };
   const RANK_NEXT   = { None:'MT', CT:'MT', MT:'TT', TT:'NTB', NTB:'IBB', IBB:'GEB', GEB:'CA', CA:'C_AWARD', C_AWARD:'AL', AL:null };
 
-  // Load user name and rank — show cached data instantly, refresh in background
+  // Load user name and rank from storage + API
   useEffect(() => {
-    getUser().then(u => { if (u?.name) setUserName(u.name.split(' ')[0]); if (u?.rank) setUserRank(u.rank); });
-    getWalletCached().then(res => { if (res?.stats?.rank) setUserRank(res.stats.rank); });
-    getWallet().then(res => { if (res?.stats?.rank) setUserRank(res.stats.rank); }).catch(() => {});
+    getUser().then(u => { if (u?.name) setUserName(u.name.split(' ')[0]); });
+    getWallet().then(res => {
+      if (res?.stats?.rank) setUserRank(res.stats.rank);
+    }).catch(() => {});
   }, []);
 
   const openSidebar = () => {
