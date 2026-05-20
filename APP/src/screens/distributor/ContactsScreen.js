@@ -147,7 +147,6 @@ const ContactsScreen = ({ C }) => {
 
   // ── quick import state (intermediate dialog after picking a phone contact)
   const [quickContact, setQuickContact] = useState(null); // { name, phone, email }
-  const [quickStatus, setQuickStatus]   = useState('New');
 
   // ── follow-up wizard state
   const [followupStep, setFollowupStep]         = useState('type');
@@ -162,7 +161,6 @@ const ContactsScreen = ({ C }) => {
   const [cName, setCName]   = useState('');
   const [cPhone, setCPhone] = useState('');
   const [cEmail, setCEmail] = useState('');
-  const [cStatus, setCStatus]   = useState('New');
   const [cSource, setCSource]   = useState('');
   const [cRelation, setCRelation] = useState('');
 
@@ -209,7 +207,6 @@ const ContactsScreen = ({ C }) => {
     setCName(prefill.name   ?? '');
     setCPhone(prefill.phone ?? '');
     setCEmail(prefill.email ?? '');
-    setCStatus(prefill.status ?? 'New');
     setCSource('');
     setCRelation('');
     setModal('contact');
@@ -330,23 +327,17 @@ const ContactsScreen = ({ C }) => {
     const phone = item.phoneNumbers?.[0]?.number ?? '';
     const email = item.emails?.[0]?.email ?? '';
     setQuickContact({ name, phone, email });
-    setQuickStatus('New');
     setModal('quickImport');
   };
 
   // Save directly from quick-import dialog (no extra info)
   const saveQuickContact = async () => {
-    if (!quickStatus) {
-      Alert.alert('Status Required', 'Please select a status before saving.');
-      return;
-    }
     setSaving(true);
     try {
       await createContact({
-        name:   quickContact.name,
-        phone:  quickContact.phone,
-        email:  quickContact.email || undefined,
-        status: quickStatus,
+        name:  quickContact.name,
+        phone: quickContact.phone,
+        email: quickContact.email || undefined,
       });
       setModal(null);
       setQuickContact(null);
@@ -360,7 +351,7 @@ const ContactsScreen = ({ C }) => {
   const goToFullForm = () => {
     const prefill = quickContact ?? {};
     setQuickContact(null);
-    openContactModal({ ...prefill, status: quickStatus });
+    openContactModal({ ...prefill });
   };
 
   const filteredPhoneContacts = phoneContacts.filter(c => {
@@ -379,7 +370,7 @@ const ContactsScreen = ({ C }) => {
     }
     setSaving(true);
     try {
-      await createContact({ name: cName.trim(), phone: cPhone.trim(), email: cEmail.trim() || undefined, status: cStatus, source: cSource || undefined, relationship: cRelation || undefined });
+      await createContact({ name: cName.trim(), phone: cPhone.trim(), email: cEmail.trim() || undefined, source: cSource || undefined, relationship: cRelation || undefined });
       setModal(null);
       load(true);
     } catch (e) {
@@ -557,8 +548,6 @@ const ContactsScreen = ({ C }) => {
         <Field label="Email" value={cEmail} onChangeText={setCEmail} placeholder="john@example.com" keyboardType="email-address" C={C} />
         <Field label="Source" value={cSource} onChangeText={setCSource} placeholder="Referral, Event, Social…" C={C} />
         <Field label="Relationship" value={cRelation} onChangeText={setCRelation} placeholder="Friend, Colleague…" C={C} />
-        <Text style={{ fontSize: 12, fontWeight: '600', color: C.muted, marginBottom: 6 }}>Status</Text>
-        <Pill options={['New', 'Warm', 'Hot', 'Cold', 'Closed']} value={cStatus} onChange={setCStatus} C={C} />
         <SaveBtn onPress={saveContact} saving={saving} C={C} />
       </BottomModal>
 
@@ -862,7 +851,7 @@ const ContactsScreen = ({ C }) => {
               </View>
               <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>Import Contact</Text>
               <Text style={{ fontSize: 13, color: C.muted, marginTop: 4, textAlign: 'center' }}>
-                Review the contact and choose a status before saving.
+                Review the contact details before saving.
               </Text>
             </View>
 
@@ -886,33 +875,11 @@ const ContactsScreen = ({ C }) => {
               </View>
             )}
 
-            {/* Status picker — REQUIRED */}
-            <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted, marginBottom: 8 }}>
-              Select Status <Text style={{ color: '#EF4444' }}>*</Text>
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
-              {['New', 'Warm', 'Hot', 'Cold', 'Closed'].map(opt => {
-                const active = quickStatus === opt;
-                const meta   = STATUS_META[opt] ?? STATUS_META['New'];
-                return (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => setQuickStatus(opt)}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      backgroundColor: active ? meta.color : C.inputBg,
-                      borderWidth: 1.5,
-                      borderColor: active ? meta.color : C.border,
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : C.muted }}>
-                      {opt}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            {/* Info note */}
+            <View style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 12, padding: 12, marginBottom: 18, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)' }}>
+              <Text style={{ fontSize: 12, color: '#6366F1', fontWeight: '600', lineHeight: 18 }}>
+                💡 Status is automatically calculated by the system based on engagement score. No manual selection needed.
+              </Text>
             </View>
 
             {/* Action buttons */}
