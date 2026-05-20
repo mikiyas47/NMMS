@@ -592,28 +592,43 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
       {/* ── Next Best Action (compact inline) ── */}
       <View style={{ backgroundColor: C.surface, borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Zap color="#F59E0B" size={15} />
-        <Text style={{ flex: 1, fontSize: 12, color: C.text, lineHeight: 16 }} numberOfLines={2}>
-          {prospect.interest_score > 60
-            ? `${prospect.name.split(' ')[0]} is highly engaged — send the Closing Script!`
-            : `Send a presentation to ${prospect.name.split(' ')[0]} to start tracking engagement.`}
-        </Text>
-        {prospect.interest_score > 60 ? (
-          <TouchableOpacity onPress={() => setShowClosingModal(true)} style={{ backgroundColor: '#10B981', paddingVertical: 6, paddingHorizontal: 11, borderRadius: 9 }}>
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>Close</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={openShareModal} style={{ backgroundColor: '#3B82F6', paddingVertical: 6, paddingHorizontal: 11, borderRadius: 9 }}>
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>Present</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flex: 1 }}>
+          {(() => {
+            const s = prospect.interest_score ?? 0;
+            let msg, btnLabel, btnColor, btnAction;
+            if (s >= 81) {
+              msg = `${prospect.name.split(' ')[0]} is Closing Ready — activate the Closing Assistant!`;
+              btnLabel = 'Close'; btnColor = '#10B981'; btnAction = () => setShowClosingModal(true);
+            } else if (s >= 61) {
+              msg = `${prospect.name.split(' ')[0]} has High Intent — recommend pricing or registration.`;
+              btnLabel = 'Follow-up'; btnColor = '#F97316'; btnAction = () => setShowFollowupModal(true);
+            } else if (s >= 41) {
+              msg = `${prospect.name.split(' ')[0]} is Interested — send a presentation now.`;
+              btnLabel = 'Present'; btnColor = '#3B82F6'; btnAction = openShareModal;
+            } else if (s >= 21) {
+              msg = `${prospect.name.split(' ')[0]} is Warm — follow up to increase engagement.`;
+              btnLabel = 'Follow-up'; btnColor = '#6366F1'; btnAction = () => setShowFollowupModal(true);
+            } else {
+              msg = `Send a presentation to ${prospect.name.split(' ')[0]} to start tracking engagement.`;
+              btnLabel = 'Present'; btnColor = '#3B82F6'; btnAction = openShareModal;
+            }
+            return (
+              <>
+                <Text style={{ fontSize: 12, color: C.text, lineHeight: 16 }} numberOfLines={2}>{msg}</Text>
+                <TouchableOpacity onPress={btnAction} style={{ backgroundColor: btnColor, paddingVertical: 6, paddingHorizontal: 11, borderRadius: 9, marginTop: 6, alignSelf: 'flex-start' }}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>{btnLabel}</Text>
+                </TouchableOpacity>
+              </>
+            );
+          })()}
+        </View>
       </View>
 
-      {/* ── Action Buttons (2×2 grid) ── */}
+      {/* ── Action Buttons ── */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {[
-          { label: 'Invite', icon: <Target size={13} color="#fff" />, bg: '#8B5CF6', action: () => setShowInviteModal(true) },
-          { label: 'Move Stage', icon: <ArrowRight size={13} color="#fff" />, bg: '#6366F1', action: () => setShowStageModal(true) },
-          { label: 'Add Note', icon: <User size={13} color="#fff" />, bg: '#F59E0B', action: () => setShowNoteModal(true) },
+          { label: 'Invite',    icon: <Target size={13} color="#fff" />,      bg: '#8B5CF6', action: () => setShowInviteModal(true) },
+          { label: 'Add Note',  icon: <User size={13} color="#fff" />,        bg: '#F59E0B', action: () => setShowNoteModal(true) },
           { label: 'Follow-up', icon: <MessageSquare size={13} color="#fff" />, bg: '#10B981', action: () => setShowFollowupModal(true) },
         ].map(btn => (
           <TouchableOpacity key={btn.label} onPress={btn.action}
@@ -793,6 +808,9 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
               <Text style={{ fontSize: 14, fontWeight: '800', color: C.text, marginTop: 4 }}>
                 {scoreBreakdown.classification ?? 'Cold'}
               </Text>
+              <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                Interest Score · {scoreBreakdown.final_score >= 81 ? 'Likely to convert' : scoreBreakdown.final_score >= 61 ? 'Strong buying interest' : scoreBreakdown.final_score >= 41 ? 'Active engagement' : scoreBreakdown.final_score >= 21 ? 'Moderate curiosity' : 'Weak engagement'}
+              </Text>
             </View>
 
             {/* Invitation Score */}
@@ -833,14 +851,33 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
               )}
             </View>
 
+            {/* Follow-up Score */}
+            <View style={{ backgroundColor: C.inputBg, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, borderBottomWidth: 1, borderBottomColor: C.border, paddingBottom: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>Follow-up Score</Text>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#10B981' }}>{scoreBreakdown.followup?.score ?? 0}</Text>
+              </View>
+              {scoreBreakdown.followup?.breakdown?.map((item, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 12, color: C.text, fontWeight: '500', flex: 1 }}>• {item.label}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: item.value >= 0 ? '#10B981' : '#EF4444' }}>
+                    {item.value >= 0 ? `+${item.value}` : item.value}
+                  </Text>
+                </View>
+              ))}
+              {(!scoreBreakdown.followup?.breakdown || scoreBreakdown.followup.breakdown.length === 0) && (
+                <Text style={{ fontSize: 12, color: C.muted, fontStyle: 'italic' }}>No follow-up activity yet</Text>
+              )}
+            </View>
+
             {/* Formula */}
             <View style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)' }}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#6366F1', marginBottom: 6, textTransform: 'uppercase' }}>Combined Formula</Text>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#6366F1', marginBottom: 6, textTransform: 'uppercase' }}>Combined Score</Text>
               <Text style={{ fontSize: 13, color: C.text, lineHeight: 18, fontWeight: '600' }}>
-                ({scoreBreakdown.invitation?.score ?? 0} × 0.4) + ({scoreBreakdown.presentation?.score ?? 0} × 0.6) = {scoreBreakdown.final_score ?? 0}
+                Invitation ({scoreBreakdown.invitation?.score ?? 0}) + Presentation ({scoreBreakdown.presentation?.score ?? 0}) + Follow-up ({scoreBreakdown.followup?.score ?? 0}) = {scoreBreakdown.final_score ?? 0}
               </Text>
               <Text style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                Invitation counts for 40% and Presentation counts for 60% of the final score.
+                All engagement sources are added together. Score is clamped to 0–100.
               </Text>
             </View>
           </ScrollView>
@@ -1253,19 +1290,6 @@ const AddProspectModal = ({ visible, onClose, onSaved, C }) => {
               <FormField label="Phone *" value={phone} onChange={setPhone} placeholder="+251 9..." C={C} />
               <FormField label="Email" value={email} onChange={setEmail} placeholder="john@example.com" C={C} />
               <FormField label="Source" value={source} onChange={setSource} placeholder="Referral, Event, Social..." C={C} />
-              <Text style={{ fontSize: 12, color: C.muted, fontWeight: '600', marginBottom: 8 }}>Initial Stage</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-                {['New Lead', 'Contacted', 'Invited'].map(s => (
-                  <TouchableOpacity key={s} onPress={() => setStage(s)}
-                    style={{
-                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
-                      backgroundColor: stage === s ? '#6366F1' : 'transparent',
-                      borderWidth: 1.5, borderColor: stage === s ? '#6366F1' : C.border
-                    }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: stage === s ? '#fff' : C.muted }}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
               <FormField label="Next Action" value={nextAction} onChange={setNextAction} placeholder="e.g. Call tomorrow" C={C} />
               <DatePickerField label="Next Action Date" value={nextDate} onChange={setNextDate} placeholder="Select Date" C={C} />
               <Text style={{ fontSize: 12, color: C.muted, fontWeight: '600', marginBottom: 8 }}>Tags</Text>

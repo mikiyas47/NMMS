@@ -428,6 +428,85 @@ class ProspectController extends Controller
         return response()->json(['status' => 'success', 'data' => $followup], 201);
     }
 
+    /**
+     * POST /api/prospects/{id}/followup-outcome
+     * Logs a follow-up outcome with scoring and returns score explanations.
+     */
+    public function logFollowupOutcome(Request $request, $id)
+    {
+        $distId = $this->distId($request);
+        $prospect = Prospect::where('prospect_id', $id)
+            ->where('distributor_id', $distId)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'outcome'          => 'required|string|max:60',
+            'method'           => 'nullable|string|max:60',
+            'notes'            => 'nullable|string',
+            'next_action_date' => 'nullable|date',
+        ]);
+
+        // Score deltas per spec
+        $outcomeScores = [
+            'positive'        => ['value' => 15,  'label' => 'Positive follow-up response'],
+            'asked_questions' => ['value' => 10,  'label' => 'Prospect asked more questions'],
+            'wants_pricing'   => ['value' => 20,  'label' => 'Prospect requested pricing'],
+            'wants_to_join'   => ['value' => 30,  'label' => 'Prospect wants to join'],
+            'needs_more_time' => ['value' => 5,   'label' => 'Prospect needs more time'],
+            'no_response'     => ['value' => -5,  'label' => 'No response to follow-up'],
+            'not_interested'  => ['value' => -20, 'label' => 'Prospect not interested'],
+        ];
+
+        $outcomeKey = strtolower(str_replace(' ', '_', $data['outcome']));
+        $delta = $outcomeScores[$outcomeKey] ?? null;
+
+        // Create followup record
+        $followup = Followup::create([
+            'prospect_id'    => $prospect->prospect_id,
+            'distributor_id' => $distId,
+            'followup_type'  => 'Follow-up Assistant',
+            'method'         => $data['method'] ?? null,
+            'outcome'        => $outcomeKey,
+            'notes'          => $data['notes'] ?? null,
+        ]);
+
+        // Log activity with score explanation
+        $actDesc = $delta
+            ? ($delta['value'] >= 0 ? "+{$delta['value']}" : "{$delta['value']}") . " because {$delta['label']}."
+            : "Follow-up outcome: {$data['outcome']}.";
+
+        ProspectActivity::create([
+            'prospect_id'    => $prospect->prospect_id,
+            'distributor_id' => $distId,
+            'activity_type'  => 'followup',
+            'title'          => 'Follow-up outcome logged',
+            'description'    => $actDesc,
+            'meta'           => ['outcome' => $outcomeKey, 'score_delta' => $delta['value'] ?? 0],
+            'created_at'     => now(),
+        ]);
+
+        if (!empty($data['next_action_date'])) {
+            $prospect->next_action_date = $data['next_action_date'];
+            $prospect->save();
+        }
+
+        // Recalculate full score
+        $prospect->recalculateScore();
+        $prospect->refresh();
+
+        $scoreExplanation = $delta
+            ? ($delta['value'] >= 0 ? "+{$delta['value']}" : "{$delta['value']}") . " because {$delta['label']}."
+            : null;
+
+        return response()->json([
+            'status'            => 'success',
+            'new_score'         => $prospect->interest_score,
+            'new_stage'         => $prospect->stage,
+            'score_explanation' => $scoreExplanation,
+            'outcome'           => $outcomeKey,
+        ]);
+    }
+
     // â”€â”€ Closing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** POST /api/prospects/{id}/closings */

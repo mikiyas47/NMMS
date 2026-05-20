@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum,api')->group(function () {
     Route::delete('/prospects/{id}', [ProspectController::class, 'destroy']);
     Route::patch('/prospects/{id}/stage', [ProspectController::class, 'moveStage']);
     Route::post('/prospects/{id}/followups', [ProspectController::class, 'storeFollowup']);
+    Route::post('/prospects/{id}/followup-outcome', [ProspectController::class, 'logFollowupOutcome']);
     Route::post('/prospects/{id}/closings', [ProspectController::class, 'storeClosing']);
     Route::post('/prospects/{id}/notes', [ProspectController::class, 'addNote']);
     Route::get('/prospects/{id}/activities', [ProspectController::class, 'activities']);

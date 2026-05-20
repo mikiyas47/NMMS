@@ -96,9 +96,22 @@ class Prospect extends Model
      */
     public function recalculateScore(): void
     {
-        $breakdown = $this->score_breakdown;
-        $this->interest_score = $breakdown['final_score'];
-        $this->interest_level = $breakdown['level'];
+        $svc = app(\App\Services\Scoring\InterestScoreService::class);
+        $breakdown = $svc->calculate($this);
+
+        $finalScore = $breakdown['final_score'];
+        [$classification, $level] = \App\Services\Scoring\InterestScoreService::classify($finalScore);
+
+        $this->interest_score = $finalScore;
+        $this->interest_level = $level;
+
+        // Auto-advance stage based on score (never downgrade terminal stages)
+        $autoStage = \App\Services\Scoring\InterestScoreService::stageFromScore($finalScore, $this->stage ?? 'New Lead');
+        if ($autoStage !== $this->stage) {
+            $this->stage  = $autoStage;
+            $this->status = $autoStage;
+            $this->stage_updated_at = now();
+        }
 
         $this->saveQuietly();
     }

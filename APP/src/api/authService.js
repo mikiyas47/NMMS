@@ -222,6 +222,7 @@ export const updateProspect = async (id, data) => (await apiClient.put(`/prospec
 export const deleteProspect = async (id) => (await apiClient.delete(`/prospects/${id}`)).data;
 export const moveProspectStage = async (id, payload) => (await apiClient.patch(`/prospects/${id}/stage`, typeof payload === 'string' ? { stage: payload } : payload)).data;
 export const addProspectFollowup = async (id, data) => (await apiClient.post(`/prospects/${id}/followups`, data)).data;
+export const logFollowupOutcome = async (id, data) => (await apiClient.post(`/prospects/${id}/followup-outcome`, data)).data;
 export const addProspectClosing = async (id, data) => (await apiClient.post(`/prospects/${id}/closings`, data)).data;
 export const addProspectNote = async (id, data) => (await apiClient.post(`/prospects/${id}/notes`, data)).data;
 
