@@ -932,7 +932,7 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
         <FollowupWizardContent
           contact={prospect}
           onClose={() => setShowFollowupModal(false)}
-          onSaved={() => onUpdate(null)}
+          onSaved={() => { setScoreBreakdown(null); onUpdate(null); }}
           createFollowup={addProspectFollowup}
           C={C}
         />
@@ -960,7 +960,7 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
         visible={showInviteModal}
         prospect={prospect}
         onClose={() => setShowInviteModal(false)}
-        onSaved={() => { setShowInviteModal(false); onUpdate(null); }}
+        onSaved={() => { setShowInviteModal(false); setScoreBreakdown(null); onUpdate(null); }}
         C={C}
       />
 
@@ -970,7 +970,7 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
         prospect={prospect}
         invitationId={pendingInvitationId}
         onClose={() => setShowUpdateModal(false)}
-        onSaved={() => { setShowUpdateModal(false); onUpdate(null); }}
+        onSaved={() => { setShowUpdateModal(false); setScoreBreakdown(null); onUpdate(null); }}
         C={C}
       />
 
@@ -982,7 +982,7 @@ const ProfileView = ({ prospect, onBack, onUpdate, autoOpen, C }) => {
         prospectName={prospect.name}
         prospectPhone={prospect.phone}
         prospectInterest={prospect.interest_level}
-        onShared={() => onUpdate(null)}
+        onShared={() => { setScoreBreakdown(null); onUpdate(null); }}
         C={C}
       />
     </View>
