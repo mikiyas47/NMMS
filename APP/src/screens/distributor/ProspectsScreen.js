@@ -1557,19 +1557,21 @@ const InviteFlowModal = ({ visible, prospect, onClose, onSaved, C }) => {
       const { createInvitation, moveProspectStage, updateProspect } = require('../../api/authService');
 
       await createInvitation({
-        prospect_id: prospect.prospect_id,
-        invitation_type: type === 'call' ? 'one_on_one_call' : 'one_on_one_call',
-        notes: finalNotes,
+        prospect_id:       prospect.prospect_id,
+        invitation_type:   type === 'call' ? 'one_on_one_call' : 'text',
+        invitation_method: type === 'call' ? 'call' : 'text',
+        outcome:           outcome,
+        notes:             finalNotes,
       });
 
-      // Update the prospect with intelligent insights
-      const updatePayload = { 
-          interest_score: intelligence.newTotalScore 
-      };
+      // Do NOT manually set interest_score — let the backend recalculate from all events
+      const updatePayload = {};
       if (extraData.new_phone) {
           updatePayload.phone = extraData.new_phone;
       }
-      await updateProspect(prospect.prospect_id, updatePayload);
+      if (Object.keys(updatePayload).length > 0) {
+          await updateProspect(prospect.prospect_id, updatePayload);
+      }
 
       // Advance pipeline stage
       await moveProspectStage(prospect.prospect_id, { 

@@ -428,6 +428,7 @@ class PerformanceController extends Controller
             'script_used'     => 'nullable|string',
             'invitation_method' => 'nullable|string|max:30',
             'prospect_value'  => 'nullable|in:hot,warm,cold',
+            'outcome'         => 'nullable|string|max:60',
         ]);
         $prospect = Prospect::where('prospect_id', $data['prospect_id'])->where('distributor_id', $distId)->firstOrFail();
         $distributor = Distributor::where('distributor_id', $distId)->first();
@@ -454,9 +455,11 @@ class PerformanceController extends Controller
             'distributor_id'    => $distId,
             'prospect_id'       => $data['prospect_id'],
             'invitation_type'   => $data['invitation_type'],
-            'invitation_method' => $data['invitation_method'] ?? 'text',
+            'invitation_method' => $data['invitation_method'] ?? ($data['invitation_type'] === 'one_on_one_call' ? 'call' : 'text'),
             'token'             => $token,
-            'status'            => 'sent',
+            'status'            => !empty($data['outcome']) ? 'accepted' : 'sent',
+            'outcome'           => $data['outcome'] ?? null,
+            'responded_at'      => !empty($data['outcome']) ? now() : null,
             'scheduled_at'      => $data['scheduled_at'] ?? null,
             'script_used'       => $script,
             'notes'             => $data['notes'] ?? null,
@@ -465,26 +468,42 @@ class PerformanceController extends Controller
             'prospect_value'    => $prospectValue,
         ]);
 
-        // Move prospect to "Awaiting Response" immediately after text invitation
-        if (in_array($data['invitation_method'] ?? 'text', ['text', 'whatsapp', 'telegram', 'sms', 'imo', 'messenger'])) {
+        // Move prospect to "Awaiting Response" only for text invitations with no immediate outcome
+        $isCall = in_array($data['invitation_method'] ?? '', ['call']) ||
+                  str_contains(strtolower($data['invitation_type'] ?? ''), 'call') ||
+                  str_contains(strtolower($data['invitation_type'] ?? ''), 'one_on_one');
+
+        if (!$isCall && empty($data['outcome'])) {
             $prospect->stage  = 'Awaiting Response';
             $prospect->status = 'Awaiting Response';
             $prospect->save();
         }
 
+        $methodLabel = $isCall ? 'Call' : 'Text';
+        $outcomeLabel = $data['outcome'] ? ' · Outcome: ' . $data['outcome'] : '';
+
         ProspectActivity::create([
             'prospect_id'    => $data['prospect_id'],
             'distributor_id' => $distId,
             'activity_type'  => 'invited',
-            'title'          => 'Text invitation sent',
-            'description'    => 'Sent via ' . ($data['invitation_method'] ?? 'text') . '. Script: ' . mb_substr($script, 0, 80) . '…',
-            'meta'           => ['type' => $data['invitation_type'], 'method' => $data['invitation_method'] ?? 'text', 'invitation_id' => $invitation->invitation_id],
+            'title'          => "{$methodLabel} invitation sent" . ($data['outcome'] ? " — {$data['outcome']}" : ''),
+            'description'    => "Sent via {$methodLabel}{$outcomeLabel}",
+            'meta'           => [
+                'type'          => $data['invitation_type'],
+                'method'        => $data['invitation_method'] ?? ($isCall ? 'call' : 'text'),
+                'outcome'       => $data['outcome'] ?? null,
+                'invitation_id' => $invitation->invitation_id,
+            ],
             'created_at'     => now(),
         ]);
 
         $this->markOnboardingMilestone($distId, 'first_invite_sent');
         $this->checkBadge($distId, 'first_invite');
         $this->incrementWeeklyGoal($distId, 'invitations_actual');
+
+        // Recalculate score so the scoreboard reflects this invitation immediately
+        $prospect->refresh();
+        $prospect->recalculateScore();
 
         $link = 'https://nmms-backend.onrender.com/api/invite/' . $token;
         return response()->json(['status' => 'success', 'data' => $invitation, 'tracked_link' => $link, 'script' => $script], 201);

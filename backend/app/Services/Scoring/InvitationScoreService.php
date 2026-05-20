@@ -70,18 +70,21 @@ class InvitationScoreService
 
             // ── Call invitation outcomes ──────────────────────────────────
             if ($isCall) {
-                if (in_array($outcome, ['success', 'invitation_successful'])) {
+                if (in_array($outcome, ['success', 'invitation_successful', 'successful'])) {
                     $score += 25;
                     $breakdown[] = ['label' => 'Call invitation successful', 'value' => 25];
-                } elseif (in_array($outcome, ['call_later', 'asked_to_call_later'])) {
+                } elseif (in_array($outcome, ['call_later', 'asked_to_call_later', 'call later'])) {
                     $score += 5;
                     $breakdown[] = ['label' => 'Asked to call later', 'value' => 5];
-                } elseif (in_array($outcome, ['no_answer', 'did_not_answer'])) {
+                } elseif (in_array($outcome, ['no_answer', 'did_not_answer', 'no answer'])) {
                     $score -= 5;
                     $breakdown[] = ['label' => 'Did not answer', 'value' => -5];
-                } elseif (in_array($outcome, ['wrong_number'])) {
+                } elseif (in_array($outcome, ['wrong_number', 'wrong number'])) {
                     $score -= 20;
                     $breakdown[] = ['label' => 'Wrong number', 'value' => -20];
+                } elseif (in_array($outcome, ['not_interested', 'not interested'])) {
+                    $score -= 25;
+                    $breakdown[] = ['label' => 'Not interested', 'value' => -25];
                 }
             }
         }
