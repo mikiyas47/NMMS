@@ -2,12 +2,39 @@
 
 ## 🔑 Admin Credentials (Ready to Use)
 
-### **Primary Admin Account:**
+### **Admin Account (Statistics Dashboard):**
 - **Email:** admin@nmms.com
 - **Password:** Admin@123
 - **Role:** Admin
+- **Dashboard:** `/admin` - Statistics and transaction data only
 
-**✅ This account will work after both deployments complete!**
+### **Owner Account (Full Management):**
+- **Email:** miki@gmail.com
+- **Password:** miki#123
+- **Role:** Owner
+- **Dashboard:** `/owner` - Full system management (presentations, distributors, products, etc.)
+
+---
+
+## 📊 What Each Role Can Access:
+
+### **Admin Dashboard** (`/admin`)
+✅ App user statistics
+✅ Transaction data
+✅ Revenue reports
+✅ Product sales breakdown
+✅ Recent transactions list
+❌ Cannot manage presentations
+❌ Cannot manage distributors
+❌ Cannot manage products
+
+### **Owner Dashboard** (`/owner`)
+✅ Everything admin can see
+✅ Manage presentations
+✅ Manage distributors
+✅ Manage products
+✅ System analytics
+✅ Full system control
 
 ---
 
@@ -17,33 +44,36 @@
 **Solution:** Added `AdminUserSeeder` to `DatabaseSeeder` - runs automatically on every deployment
 
 ### Issue 2: Frontend only allowed "owner" role
-**Solution:** Updated 3 files to allow both "admin" and "owner" roles:
-- ✅ `Login.jsx` - Login validation
-- ✅ `App.jsx` - Route redirection
-- ✅ `PrivateRoute.jsx` - Route protection
+**Solution:** Updated authentication to allow both "admin" and "owner" roles
+
+### Issue 3: Admin and Owner shared the same dashboard
+**Solution:** Created separate dashboards:
+- ✅ **Admin Dashboard** (`/admin`) - Statistics and transactions only
+- ✅ **Owner Dashboard** (`/owner`) - Full management features
 
 ---
 
 ## ⏱️ Deployment Timeline:
 
-1. **Backend deployment:** 2-5 minutes
-   - Creates admin user automatically via seeder
-   
-2. **Frontend deployment:** 2-5 minutes
-   - Updates role checks to allow admin access
+**Frontend deployment:** 2-5 minutes
+- Creates separate admin dashboard at `/admin` route
+- Owner dashboard remains at `/owner` route
 
-**Total wait time:** ~5-10 minutes from now
+**Total wait time:** ~2-5 minutes from now
 
 ---
 
 ## 🎯 How to Log In (After Deployment):
 
+### For Admin (Statistics Only):
 1. Go to your admin website URL
-2. Enter:
-   - **Email:** admin@nmms.com
-   - **Password:** Admin@123
-3. Click "Sign In"
-4. You'll be redirected to the Overview page with all statistics!
+2. Enter: `admin@nmms.com` / `Admin@123`
+3. You'll be redirected to `/admin` with statistics dashboard
+
+### For Owner (Full Management):
+1. Go to your admin website URL
+2. Enter: `miki@gmail.com` / `miki#123`
+3. You'll be redirected to `/owner` with full management features
 
 ---
 
