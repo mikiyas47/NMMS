@@ -47,7 +47,9 @@ class AuthController extends Controller
                 'password' => 'required',
             ]);
 
-            Log::info('Login attempt', ['email' => $request->email]);
+            try {
+                Log::info('Login attempt', ['email' => $request->email]);
+            } catch (\Throwable $e) {}
 
             // First, check if it's an Admin/Owner in the 'users' table
             // IMPORTANT: Only 'admin' and 'owner' roles are allowed here
@@ -61,7 +63,9 @@ class AuthController extends Controller
                     return response()->json(['message' => 'Invalid login details'], 401);
                 }
                 
-                Log::info('Admin/Owner login successful', ['email' => $user->email, 'role' => $user->role]);
+                try {
+                    Log::info('Admin/Owner login successful', ['email' => $user->email, 'role' => $user->role]);
+                } catch (\Throwable $e) {}
                 
                 $token = $user->createToken('auth_token')->plainTextToken;
                 return response()->json([
@@ -75,20 +79,24 @@ class AuthController extends Controller
             $distributor = \App\Models\Distributor::where('email', $request->email)->first();
 
             if ($distributor) {
-                Log::info('Distributor login attempt', [
-                    'email'     => $request->email,
-                    'status'    => $distributor->status,
-                    'is_paid'   => $distributor->is_paid,
-                    'has_password' => !empty($distributor->password),
-                ]);
+                try {
+                    Log::info('Distributor login attempt', [
+                        'email'     => $request->email,
+                        'status'    => $distributor->status,
+                        'is_paid'   => $distributor->is_paid,
+                        'has_password' => !empty($distributor->password),
+                    ]);
+                } catch (\Throwable $e) {}
 
                 if (Hash::check($request->password, $distributor->password)) {
                     // Reject inactive distributors — they need to complete upgrade first
                     if ($distributor->status !== 'active') {
-                        Log::warning('Inactive distributor tried to login', [
-                            'email'  => $request->email,
-                            'status' => $distributor->status,
-                        ]);
+                        try {
+                            Log::warning('Inactive distributor tried to login', [
+                                'email'  => $request->email,
+                                'status' => $distributor->status,
+                            ]);
+                        } catch (\Throwable $e) {}
                         return response()->json([
                             'message' => 'Your account is not yet active. Please complete the distributor activation process first.',
                         ], 403);
@@ -96,12 +104,14 @@ class AuthController extends Controller
 
                     $token = $distributor->createToken('auth_token')->plainTextToken;
 
-                    Log::info('Distributor login successful', [
-                        'distributor_id' => $distributor->distributor_id,
-                        'email'          => $distributor->email,
-                        'status'         => $distributor->status,
-                        'role'           => 'distributor',
-                    ]);
+                    try {
+                        Log::info('Distributor login successful', [
+                            'distributor_id' => $distributor->distributor_id,
+                            'email'          => $distributor->email,
+                            'status'         => $distributor->status,
+                            'role'           => 'distributor',
+                        ]);
+                    } catch (\Throwable $e) {}
 
                     return response()->json([
                         'access_token' => $token,
@@ -111,22 +121,34 @@ class AuthController extends Controller
                 }
             }
 
-            Log::warning('Failed login attempt - invalid credentials', ['email' => $request->email]);
+            try {
+                Log::warning('Failed login attempt - invalid credentials', ['email' => $request->email]);
+            } catch (\Throwable $e) {}
 
             return response()->json([
                 'message' => 'Invalid login details'
             ], 401);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Throwable $e) {
-            Log::error('Login error', [
-                'message' => $e->getMessage(),
-                'file'  => $e->getFile(),
-                'line'  => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            try {
+                Log::error('Login error', [
+                    'message' => $e->getMessage(),
+                    'file'  => $e->getFile(),
+                    'line'  => $e->getLine(),
+                ]);
+            } catch (\Throwable $logError) {
+                // Ignore logging errors (e.g. read-only filesystem)
+            }
             
             return response()->json([
                 'message' => 'Server Error',
                 'error' => $e->getMessage(),
+                'file' => basename($e->getFile()),
+                'line' => $e->getLine()
             ], 500);
         }
     }
