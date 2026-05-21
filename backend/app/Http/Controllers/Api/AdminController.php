@@ -154,98 +154,107 @@ class AdminController extends Controller
      */
     public function salesReport(Request $request)
     {
-        // Build base filtered query for successful payments
-        $applyFilters = function ($q) use ($request) {
-            $q->where('status', 'success');
+        try {
+            // Build base filtered query for successful payments
+            // IMPORTANT: always qualify columns with 'payments.' to avoid ambiguity after JOINs
+            $applyFilters = function ($q) use ($request) {
+                $q->where('payments.status', 'success');
+                if ($request->filled('date_from')) {
+                    $q->whereDate('payments.created_at', '>=', $request->date_from);
+                }
+                if ($request->filled('date_to')) {
+                    $q->whereDate('payments.created_at', '<=', $request->date_to);
+                }
+                return $q;
+            };
+
+            // Overview Stats
+            $totalRevenue      = $applyFilters(Payment::query())->sum('payments.amount');
+            $totalTransactions = $applyFilters(Payment::query())->count();
+
+            $pendingQ = Payment::where('payments.status', 'pending');
+            $failedQ  = Payment::whereIn('payments.status', ['failed', 'rejected']);
             if ($request->filled('date_from')) {
-                $q->whereDate('created_at', '>=', $request->date_from);
+                $pendingQ->whereDate('payments.created_at', '>=', $request->date_from);
+                $failedQ->whereDate('payments.created_at', '>=', $request->date_from);
             }
             if ($request->filled('date_to')) {
-                $q->whereDate('created_at', '<=', $request->date_to);
+                $pendingQ->whereDate('payments.created_at', '<=', $request->date_to);
+                $failedQ->whereDate('payments.created_at', '<=', $request->date_to);
             }
-            return $q;
-        };
 
-        // Overview Stats
-        $totalRevenue      = $applyFilters(Payment::query())->sum('amount');
-        $totalTransactions = $applyFilters(Payment::query())->count();
+            // Detect database driver for cross-DB compatible date formatting
+            $driver = DB::getDriverName();
 
-        $pendingQ  = Payment::where('status', 'pending');
-        $failedQ   = Payment::whereIn('status', ['failed', 'rejected']);
-        if ($request->filled('date_from')) {
-            $pendingQ->whereDate('created_at', '>=', $request->date_from);
-            $failedQ->whereDate('created_at', '>=', $request->date_from);
+            // Product Breakdown
+            $productSales = $applyFilters(Payment::query())
+                ->leftJoin('products', 'payments.product_id', '=', 'products.id')
+                ->select(
+                    DB::raw("COALESCE(products.name, 'Unknown Product') as product_name"),
+                    DB::raw('count(*) as sales_count'),
+                    DB::raw('sum(payments.amount) as revenue')
+                )
+                ->groupBy('payments.product_id', 'products.name')
+                ->orderByDesc('revenue')
+                ->get();
+
+            // Distributor Breakdown
+            $distributorSales = $applyFilters(Payment::query())
+                ->leftJoin('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
+                ->select(
+                    DB::raw("COALESCE(distributors.name, 'Unknown') as distributor_name"),
+                    DB::raw('count(*) as sales_count'),
+                    DB::raw('sum(payments.amount) as revenue')
+                )
+                ->groupBy('payments.distributor_id', 'distributors.name')
+                ->orderByDesc('revenue')
+                ->limit(10)
+                ->get();
+
+            // Monthly Trend
+            $trendQuery = $applyFilters(Payment::query());
+            if (!$request->filled('date_from')) {
+                $trendQuery->where('payments.created_at', '>=', now()->subMonths(5)->startOfMonth());
+            }
+
+            if ($driver === 'pgsql') {
+                $monthExpr = "TO_CHAR(payments.created_at, 'YYYY-MM')";
+            } elseif ($driver === 'sqlite') {
+                $monthExpr = "strftime('%Y-%m', payments.created_at)";
+            } else {
+                $monthExpr = "DATE_FORMAT(payments.created_at, '%Y-%m')";
+            }
+
+            $monthlyTrend = $trendQuery
+                ->select(
+                    DB::raw("{$monthExpr} as month"),
+                    DB::raw('sum(payments.amount) as revenue'),
+                    DB::raw('count(*) as transactions')
+                )
+                ->groupBy('month')
+                ->orderBy('month')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'overview' => [
+                        'total_revenue'        => (float) $totalRevenue,
+                        'total_transactions'   => $totalTransactions,
+                        'pending_transactions' => $pendingQ->count(),
+                        'failed_transactions'  => $failedQ->count(),
+                    ],
+                    'products'     => $productSales,
+                    'distributors' => $distributorSales,
+                    'trend'        => $monthlyTrend,
+                ]
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+                'line'    => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
         }
-        if ($request->filled('date_to')) {
-            $pendingQ->whereDate('created_at', '<=', $request->date_to);
-            $failedQ->whereDate('created_at', '<=', $request->date_to);
-        }
-
-        // Detect database driver for cross-DB compatible date formatting
-        $driver = DB::getDriverName();
-
-        // Product Breakdown — LEFT JOIN so missing product rows still appear
-        $productSales = $applyFilters(Payment::query())
-            ->leftJoin('products', 'payments.product_id', '=', 'products.id')
-            ->select(
-                DB::raw("COALESCE(products.name, 'Unknown Product') as product_name"),
-                DB::raw('count(*) as sales_count'),
-                DB::raw('sum(payments.amount) as revenue')
-            )
-            ->groupBy('payments.product_id', 'products.name')
-            ->orderByDesc('revenue')
-            ->get();
-
-        // Distributor Breakdown — LEFT JOIN
-        $distributorSales = $applyFilters(Payment::query())
-            ->leftJoin('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
-            ->select(
-                DB::raw("COALESCE(distributors.name, 'Unknown') as distributor_name"),
-                DB::raw('count(*) as sales_count'),
-                DB::raw('sum(payments.amount) as revenue')
-            )
-            ->groupBy('payments.distributor_id', 'distributors.name')
-            ->orderByDesc('revenue')
-            ->limit(10)
-            ->get();
-
-        // Monthly Trend — use driver-appropriate date function
-        $trendQuery = $applyFilters(Payment::query());
-        if (!$request->filled('date_from')) {
-            $trendQuery->where('payments.created_at', '>=', now()->subMonths(5)->startOfMonth());
-        }
-
-        if ($driver === 'pgsql') {
-            $monthExpr = "TO_CHAR(created_at, 'YYYY-MM')";
-        } elseif ($driver === 'sqlite') {
-            $monthExpr = "strftime('%Y-%m', created_at)";
-        } else {
-            $monthExpr = "DATE_FORMAT(created_at, '%Y-%m')";
-        }
-
-        $monthlyTrend = $trendQuery
-            ->select(
-                DB::raw("{$monthExpr} as month"),
-                DB::raw('sum(amount) as revenue'),
-                DB::raw('count(*) as transactions')
-            )
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
-
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'overview' => [
-                    'total_revenue'          => (float) $totalRevenue,
-                    'total_transactions'     => $totalTransactions,
-                    'pending_transactions'   => $pendingQ->count(),
-                    'failed_transactions'    => $failedQ->count(),
-                ],
-                'products'     => $productSales,
-                'distributors' => $distributorSales,
-                'trend'        => $monthlyTrend,
-            ]
-        ]);
     }
 }
