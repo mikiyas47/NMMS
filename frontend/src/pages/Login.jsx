@@ -17,8 +17,8 @@ const Login = () => {
     setLoading(true);
     try {
       const u = await login(form.email, form.password);
-      if (u.role === 'owner') navigate('/owner');
-      else setError('Access denied. Only owners can log in here.');
+      if (u.role === 'owner' || u.role === 'admin') navigate('/owner');
+      else setError('Access denied. Only admins and owners can log in here.');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Login failed.');
     } finally {
@@ -104,7 +104,7 @@ const Login = () => {
         </form>
 
         <p className="login-footer">
-          Access restricted to <strong>Owners</strong> only.
+          Access restricted to <strong>Admins & Owners</strong> only.
         </p>
       </div>
     </div>

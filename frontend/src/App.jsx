@@ -8,8 +8,8 @@ import CustomerPay     from './pages/CustomerPay';
 const RoleRedirect = () => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'owner') return <Navigate to="/owner" replace />;
-  // Admins and any other roles are not allowed
+  if (user.role === 'owner' || user.role === 'admin') return <Navigate to="/owner" replace />;
+  // Other roles are not allowed
   return <Navigate to="/login" replace />;
 };
 
