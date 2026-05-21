@@ -155,94 +155,65 @@ class AdminController extends Controller
     public function salesReport(Request $request)
     {
         try {
-            // Build base filtered query for successful payments
-            // IMPORTANT: always qualify columns with 'payments.' to avoid ambiguity after JOINs
-            $applyFilters = function ($q) use ($request) {
-                $q->where('payments.status', 'success');
-                if ($request->filled('date_from')) {
-                    $q->whereDate('payments.created_at', '>=', $request->date_from);
-                }
-                if ($request->filled('date_to')) {
-                    $q->whereDate('payments.created_at', '<=', $request->date_to);
-                }
-                return $q;
-            };
+            // Fetch only necessary data, avoid JOINs/raw grouping in DB.
+            $query = Payment::with(['product', 'distributor']);
 
-            // Overview Stats
-            $totalRevenue      = $applyFilters(Payment::query())->sum('payments.amount');
-            $totalTransactions = $applyFilters(Payment::query())->count();
-
-            $pendingQ = Payment::where('payments.status', 'pending');
-            $failedQ  = Payment::whereIn('payments.status', ['failed', 'rejected']);
             if ($request->filled('date_from')) {
-                $pendingQ->whereDate('payments.created_at', '>=', $request->date_from);
-                $failedQ->whereDate('payments.created_at', '>=', $request->date_from);
+                $query->whereDate('created_at', '>=', $request->date_from);
             }
             if ($request->filled('date_to')) {
-                $pendingQ->whereDate('payments.created_at', '<=', $request->date_to);
-                $failedQ->whereDate('payments.created_at', '<=', $request->date_to);
+                $query->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // Detect database driver for cross-DB compatible date formatting
-            $driver = DB::getDriverName();
+            $allPayments = $query->get();
 
-            // Product Breakdown
-            $productSales = $applyFilters(Payment::query())
-                ->leftJoin('products', 'payments.product_id', '=', 'products.id')
-                ->select(
-                    DB::raw("COALESCE(products.name, 'Unknown Product') as product_name"),
-                    DB::raw('count(*) as sales_count'),
-                    DB::raw('sum(payments.amount) as revenue')
-                )
-                ->groupBy('payments.product_id', 'products.name')
-                ->orderByDesc('revenue')
-                ->get();
+            $successPayments = $allPayments->where('status', 'success');
+            $pendingPayments = $allPayments->where('status', 'pending');
+            $failedPayments = $allPayments->whereIn('status', ['failed', 'rejected']);
 
-            // Distributor Breakdown
-            $distributorSales = $applyFilters(Payment::query())
-                ->leftJoin('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
-                ->select(
-                    DB::raw("COALESCE(distributors.name, 'Unknown') as distributor_name"),
-                    DB::raw('count(*) as sales_count'),
-                    DB::raw('sum(payments.amount) as revenue')
-                )
-                ->groupBy('payments.distributor_id', 'distributors.name')
-                ->orderByDesc('revenue')
-                ->limit(10)
-                ->get();
+            // Product Breakdown (in PHP)
+            $productSales = $successPayments->groupBy('product_id')->map(function ($group) {
+                return [
+                    'product_name' => $group->first()->product->name ?? 'Unknown Product',
+                    'sales_count'  => $group->count(),
+                    'revenue'      => $group->sum('amount'),
+                ];
+            })->sortByDesc('revenue')->values();
 
-            // Monthly Trend
-            $trendQuery = $applyFilters(Payment::query());
+            // Distributor Breakdown (in PHP)
+            $distributorSales = $successPayments->groupBy('distributor_id')->map(function ($group) {
+                return [
+                    'distributor_name' => $group->first()->distributor->name ?? 'Unknown',
+                    'sales_count'      => $group->count(),
+                    'revenue'          => $group->sum('amount'),
+                ];
+            })->sortByDesc('revenue')->take(10)->values();
+
+            // Monthly Trend (in PHP)
+            $trendPayments = $successPayments;
             if (!$request->filled('date_from')) {
-                $trendQuery->where('payments.created_at', '>=', now()->subMonths(5)->startOfMonth());
+                $cutoff = now()->subMonths(5)->startOfMonth();
+                $trendPayments = $successPayments->filter(fn($p) => $p->created_at >= $cutoff);
             }
 
-            if ($driver === 'pgsql') {
-                $monthExpr = "TO_CHAR(payments.created_at, 'YYYY-MM')";
-            } elseif ($driver === 'sqlite') {
-                $monthExpr = "strftime('%Y-%m', payments.created_at)";
-            } else {
-                $monthExpr = "DATE_FORMAT(payments.created_at, '%Y-%m')";
-            }
-
-            $monthlyTrend = $trendQuery
-                ->select(
-                    DB::raw("{$monthExpr} as month"),
-                    DB::raw('sum(payments.amount) as revenue'),
-                    DB::raw('count(*) as transactions')
-                )
-                ->groupBy('month')
-                ->orderBy('month')
-                ->get();
+            $monthlyTrend = $trendPayments->groupBy(function ($payment) {
+                return $payment->created_at->format('Y-m');
+            })->map(function ($group, $month) {
+                return [
+                    'month'        => $month,
+                    'revenue'      => $group->sum('amount'),
+                    'transactions' => $group->count(),
+                ];
+            })->sortKeys()->values();
 
             return response()->json([
                 'status' => 'success',
                 'data' => [
                     'overview' => [
-                        'total_revenue'        => (float) $totalRevenue,
-                        'total_transactions'   => $totalTransactions,
-                        'pending_transactions' => $pendingQ->count(),
-                        'failed_transactions'  => $failedQ->count(),
+                        'total_revenue'        => (float) $successPayments->sum('amount'),
+                        'total_transactions'   => $successPayments->count(),
+                        'pending_transactions' => $pendingPayments->count(),
+                        'failed_transactions'  => $failedPayments->count(),
                     ],
                     'products'     => $productSales,
                     'distributors' => $distributorSales,
