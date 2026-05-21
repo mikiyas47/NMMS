@@ -163,6 +163,100 @@ class AuthController extends Controller
 
         return response()->json($users->concat($distributors));
     }
+    
+    /**
+     * Get admin dashboard statistics
+     * Returns app user counts and transaction data
+     */
+    public function adminStats()
+    {
+        try {
+            // Total distributors (app users)
+            $totalDistributors = \App\Models\Distributor::count();
+            
+            // Active distributors (logged in within last 30 days)
+            $activeDistributors = \App\Models\Distributor::where('updated_at', '>=', now()->subDays(30))->count();
+            
+            // Paid distributors
+            $paidDistributors = \App\Models\Distributor::where('is_paid', true)->count();
+            
+            // Transaction statistics
+            $totalTransactions = \App\Models\Payment::where('status', 'success')->count();
+            $totalRevenue = \App\Models\Payment::where('status', 'success')->sum('amount');
+            $pendingTransactions = \App\Models\Payment::where('status', 'pending')->count();
+            $failedTransactions = \App\Models\Payment::where('status', 'failed')->count();
+            
+            // Recent transactions (last 10)
+            $recentTransactions = \App\Models\Payment::with(['product', 'distributor'])
+                ->where('status', 'success')
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get()
+                ->map(function ($payment) {
+                    return [
+                        'id' => $payment->id,
+                        'customer_name' => $payment->customer_name,
+                        'product_name' => $payment->product->name ?? 'Unknown',
+                        'amount' => $payment->amount,
+                        'currency' => $payment->currency,
+                        'distributor_name' => $payment->distributor->name ?? 'Unknown',
+                        'created_at' => $payment->created_at->format('Y-m-d H:i:s'),
+                    ];
+                });
+            
+            // Product sales breakdown
+            $productSales = \App\Models\Payment::where('status', 'success')
+                ->selectRaw('product_id, COUNT(*) as sales_count, SUM(amount) as total_revenue')
+                ->groupBy('product_id')
+                ->with('product')
+                ->get()
+                ->map(function ($sale) {
+                    return [
+                        'product_id' => $sale->product_id,
+                        'product_name' => $sale->product->name ?? 'Unknown',
+                        'sales_count' => $sale->sales_count,
+                        'total_revenue' => $sale->total_revenue,
+                    ];
+                });
+            
+            // Monthly revenue trend (last 6 months)
+            $monthlyRevenue = \App\Models\Payment::where('status', 'success')
+                ->where('created_at', '>=', now()->subMonths(6))
+                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(amount) as revenue')
+                ->groupBy('month')
+                ->orderBy('month', 'asc')
+                ->get();
+            
+            return response()->json([
+                'distributors' => [
+                    'total' => $totalDistributors,
+                    'active' => $activeDistributors,
+                    'paid' => $paidDistributors,
+                ],
+                'transactions' => [
+                    'total' => $totalTransactions,
+                    'total_revenue' => $totalRevenue,
+                    'pending' => $pendingTransactions,
+                    'failed' => $failedTransactions,
+                ],
+                'recent_transactions' => $recentTransactions,
+                'product_sales' => $productSales,
+                'monthly_revenue' => $monthlyRevenue,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Admin stats error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to fetch admin statistics',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function storeUser(Request $request)
     {
         $request->validate([

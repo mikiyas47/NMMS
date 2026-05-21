@@ -3,7 +3,7 @@ import { Users, ShieldCheck, DollarSign, Activity, ArrowUpRight, Star, RefreshCw
 import client from '../../api/client';
 
 const OverviewPage = ({ dark }) => {
-  const [users,      setUsers]      = useState([]);
+  const [adminStats, setAdminStats] = useState(null);
   const [products,   setProducts]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -11,18 +11,16 @@ const OverviewPage = ({ dark }) => {
   const fetchData = async (refresh = false) => {
     if (refresh) setRefreshing(true);
     try {
-      const [userRes, prodRes] = await Promise.all([
-        client.get('/all-users'),
+      const [statsRes, prodRes] = await Promise.all([
+        client.get('/admin/stats'),
         client.get('/products')
       ]);
-      // Filter out admins so they are not shown at all in any stats
-      const nonAdmins = userRes.data.filter(u => u.role !== 'admin');
-      setUsers(nonAdmins);
+      setAdminStats(statsRes.data);
       if (prodRes.data && prodRes.data.data) {
         setProducts(prodRes.data.data);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Failed to fetch admin stats:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -31,15 +29,40 @@ const OverviewPage = ({ dark }) => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const paid    = users.filter((u) => u.isPaid).length;
-  const revenue = paid * 50;
-
-  const stats = [
-    { label: 'Total Users',  value: users.length, icon: Users,       color: '#3B82F6', bg: 'rgba(59,130,246,0.15)',  trend: '+12%' },
-    { label: 'Paid Users',   value: paid,          icon: ShieldCheck, color: '#10B981', bg: 'rgba(16,185,129,0.15)',  trend: '+8%'  },
-    { label: 'Revenue',      value: `$${revenue.toLocaleString()}`, icon: DollarSign, color: '#F59E0B', bg: 'rgba(245,158,11,0.15)', trend: '+23%' },
-    { label: 'Products',     value: products.length, icon: Activity,    color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)',  trend: '0%'   },
-  ];
+  const stats = adminStats ? [
+    { 
+      label: 'Total App Users',  
+      value: adminStats.distributors.total, 
+      icon: Users,       
+      color: '#3B82F6', 
+      bg: 'rgba(59,130,246,0.15)',  
+      trend: `${adminStats.distributors.active} active`
+    },
+    { 
+      label: 'Paid Distributors',   
+      value: adminStats.distributors.paid,          
+      icon: ShieldCheck, 
+      color: '#10B981', 
+      bg: 'rgba(16,185,129,0.15)',  
+      trend: `${Math.round((adminStats.distributors.paid / adminStats.distributors.total) * 100)}% conversion`
+    },
+    { 
+      label: 'Total Revenue',      
+      value: `${adminStats.transactions.total_revenue.toLocaleString()} ETB`, 
+      icon: DollarSign, 
+      color: '#F59E0B', 
+      bg: 'rgba(245,158,11,0.15)', 
+      trend: `${adminStats.transactions.total} transactions`
+    },
+    { 
+      label: 'Products',     
+      value: products.length, 
+      icon: Activity,    
+      color: '#8B5CF6', 
+      bg: 'rgba(139,92,246,0.15)',  
+      trend: `${adminStats.product_sales.length} selling`
+    },
+  ] : [];
 
   return (
     <div className="page-container">
@@ -84,6 +107,96 @@ const OverviewPage = ({ dark }) => {
           </div>
         ))}
       </div>
+
+      {/* Recent Transactions & Product Sales */}
+      {!loading && adminStats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '2rem' }}>
+          {/* Recent Transactions */}
+          <div style={{ 
+            background: 'white', 
+            borderRadius: '12px', 
+            padding: '1.5rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: '600', marginBottom: '1rem', color: '#1f2937' }}>
+              Recent Transactions
+            </h3>
+            {adminStats.recent_transactions.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>No transactions yet</p>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {adminStats.recent_transactions.map((tx) => (
+                  <div key={tx.id} style={{ 
+                    padding: '0.75rem', 
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <p style={{ fontWeight: '500', fontSize: '0.875rem', color: '#111827' }}>
+                        {tx.customer_name}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                        {tx.product_name} • {tx.distributor_name}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                        {new Date(tx.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontWeight: '600', color: '#10B981', fontSize: '0.875rem' }}>
+                        {tx.amount.toLocaleString()} {tx.currency}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Product Sales Breakdown */}
+          <div style={{ 
+            background: 'white', 
+            borderRadius: '12px', 
+            padding: '1.5rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: '600', marginBottom: '1rem', color: '#1f2937' }}>
+              Product Sales
+            </h3>
+            {adminStats.product_sales.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>No sales yet</p>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {adminStats.product_sales.map((sale) => (
+                  <div key={sale.product_id} style={{ 
+                    padding: '0.75rem', 
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <p style={{ fontWeight: '500', fontSize: '0.875rem', color: '#111827' }}>
+                        {sale.product_name}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                        {sale.sales_count} sales
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontWeight: '600', color: '#8B5CF6', fontSize: '0.875rem' }}>
+                        {parseFloat(sale.total_revenue).toLocaleString()} ETB
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
