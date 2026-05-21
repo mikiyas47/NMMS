@@ -6,13 +6,13 @@ const PrivateRoute = ({ children, role }) => {
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   
-  // Allow both admin and owner roles for owner routes
-  if (role === 'owner' && (user.role === 'owner' || user.role === 'admin')) {
-    return children;
+  // Check if user has the required role
+  if (role && user.role !== role) {
+    // Redirect to their appropriate dashboard
+    if (user.role === 'owner') return <Navigate to="/owner" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin" replace />;
+    return <Navigate to="/login" replace />;
   }
-  
-  // For other specific roles, check exact match
-  if (role && user.role !== role) return <Navigate to="/" replace />;
   
   return children;
 };

@@ -17,7 +17,8 @@ const Login = () => {
     setLoading(true);
     try {
       const u = await login(form.email, form.password);
-      if (u.role === 'owner' || u.role === 'admin') navigate('/owner');
+      if (u.role === 'owner') navigate('/owner');
+      else if (u.role === 'admin') navigate('/admin');
       else setError('Access denied. Only admins and owners can log in here.');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Login failed.');
