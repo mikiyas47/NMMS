@@ -7,7 +7,43 @@
 - **Password:** Admin@123
 - **Role:** Admin
 
-**Use this account to log in to the admin website!**
+**✅ This account will work after both deployments complete!**
+
+---
+
+## 📋 What Was Fixed:
+
+### Issue 1: Admin user didn't exist in production
+**Solution:** Added `AdminUserSeeder` to `DatabaseSeeder` - runs automatically on every deployment
+
+### Issue 2: Frontend only allowed "owner" role
+**Solution:** Updated 3 files to allow both "admin" and "owner" roles:
+- ✅ `Login.jsx` - Login validation
+- ✅ `App.jsx` - Route redirection
+- ✅ `PrivateRoute.jsx` - Route protection
+
+---
+
+## ⏱️ Deployment Timeline:
+
+1. **Backend deployment:** 2-5 minutes
+   - Creates admin user automatically via seeder
+   
+2. **Frontend deployment:** 2-5 minutes
+   - Updates role checks to allow admin access
+
+**Total wait time:** ~5-10 minutes from now
+
+---
+
+## 🎯 How to Log In (After Deployment):
+
+1. Go to your admin website URL
+2. Enter:
+   - **Email:** admin@nmms.com
+   - **Password:** Admin@123
+3. Click "Sign In"
+4. You'll be redirected to the Overview page with all statistics!
 
 ---
 
