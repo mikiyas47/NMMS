@@ -181,11 +181,14 @@ class AdminController extends Controller
             $failedQ->whereDate('created_at', '<=', $request->date_to);
         }
 
+        // Detect database driver for cross-DB compatible date formatting
+        $driver = DB::getDriverName();
+
         // Product Breakdown — LEFT JOIN so missing product rows still appear
         $productSales = $applyFilters(Payment::query())
             ->leftJoin('products', 'payments.product_id', '=', 'products.id')
             ->select(
-                DB::raw('COALESCE(products.name, "Unknown Product") as product_name'),
+                DB::raw("COALESCE(products.name, 'Unknown Product') as product_name"),
                 DB::raw('count(*) as sales_count'),
                 DB::raw('sum(payments.amount) as revenue')
             )
@@ -197,7 +200,7 @@ class AdminController extends Controller
         $distributorSales = $applyFilters(Payment::query())
             ->leftJoin('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
             ->select(
-                DB::raw('COALESCE(distributors.name, "Unknown") as distributor_name'),
+                DB::raw("COALESCE(distributors.name, 'Unknown') as distributor_name"),
                 DB::raw('count(*) as sales_count'),
                 DB::raw('sum(payments.amount) as revenue')
             )
@@ -206,14 +209,23 @@ class AdminController extends Controller
             ->limit(10)
             ->get();
 
-        // Monthly Trend
+        // Monthly Trend — use driver-appropriate date function
         $trendQuery = $applyFilters(Payment::query());
         if (!$request->filled('date_from')) {
             $trendQuery->where('payments.created_at', '>=', now()->subMonths(5)->startOfMonth());
         }
+
+        if ($driver === 'pgsql') {
+            $monthExpr = "TO_CHAR(created_at, 'YYYY-MM')";
+        } elseif ($driver === 'sqlite') {
+            $monthExpr = "strftime('%Y-%m', created_at)";
+        } else {
+            $monthExpr = "DATE_FORMAT(created_at, '%Y-%m')";
+        }
+
         $monthlyTrend = $trendQuery
             ->select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
+                DB::raw("{$monthExpr} as month"),
                 DB::raw('sum(amount) as revenue'),
                 DB::raw('count(*) as transactions')
             )
