@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
+            \App\Http\Middleware\ForceApiCors::class,
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
     })
