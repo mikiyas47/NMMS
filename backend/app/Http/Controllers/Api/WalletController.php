@@ -28,11 +28,16 @@ class WalletController extends Controller
         $stat   = Stat::firstOrCreate(['distributor_id'   => $distributorId]);
         $mlm    = new MlmEngineService();
 
-        // Own package points (sum of all packages this distributor purchased)
-        $ownPoints = Account::where('distributor_id', $distributorId)
+        // Own package points (sum of all packages this distributor purchased AFTER the main account)
+        // The main account should not be considered for own commission/points.
+        $ownPointsAccounts = Account::where('distributor_id', $distributorId)
             ->with('product')
-            ->get()
-            ->sum(fn($a) => $a->product->point ?? 0);
+            ->orderBy('id', 'asc')
+            ->get();
+            
+        $ownPointsAccounts->shift(); // Remove main account
+        
+        $ownPoints = $ownPointsAccounts->sum(fn($a) => $a->product->point ?? 0);
 
         // Sync own_points to stat if drifted
         if ((int)$stat->own_points !== (int)$ownPoints) {
