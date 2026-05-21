@@ -19,6 +19,9 @@ class DatabaseSeeder extends Seeder
 
         $this->call(PlaybookSeeder::class);
 
+        // Create admin user for production access
+        $this->call(AdminUserSeeder::class);
+
         try {
             User::firstOrCreate(
                 ['email' => 'mikiadmin@gmail.com'], // Added email for firstOrCreate
