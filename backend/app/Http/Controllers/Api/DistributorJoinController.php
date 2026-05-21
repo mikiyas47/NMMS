@@ -108,7 +108,7 @@ class DistributorJoinController extends Controller
                 'is_paid'  => (bool) $user->is_paid,
                 'account_count' => $accounts->count(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('DistributorJoin: Failed', [
                 'distributor_id' => $distributorId,
                 'error'          => $e->getMessage(),

@@ -55,6 +55,9 @@ class MlmEngineService
                     $companyRoot = Node::whereNull('parent_id')->first();
                     if ($companyRoot) {
                         $placementNode = $this->findPlacementNode($companyRoot->id);
+                        if (!$placementNode) {
+                            throw new \Exception("No placement slot found in tree for new distributor {$distributorId}.");
+                        }
                         $leg = $this->calculateNextLeg($placementNode->id);
                     } else {
                         // Creating the very first node in the system
@@ -66,6 +69,9 @@ class MlmEngineService
                         $existingLegChild = Node::where('parent_id', $mainNode->id)->where('leg', $preferredLeg)->first();
                         if ($existingLegChild) {
                             $placementNode = $this->findPlacementNode($existingLegChild->id);
+                            if (!$placementNode) {
+                                throw new \Exception("No placement slot found under preferred leg {$preferredLeg} for distributor {$distributorId}.");
+                            }
                             $leg = $this->calculateNextLeg($placementNode->id);
                         } else {
                             $placementNode = $mainNode;
@@ -73,6 +79,9 @@ class MlmEngineService
                         }
                     } else {
                         $placementNode = $this->findPlacementNode($mainNode->id);
+                        if (!$placementNode) {
+                            throw new \Exception("No placement slot found under main node for distributor {$distributorId}.");
+                        }
                         $leg = $this->calculateNextLeg($placementNode->id);
                     }
                 }
@@ -110,9 +119,13 @@ class MlmEngineService
             }
 
             return $nodes[0] ?? null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('MLM processPurchase Error: ' . $e->getMessage());
+            Log::error('MLM processPurchase Error: ' . $e->getMessage(), [
+                'distributor_id' => $distributorId,
+                'product_id' => $productId,
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
             throw $e;
         }
     }
@@ -133,6 +146,7 @@ class MlmEngineService
                     'name'      => $customerName,
                     'email'     => $customerEmail,
                     'phone'     => $customerPhone,
+                    'password'  => bcrypt('password'),
                     'upline_id' => $distributorId,
                     'is_paid'   => false,
                     'status'    => 'customer',
@@ -155,6 +169,9 @@ class MlmEngineService
                     $existingLegChild = Node::where('parent_id', $sponsorNode->id)->where('leg', $preferredLeg)->first();
                     if ($existingLegChild) {
                         $placementNode = $this->findPlacementNode($existingLegChild->id);
+                        if (!$placementNode) {
+                            throw new \Exception("No placement slot found under preferred leg {$preferredLeg}.");
+                        }
                         $leg = $this->calculateNextLeg($placementNode->id);
                     } else {
                         $placementNode = $sponsorNode;
@@ -162,6 +179,9 @@ class MlmEngineService
                     }
                 } else {
                     $placementNode = $this->findPlacementNode($sponsorNode->id);
+                    if (!$placementNode) {
+                        throw new \Exception("No placement slot found under sponsor node.");
+                    }
                     $leg = $this->calculateNextLeg($placementNode->id);
                 }
 
@@ -195,9 +215,13 @@ class MlmEngineService
             }
 
             return $nodes[0] ?? null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('MLM processCustomerPurchase Error: ' . $e->getMessage());
+            Log::error('MLM processCustomerPurchase Error: ' . $e->getMessage(), [
+                'distributor_id' => $distributorId,
+                'product_id' => $productId,
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
             throw $e;
         }
     }
