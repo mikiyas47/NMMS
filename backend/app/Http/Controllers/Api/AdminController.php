@@ -19,25 +19,24 @@ class AdminController extends Controller
     {
         $users = User::select('userid', 'name', 'email', 'phone', 'role', 'status', 'created_at')->get();
         
+        // Select distributor_id as userid so frontend uses the same key for all user types
         $distributors = Distributor::select(
-            'distributor_id as userid',
+            DB::raw('distributor_id as userid'),
             'name',
             'email',
             'phone',
-            'status',
+            DB::raw("COALESCE(status, 'inactive') as status"),
             'is_paid',
             'created_at',
             'rank'
         )->get()->map(function ($d) {
-            $d->role = 'distributor';
-            $d->isPaid = (bool) $d->is_paid;
+            $d->role    = 'distributor';
+            $d->is_paid = (bool) $d->is_paid;
             return $d;
         });
 
-        // Combine and optionally filter/sort
         $allUsers = $users->concat($distributors);
 
-        // Simple filtering (can be expanded)
         if ($request->has('role')) {
             $allUsers = $allUsers->where('role', $request->role);
         }
@@ -46,16 +45,16 @@ class AdminController extends Controller
         }
         if ($request->has('search')) {
             $s = strtolower($request->search);
-            $allUsers = $allUsers->filter(function($u) use ($s) {
-                return str_contains(strtolower($u->name), $s) || 
-                       str_contains(strtolower($u->email), $s) || 
-                       str_contains(strtolower($u->phone ?? ''), $s);
+            $allUsers = $allUsers->filter(function ($u) use ($s) {
+                return str_contains(strtolower($u->name ?? ''), $s)
+                    || str_contains(strtolower($u->email ?? ''), $s)
+                    || str_contains(strtolower($u->phone ?? ''), $s);
             });
         }
 
         return response()->json([
             'status' => 'success',
-            'data' => $allUsers->values() // Re-index array
+            'data'   => $allUsers->values(),
         ]);
     }
 
@@ -131,19 +130,23 @@ class AdminController extends Controller
      */
     public function toggleStatus(Request $request, $id)
     {
-        $role = $request->input('role');
-        $isDistributor = ($role === 'distributor') || Distributor::where('distributor_id', $id)->exists();
+        $role = $request->input('role', '');
 
-        if ($isDistributor) {
+        // Use role to pick the correct table; fall back to distributor check if role missing
+        if ($role === 'distributor') {
             $model = Distributor::where('distributor_id', $id)->firstOrFail();
-        } else {
+        } elseif (in_array($role, ['admin', 'owner'])) {
             $model = User::where('userid', $id)->firstOrFail();
+        } else {
+            // Fallback: try users first, then distributors
+            $model = User::where('userid', $id)->first()
+                ?? Distributor::where('distributor_id', $id)->firstOrFail();
         }
 
         $model->status = $model->status === 'active' ? 'inactive' : 'active';
         $model->save();
 
-        return response()->json(['status' => 'success', 'message' => 'User status updated', 'data' => $model]);
+        return response()->json(['status' => 'success', 'message' => 'User status updated', 'new_status' => $model->status]);
     }
 
     /**
@@ -151,58 +154,66 @@ class AdminController extends Controller
      */
     public function salesReport(Request $request)
     {
-        $query = Payment::where('status', 'success');
-
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
-
-        $baseQuery = clone $query;
+        // Build base filtered query for successful payments
+        $applyFilters = function ($q) use ($request) {
+            $q->where('status', 'success');
+            if ($request->filled('date_from')) {
+                $q->whereDate('created_at', '>=', $request->date_from);
+            }
+            if ($request->filled('date_to')) {
+                $q->whereDate('created_at', '<=', $request->date_to);
+            }
+            return $q;
+        };
 
         // Overview Stats
-        $totalRevenue = (clone $baseQuery)->sum('amount');
-        $totalTransactions = (clone $baseQuery)->count();
-        $pendingTransactions = Payment::where('status', 'pending');
-        $failedTransactions = Payment::where('status', 'failed');
-        
+        $totalRevenue      = $applyFilters(Payment::query())->sum('amount');
+        $totalTransactions = $applyFilters(Payment::query())->count();
+
+        $pendingQ  = Payment::where('status', 'pending');
+        $failedQ   = Payment::whereIn('status', ['failed', 'rejected']);
         if ($request->filled('date_from')) {
-            $pendingTransactions->whereDate('created_at', '>=', $request->date_from);
-            $failedTransactions->whereDate('created_at', '>=', $request->date_from);
+            $pendingQ->whereDate('created_at', '>=', $request->date_from);
+            $failedQ->whereDate('created_at', '>=', $request->date_from);
         }
         if ($request->filled('date_to')) {
-            $pendingTransactions->whereDate('created_at', '<=', $request->date_to);
-            $failedTransactions->whereDate('created_at', '<=', $request->date_to);
+            $pendingQ->whereDate('created_at', '<=', $request->date_to);
+            $failedQ->whereDate('created_at', '<=', $request->date_to);
         }
 
-        // Product Breakdown
-        $productSales = (clone $baseQuery)
-            ->join('products', 'payments.product_id', '=', 'products.id')
-            ->select('products.name as product_name', DB::raw('count(*) as sales_count'), DB::raw('sum(payments.amount) as revenue'))
-            ->groupBy('products.id', 'products.name')
+        // Product Breakdown — LEFT JOIN so missing product rows still appear
+        $productSales = $applyFilters(Payment::query())
+            ->leftJoin('products', 'payments.product_id', '=', 'products.id')
+            ->select(
+                DB::raw('COALESCE(products.name, "Unknown Product") as product_name'),
+                DB::raw('count(*) as sales_count'),
+                DB::raw('sum(payments.amount) as revenue')
+            )
+            ->groupBy('payments.product_id', 'products.name')
             ->orderByDesc('revenue')
             ->get();
 
-        // Distributor Breakdown
-        $distributorSales = (clone $baseQuery)
-            ->join('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
-            ->select('distributors.name as distributor_name', DB::raw('count(*) as sales_count'), DB::raw('sum(payments.amount) as revenue'))
-            ->groupBy('distributors.distributor_id', 'distributors.name')
+        // Distributor Breakdown — LEFT JOIN
+        $distributorSales = $applyFilters(Payment::query())
+            ->leftJoin('distributors', 'payments.distributor_id', '=', 'distributors.distributor_id')
+            ->select(
+                DB::raw('COALESCE(distributors.name, "Unknown") as distributor_name'),
+                DB::raw('count(*) as sales_count'),
+                DB::raw('sum(payments.amount) as revenue')
+            )
+            ->groupBy('payments.distributor_id', 'distributors.name')
             ->orderByDesc('revenue')
             ->limit(10)
             ->get();
 
-        // Monthly Trend (Last 6 months by default, unless filtered)
-        $monthlyQuery = clone $baseQuery;
+        // Monthly Trend
+        $trendQuery = $applyFilters(Payment::query());
         if (!$request->filled('date_from')) {
-            $monthlyQuery->where('created_at', '>=', now()->subMonths(5)->startOfMonth());
+            $trendQuery->where('payments.created_at', '>=', now()->subMonths(5)->startOfMonth());
         }
-        
-        $monthlyTrend = $monthlyQuery
+        $monthlyTrend = $trendQuery
             ->select(
-                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"), 
+                DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month"),
                 DB::raw('sum(amount) as revenue'),
                 DB::raw('count(*) as transactions')
             )
@@ -214,14 +225,14 @@ class AdminController extends Controller
             'status' => 'success',
             'data' => [
                 'overview' => [
-                    'total_revenue' => $totalRevenue,
-                    'total_transactions' => $totalTransactions,
-                    'pending_transactions' => $pendingTransactions->count(),
-                    'failed_transactions' => $failedTransactions->count(),
+                    'total_revenue'          => (float) $totalRevenue,
+                    'total_transactions'     => $totalTransactions,
+                    'pending_transactions'   => $pendingQ->count(),
+                    'failed_transactions'    => $failedQ->count(),
                 ],
-                'products' => $productSales,
+                'products'     => $productSales,
                 'distributors' => $distributorSales,
-                'trend' => $monthlyTrend
+                'trend'        => $monthlyTrend,
             ]
         ]);
     }
