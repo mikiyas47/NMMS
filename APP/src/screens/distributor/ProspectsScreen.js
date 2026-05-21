@@ -1977,6 +1977,7 @@ const ProspectsScreen = ({ C }) => {
   const [selectedProspect, setSelectedProspect] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dashboardError, setDashboardError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [listFilter, setListFilter] = useState({});
 
@@ -1985,7 +1986,11 @@ const ProspectsScreen = ({ C }) => {
       if (!quiet) setLoading(true);
       const res = await getProspectDashboard();
       setDashData(res.data);
-    } catch (e) { console.error('Prospect dashboard error:', e); }
+      setDashboardError('');
+    } catch (e) {
+      setDashboardError(e?.message || 'Could not load your prospect dashboard.');
+      console.error('Prospect dashboard error:', e);
+    }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
@@ -2102,6 +2107,27 @@ const ProspectsScreen = ({ C }) => {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={C.accent} size="large" />
         <Text style={{ color: C.muted, marginTop: 12, fontSize: 13 }}>Loading prospects...</Text>
+      </View>
+    );
+  }
+
+  if (view === 'dashboard' && dashboardError && !dashData) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <View style={{ width: '100%', maxWidth: 420, backgroundColor: C.inputBg, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: C.border }}>
+          <Text style={{ color: C.text, fontSize: 18, fontWeight: '900', marginBottom: 8 }}>
+            Could not load dashboard
+          </Text>
+          <Text style={{ color: C.muted, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+            {dashboardError}
+          </Text>
+          <TouchableOpacity
+            onPress={() => loadDashboard()}
+            style={{ backgroundColor: C.accent, borderRadius: 14, height: 48, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -2271,4 +2297,3 @@ const BottomModal = ({ visible, onClose, title, children, C }) => (
 );
 
 export default ProspectsScreen;
-

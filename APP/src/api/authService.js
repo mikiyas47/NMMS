@@ -45,13 +45,49 @@ export const getEcho = () => echoInstance;
 const _cache = {};
 const CACHE_TTL = 30000; // 30 seconds
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isTransientNetworkError = (error) => {
+  if (error?.response) return false;
+  const msg = String(error?.message || '');
+  return /network error|timeout|timed out|socket|connection|unable to connect|request aborted/i.test(msg);
+};
+
+const wakeServer = async () => {
+  try {
+    await axios.get(API_BASE_URL + '/products', { timeout: 10000 });
+  } catch {
+    // best-effort warmup only
+  }
+};
+
+const apiGetWithRetry = async (url, config = {}, fallbackMessage = 'Could not load data.') => {
+  try {
+    return await apiClient.get(url, config);
+  } catch (error) {
+    if (isTransientNetworkError(error)) {
+      await wakeServer();
+      await sleep(2500);
+      try {
+        return await apiClient.get(url, config);
+      } catch (retryError) {
+        throwApiError(
+          retryError,
+          'Cannot reach the server. It may be waking up on Render. Please wait a few seconds and try again.'
+        );
+      }
+    }
+    throwApiError(error, fallbackMessage);
+  }
+};
+
 const cachedGet = async (url, params = {}) => {
   const key = url + JSON.stringify(params);
   const now = Date.now();
   if (_cache[key] && now - _cache[key].ts < CACHE_TTL) {
     return _cache[key].data;
   }
-  const response = await apiClient.get(url, params ? { params } : {});
+  const response = await apiGetWithRetry(url, params ? { params } : {}, 'Could not load data.');
   _cache[key] = { data: response.data, ts: now };
   return response.data;
 };
@@ -229,8 +265,20 @@ export const refreshUserFromServer = async () => {
 };
 
 // ── Prospects ─────────────────────────────────────────────────────────────────
-export const getProspectDashboard = async () => (await apiClient.get('/prospect-dashboard')).data;
-export const getProspects = async (params) => (await apiClient.get('/prospects', { params })).data;
+export const getProspectDashboard = async () => (
+  await apiGetWithRetry(
+    '/prospect-dashboard',
+    {},
+    'Could not load your prospect dashboard.'
+  )
+).data;
+export const getProspects = async (params) => (
+  await apiGetWithRetry(
+    '/prospects',
+    { params },
+    'Could not load prospects.'
+  )
+).data;
 export const createProspect = async (data) => (await apiClient.post('/prospects', data)).data;
 export const updateProspect = async (id, data) => (await apiClient.put(`/prospects/${id}`, data)).data;
 export const deleteProspect = async (id) => (await apiClient.delete(`/prospects/${id}`)).data;
