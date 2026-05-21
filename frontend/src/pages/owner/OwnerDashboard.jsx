@@ -6,7 +6,6 @@ import {
   LogOut, Menu, X, Bell, Sun, Moon, ChevronRight,
 } from 'lucide-react';
 import OverviewPage    from './OverviewPage';
-import OwnersPage      from './OwnersPage';
 import ProspectsPage   from './ProspectsPage';
 import AddProductPage  from './AddProductPage';
 import ReportPage      from './ReportPage';
@@ -14,13 +13,12 @@ import SalesPage       from './SalesPage';
 import PresentationsPage  from './PresentationsPage';
 
 const MENU = [
-  { id: 'overview',   label: 'System Overview',     icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
-  { id: 'owners',     label: 'Manage Owners',       icon: ShieldCheck,     grad: ['#8B5CF6','#A78BFA'] },
-  { id: 'prospects',  label: 'Distributors DB',     icon: Users,           grad: ['#10B981','#34D399'] },
-  { id: 'product',    label: 'Product Catalog',     icon: Package,         grad: ['#F59E0B','#FCD34D'] },
-  { id: 'presentations',  label: 'Presentation Library',icon: Play,            grad: ['#6366F1','#818CF8'] },
-  { id: 'report',     label: 'System Analytics',    icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
-  { id: 'sales',      label: 'Sales & Transactions',icon: DollarSign,      grad: ['#10B981','#10B981'] },
+  { id: 'overview',      label: 'System Overview',       icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
+  { id: 'prospects',     label: 'Distributors DB',       icon: Users,           grad: ['#10B981','#34D399'] },
+  { id: 'product',       label: 'Product Catalog',       icon: Package,         grad: ['#F59E0B','#FCD34D'] },
+  { id: 'presentations', label: 'Presentation Library',  icon: Play,            grad: ['#6366F1','#818CF8'] },
+  { id: 'report',        label: 'System Analytics',      icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
+  { id: 'sales',         label: 'Sales & Transactions',  icon: DollarSign,      grad: ['#10B981','#10B981'] },
 ];
 
 const OwnerDashboard = () => {
@@ -40,7 +38,6 @@ const OwnerDashboard = () => {
   const renderContent = () => {
     switch (active) {
       case 'overview':  return <OverviewPage   dark={darkMode} />;
-      case 'owners':    return <OwnersPage     dark={darkMode} />;
       case 'prospects': return <ProspectsPage  dark={darkMode} />;
       case 'product':   return <AddProductPage dark={darkMode} />;
       case 'presentations': return <PresentationsPage dark={darkMode} />;

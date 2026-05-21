@@ -544,6 +544,7 @@ export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1, prefer
     const response = await apiClient.post('/distributor/join', payload, { timeout: 90000 });
     return response.data;
   } catch (error) {
+    console.log("joinNetwork ERROR [status=" + (error?.response?.status ?? "NO_RESPONSE") + "]:", JSON.stringify(error?.response?.data ?? error.message));
     if (!error.response) {
       try {
         const statusRes = await apiClient.get('/distributor/status', { timeout: 30000 });

@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, ShieldCheck, LogOut, Menu, X, Bell, Sun, Moon, ChevronRight,
+  LayoutDashboard, ShieldCheck, LogOut, Menu, X, Bell, Sun, Moon, ChevronRight, Users, BarChart2
 } from 'lucide-react';
 import AdminOverviewPage from './AdminOverviewPage';
+import ManageUsersPage   from './ManageUsersPage';
+import SalesReportsPage  from './SalesReportsPage';
 
 const MENU = [
   { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, grad: ['#6366F1','#818CF8'] },
+  { id: 'users',    label: 'Manage Users', icon: Users,           grad: ['#3B82F6','#60A5FA'] },
+  { id: 'sales',    label: 'Sales Reports',icon: BarChart2,       grad: ['#EC4899','#F472B6'] },
 ];
 
 const AdminDashboard = () => {
@@ -26,10 +30,10 @@ const AdminDashboard = () => {
 
   const renderContent = () => {
     switch (active) {
-      case 'overview':
-        return <AdminOverviewPage dark={darkMode} />;
-      default:
-        return <AdminOverviewPage dark={darkMode} />;
+      case 'overview': return <AdminOverviewPage dark={darkMode} />;
+      case 'users':    return <ManageUsersPage   dark={darkMode} />;
+      case 'sales':    return <SalesReportsPage  dark={darkMode} />;
+      default:         return <AdminOverviewPage dark={darkMode} />;
     }
   };
 

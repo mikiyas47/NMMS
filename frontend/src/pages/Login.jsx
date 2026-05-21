@@ -3,28 +3,67 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 3500;
+
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
 const Login = () => {
   const { login } = useAuth();
   const navigate   = useNavigate();
-  const [form, setForm]       = useState({ email: '', password: '' });
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [form, setForm]         = useState({ email: '', password: '' });
+  const [showPwd, setShowPwd]   = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [retryInfo, setRetryInfo] = useState(''); // "Server waking up…" message
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setRetryInfo('');
     setLoading(true);
-    try {
-      const u = await login(form.email, form.password);
-      if (u.role === 'owner') navigate('/owner');
-      else if (u.role === 'admin') navigate('/admin');
-      else setError('Access denied. Only admins and owners can log in here.');
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Login failed.');
-    } finally {
-      setLoading(false);
+
+    let lastErr = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const u = await login(form.email, form.password);
+        setRetryInfo('');
+        setLoading(false);
+
+        if (u.role === 'owner') navigate('/owner');
+        else if (u.role === 'admin') navigate('/admin');
+        else setError('Access denied. Only admins and owners can log in here.');
+        return; // success — exit loop
+      } catch (err) {
+        lastErr = err;
+        const status = err.response?.status;
+        const isServerError = !status || status >= 500; // network error or 5xx
+
+        // Only retry on server/network errors, not on 401/403 (wrong credentials)
+        if (!isServerError || attempt === MAX_RETRIES) break;
+
+        setRetryInfo(`Server is starting up… retrying (${attempt}/${MAX_RETRIES - 1})`);
+        await sleep(RETRY_DELAY_MS);
+      }
     }
+
+    // All retries exhausted — show the real error
+    setRetryInfo('');
+    const status = lastErr?.response?.status;
+    if (!status || status >= 500) {
+      setError(
+        'The server is temporarily unavailable (cold start). ' +
+        'Please wait 20–30 seconds and try again.'
+      );
+    } else {
+      setError(
+        lastErr.response?.data?.message ||
+        lastErr.message ||
+        'Login failed.'
+      );
+    }
+    setLoading(false);
   };
 
   return (
@@ -52,6 +91,13 @@ const Login = () => {
         {error && (
           <div className="login-error" role="alert">
             <span>⚠ {error}</span>
+          </div>
+        )}
+
+        {retryInfo && (
+          <div className="login-retry-info" role="status">
+            <span className="retry-spinner" />
+            <span>{retryInfo}</span>
           </div>
         )}
 
@@ -94,7 +140,10 @@ const Login = () => {
 
           <button type="submit" className="login-btn" disabled={loading} id="login-submit-btn">
             {loading ? (
-              <span className="btn-spinner" />
+              <>
+                <span className="btn-spinner" />
+                <span>{retryInfo ? 'Retrying…' : 'Signing in…'}</span>
+              </>
             ) : (
               <>
                 <LogIn size={18} />

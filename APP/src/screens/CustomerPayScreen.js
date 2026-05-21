@@ -559,24 +559,32 @@ const SuccessScreen = ({
         setJoiningNetwork(true);
         getDistributorStatus()
           .then(statusRes => {
-            return joinNetwork({
+            console.log("CustomerPayScreen statusRes:", statusRes);
+            const joinPayload = {
               product_id: productId,
               sponsor_id: statusRes?.upline_id ?? null,
               quantity: quantity ?? 1,
               preferred_leg: preferredLeg ?? null,
-            });
+            };
+            console.log("CustomerPayScreen joinNetwork payload:", joinPayload);
+            return joinNetwork(joinPayload);
           })
           .then(() => {
             setJoinDone(true);
             setJoiningNetwork(false);
           })
           .catch(err => {
+            console.log("CustomerPayScreen joinNetwork Chain Error:", err.message);
             getDistributorStatus()
               .then(s => {
+                console.log("CustomerPayScreen fallback status:", s);
                 if (s?.has_joined) setJoinDone(true);
                 else setJoinError(err.message);
               })
-              .catch(() => setJoinError(err.message))
+              .catch(fallbackErr => {
+                console.log("CustomerPayScreen fallback Error:", fallbackErr.message);
+                setJoinError(err.message);
+              })
               .finally(() => setJoiningNetwork(false));
           });
       }

@@ -177,57 +177,66 @@ class CustomerUpgradeController extends Controller
                 Stat::firstOrCreate(['distributor_id'   => $distributor->distributor_id]);
 
                 // Ensure the node and account exist in the tree
-                $hasAccount = Account::where('distributor_id', $distributor->distributor_id)->exists();
+                $accountCount = Account::where('distributor_id', $distributor->distributor_id)->count();
+                $quantity     = $payment->quantity ?? 1;
 
-                if (!$hasAccount) {
+                if ($accountCount < $quantity) {
                     $mlm         = new \App\Services\MlmEngineService();
                     $sponsorNode = Node::where('distributor_id', $payment->distributor_id)
                         ->orderBy('id', 'asc')->first();
 
                     if ($sponsorNode) {
-                        $preferredLeg  = $payment->leg ?? null;
-                        $placementNode = null;
-                        $leg           = null;
+                        $preferredLeg = $payment->leg ?? null;
+                        
+                        // Remaining accounts to create
+                        $toCreate = $quantity - $accountCount;
 
-                        if ($preferredLeg) {
-                            $existingLegChild = Node::where('parent_id', $sponsorNode->id)
-                                ->where('leg', $preferredLeg)->first();
-                            if ($existingLegChild) {
-                                $placementNode = $mlm->findPlacementNode($existingLegChild->id);
-                                $leg           = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+                        for ($i = 0; $i < $toCreate; $i++) {
+                            $placementNode = null;
+                            $leg           = null;
+
+                            // Only use preferred leg if it's the first node of the distributor EVER
+                            if ($accountCount === 0 && $i === 0 && $preferredLeg) {
+                                $existingLegChild = Node::where('parent_id', $sponsorNode->id)
+                                    ->where('leg', $preferredLeg)->first();
+                                if ($existingLegChild) {
+                                    $placementNode = $mlm->findPlacementNode($existingLegChild->id);
+                                    $leg           = $placementNode ? min(Node::where('parent_id', $placementNode->id)->count() + 1, 4) : 1;
+                                } else {
+                                    $placementNode = $sponsorNode;
+                                    $leg           = $preferredLeg;
+                                }
                             } else {
-                                $placementNode = $sponsorNode;
-                                $leg           = $preferredLeg;
+                                $placementNode = $mlm->findPlacementNode($sponsorNode->id);
+                                $leg           = $placementNode ? min(Node::where('parent_id', $placementNode->id)->count() + 1, 4) : 1;
                             }
-                        } else {
-                            $placementNode = $mlm->findPlacementNode($sponsorNode->id);
-                            $leg           = $placementNode ? min($placementNode->children()->count() + 1, 4) : 1;
+
+                            if ($placementNode) {
+                                $newNode = Node::create([
+                                    'parent_id'      => $placementNode->id,
+                                    'distributor_id' => $distributor->distributor_id,
+                                    'leg'            => $leg,
+                                ]);
+
+                                Account::create([
+                                    'distributor_id' => $distributor->distributor_id,
+                                    'node_id'        => $newNode->id,
+                                    'product_id'     => $payment->product_id,
+                                    'sponsor_id'     => $payment->distributor_id,
+                                ]);
+
+                                // Refresh points and check ranks after each account? 
+                                // Actually better to do once after the loop.
+                            }
                         }
 
-                        if ($placementNode) {
-                            $newNode = Node::create([
-                                'parent_id'      => $placementNode->id,
-                                'distributor_id' => $distributor->distributor_id,
-                                'leg'            => $leg,
-                            ]);
-
-                            Account::create([
-                                'distributor_id' => $distributor->distributor_id,
-                                'node_id'        => $newNode->id,
-                                'product_id'     => $payment->product_id,
-                                'sponsor_id'     => $payment->distributor_id,
-                            ]);
-
-                            $product = \App\Models\Product::find($payment->product_id);
-                            if ($product) {
-                                $stat = Stat::where('distributor_id', $distributor->distributor_id)->first();
-                                if ($stat) {
-                                    $stat->own_points = ($stat->own_points ?? 0) + ($product->point ?? 0);
-                                    $stat->save();
-                                }
-                            }
-
-                            $mlm->runRankCheckForAncestors($newNode, $distributor->distributor_id);
+                        $mlm->refreshOwnPoints($distributor->distributor_id);
+                        $mlm->runRankCheck($distributor->distributor_id);
+                        
+                        // Use the first new node of THIS distributor for ancestor check
+                        $firstNode = Node::where('distributor_id', $distributor->distributor_id)->orderBy('id')->first();
+                        if ($firstNode) {
+                            $mlm->runRankCheckForAncestors($firstNode, $payment->distributor_id);
                         }
                     }
                 }
