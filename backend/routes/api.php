@@ -438,7 +438,23 @@ Route::get('/customer/status', [CustomerUpgradeController::class, 'status']);
 
 // ── Temporary diagnostic routes – REMOVE AFTER USE ───────────────────────────
 
-// Automatically creates missing Account records for legacy tree data
+Route::get('/test-join-debug/{distId}/{prodId}', function($distId, $prodId) {
+    try {
+        \DB::beginTransaction();
+        $mlm = app(\App\Services\MlmEngineService::class);
+        $node = $mlm->processPurchase($distId, $prodId, null, 1);
+        \DB::rollBack();
+        return response()->json(['success' => true, 'node' => $node]);
+    } catch (\Throwable $e) {
+        \DB::rollBack();
+        return response()->json([
+            'error_message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString())
+        ], 500);
+    }
+});// Automatically creates missing Account records for legacy tree data
 Route::get('/fix-accounts', function () {
     $nodes = \App\Models\Node::all();
     $fixed = 0;
