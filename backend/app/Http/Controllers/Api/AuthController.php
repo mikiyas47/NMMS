@@ -231,19 +231,22 @@ class AuthController extends Controller
                 ];
             });
             
-            // Monthly revenue trend (last 6 months)
+            // Monthly revenue trend (last 6 months) - Database agnostic approach
             $monthlyRevenue = \App\Models\Payment::where('status', 'success')
                 ->where('created_at', '>=', now()->subMonths(6))
-                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(amount) as revenue')
-                ->groupBy('month')
-                ->orderBy('month', 'asc')
                 ->get()
-                ->map(function ($item) {
+                ->groupBy(function($item) {
+                    return $item->created_at->format('Y-m');
+                })
+                ->map(function ($group, $month) {
                     return [
-                        'month' => $item->month,
-                        'revenue' => (float) $item->revenue,
+                        'month' => $month,
+                        'revenue' => (float) $group->sum('amount'),
                     ];
-                });
+                })
+                ->values()
+                ->sortBy('month')
+                ->values();
             
             return response()->json([
                 'distributors' => [
