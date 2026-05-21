@@ -197,27 +197,28 @@ class AuthController extends Controller
                         'id' => $payment->id,
                         'customer_name' => $payment->customer_name,
                         'product_name' => $payment->product->name ?? 'Unknown',
-                        'amount' => $payment->amount,
+                        'amount' => (float) $payment->amount,
                         'currency' => $payment->currency,
                         'distributor_name' => $payment->distributor->name ?? 'Unknown',
                         'created_at' => $payment->created_at->format('Y-m-d H:i:s'),
                     ];
                 });
             
-            // Product sales breakdown
-            $productSales = \App\Models\Payment::where('status', 'success')
+            // Product sales breakdown - Fixed query
+            $productSalesRaw = \App\Models\Payment::where('status', 'success')
                 ->selectRaw('product_id, COUNT(*) as sales_count, SUM(amount) as total_revenue')
                 ->groupBy('product_id')
-                ->with('product')
-                ->get()
-                ->map(function ($sale) {
-                    return [
-                        'product_id' => $sale->product_id,
-                        'product_name' => $sale->product->name ?? 'Unknown',
-                        'sales_count' => $sale->sales_count,
-                        'total_revenue' => $sale->total_revenue,
-                    ];
-                });
+                ->get();
+            
+            $productSales = $productSalesRaw->map(function ($sale) {
+                $product = \App\Models\Product::find($sale->product_id);
+                return [
+                    'product_id' => $sale->product_id,
+                    'product_name' => $product->name ?? 'Unknown',
+                    'sales_count' => (int) $sale->sales_count,
+                    'total_revenue' => (float) $sale->total_revenue,
+                ];
+            });
             
             // Monthly revenue trend (last 6 months)
             $monthlyRevenue = \App\Models\Payment::where('status', 'success')
@@ -225,7 +226,13 @@ class AuthController extends Controller
                 ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(amount) as revenue')
                 ->groupBy('month')
                 ->orderBy('month', 'asc')
-                ->get();
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'month' => $item->month,
+                        'revenue' => (float) $item->revenue,
+                    ];
+                });
             
             return response()->json([
                 'distributors' => [
@@ -235,7 +242,7 @@ class AuthController extends Controller
                 ],
                 'transactions' => [
                     'total' => $totalTransactions,
-                    'total_revenue' => $totalRevenue,
+                    'total_revenue' => (float) $totalRevenue,
                     'pending' => $pendingTransactions,
                     'failed' => $failedTransactions,
                 ],
@@ -248,6 +255,7 @@ class AuthController extends Controller
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
             ]);
             
             return response()->json([
