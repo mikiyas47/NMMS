@@ -90,7 +90,7 @@ class MlmEngineService
     }
 
     // ─── Recalculate own_points for a distributor ─────────────────────────────
-    private function refreshOwnPoints(int $distributorId): int
+    public function refreshOwnPoints(int $distributorId): int
     {
         $pts = Account::where('distributor_id', $distributorId)
             ->with('product')
