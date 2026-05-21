@@ -43,79 +43,90 @@ class AuthController extends Controller
     {
         try {
             $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
-
-        // First, check if it's an Admin/Owner in the 'users' table
-        // IMPORTANT: Only 'admin' and 'owner' roles are allowed here
-        $user = \App\Models\User::where('email', $request->email)->first();
-
-        if ($user && Hash::check($request->password, $user->password)) {
-            // Reject if the role is not admin or owner — prevents old 'user' role records
-            // from slipping through to the distributor dashboard
-            if (!in_array($user->role, ['admin', 'owner'])) {
-                return response()->json(['message' => 'Invalid login details'], 401);
-            }
-            $token = $user->createToken('auth_token')->plainTextToken;
-            return response()->json([
-                'access_token' => $token,
-                'token_type' => 'Bearer',
-                'user' => $user,
-            ]);
-        }
-
-        // If not found or password mismatch, check 'distributors' table
-        $distributor = \App\Models\Distributor::where('email', $request->email)->first();
-
-        if ($distributor) {
-            Log::info('Distributor login attempt', [
-                'email'     => $request->email,
-                'status'    => $distributor->status,
-                'is_paid'   => $distributor->is_paid,
-                'has_password' => !empty($distributor->password),
+                'email' => 'required|email',
+                'password' => 'required',
             ]);
 
-            if (Hash::check($request->password, $distributor->password)) {
-                // Reject inactive distributors — they need to complete upgrade first
-                if ($distributor->status !== 'active') {
-                    Log::warning('Inactive distributor tried to login', [
-                        'email'  => $request->email,
-                        'status' => $distributor->status,
-                    ]);
-                    return response()->json([
-                        'message' => 'Your account is not yet active. Please complete the distributor activation process first.',
-                    ], 403);
+            Log::info('Login attempt', ['email' => $request->email]);
+
+            // First, check if it's an Admin/Owner in the 'users' table
+            // IMPORTANT: Only 'admin' and 'owner' roles are allowed here
+            $user = \App\Models\User::where('email', $request->email)->first();
+
+            if ($user && Hash::check($request->password, $user->password)) {
+                // Reject if the role is not admin or owner — prevents old 'user' role records
+                // from slipping through to the distributor dashboard
+                if (!in_array($user->role, ['admin', 'owner'])) {
+                    Log::warning('Non-admin/owner tried to login', ['email' => $request->email, 'role' => $user->role]);
+                    return response()->json(['message' => 'Invalid login details'], 401);
                 }
-
-                $token = $distributor->createToken('auth_token')->plainTextToken;
-
-                Log::info('Distributor login successful', [
-                    'distributor_id' => $distributor->distributor_id,
-                    'email'          => $distributor->email,
-                    'status'         => $distributor->status,
-                    'role'           => 'distributor',
-                ]);
-
+                
+                Log::info('Admin/Owner login successful', ['email' => $user->email, 'role' => $user->role]);
+                
+                $token = $user->createToken('auth_token')->plainTextToken;
                 return response()->json([
                     'access_token' => $token,
-                    'token_type'   => 'Bearer',
-                    'user'         => $distributor,
+                    'token_type' => 'Bearer',
+                    'user' => $user,
                 ]);
             }
-        }
 
-        Log::warning('Failed login attempt', ['email' => $request->email]);
+            // If not found or password mismatch, check 'distributors' table
+            $distributor = \App\Models\Distributor::where('email', $request->email)->first();
 
-        return response()->json([
-            'message' => 'Invalid login details'
-        ], 401);
+            if ($distributor) {
+                Log::info('Distributor login attempt', [
+                    'email'     => $request->email,
+                    'status'    => $distributor->status,
+                    'is_paid'   => $distributor->is_paid,
+                    'has_password' => !empty($distributor->password),
+                ]);
+
+                if (Hash::check($request->password, $distributor->password)) {
+                    // Reject inactive distributors — they need to complete upgrade first
+                    if ($distributor->status !== 'active') {
+                        Log::warning('Inactive distributor tried to login', [
+                            'email'  => $request->email,
+                            'status' => $distributor->status,
+                        ]);
+                        return response()->json([
+                            'message' => 'Your account is not yet active. Please complete the distributor activation process first.',
+                        ], 403);
+                    }
+
+                    $token = $distributor->createToken('auth_token')->plainTextToken;
+
+                    Log::info('Distributor login successful', [
+                        'distributor_id' => $distributor->distributor_id,
+                        'email'          => $distributor->email,
+                        'status'         => $distributor->status,
+                        'role'           => 'distributor',
+                    ]);
+
+                    return response()->json([
+                        'access_token' => $token,
+                        'token_type'   => 'Bearer',
+                        'user'         => $distributor,
+                    ]);
+                }
+            }
+
+            Log::warning('Failed login attempt - invalid credentials', ['email' => $request->email]);
+
+            return response()->json([
+                'message' => 'Invalid login details'
+            ], 401);
         } catch (\Throwable $e) {
+            Log::error('Login error', [
+                'message' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
             return response()->json([
                 'message' => 'Server Error',
                 'error' => $e->getMessage(),
-                'file'  => $e->getFile(),
-                'line'  => $e->getLine()
             ], 500);
         }
     }
