@@ -47,24 +47,90 @@ class MlmEngineService
             $mainNode = Node::where('distributor_id', $distributorId)->orderBy('id')->first();
 
             $nodes = [];
-            for ($i = 0; $i < $quantity; $i++) {
-                $placementNode = null;
-                $leg = null;
 
-                if (!$mainNode) {
-                    $companyRoot = Node::whereNull('parent_id')->first();
-                    if ($companyRoot) {
-                        $placementNode = $this->findPlacementNode($companyRoot->id);
-                        if (!$placementNode) {
-                            throw new \Exception("No placement slot found in tree for new distributor {$distributorId}.");
-                        }
-                        $leg = $this->calculateNextLeg($placementNode->id);
-                    } else {
-                        // Creating the very first node in the system
-                        $newNode = Node::create(['parent_id' => null, 'distributor_id' => $distributorId, 'leg' => 1]);
-                        $mainNode = $newNode;
+            // ── CASE A: First-time join (no existing node) ─────────────────────
+            // Place the first node in the company BFS tree. Additional nodes
+            // (quantity > 1) are placed as direct children of that first node.
+            if (!$mainNode) {
+                $companyRoot = Node::whereNull('parent_id')->first();
+
+                if ($companyRoot) {
+                    // BFS-find the first available slot in the company tree
+                    $treeParent = $this->findPlacementNode($companyRoot->id);
+                    if (!$treeParent) {
+                        throw new \Exception("No placement slot found in tree for new distributor {$distributorId}.");
                     }
+                    $firstLeg = $this->calculateNextLeg($treeParent->id);
+
+                    // Create the main / first node
+                    $mainNode = Node::create([
+                        'parent_id'      => $treeParent->id,
+                        'distributor_id' => $distributorId,
+                        'leg'            => $firstLeg,
+                    ]);
+                    Account::create([
+                        'distributor_id' => $distributorId,
+                        'node_id'        => $mainNode->id,
+                        'product_id'     => $productId,
+                        'sponsor_id'     => $sponsorId,
+                    ]);
+                    $nodes[] = $mainNode;
+
+                    // Extra nodes (doubling, tripling, quadrupling) go directly
+                    // under the distributor's own main node as child legs.
+                    for ($i = 1; $i < $quantity; $i++) {
+                        $extraLeg  = $this->calculateNextLeg($mainNode->id);
+                        $extraNode = Node::create([
+                            'parent_id'      => $mainNode->id,
+                            'distributor_id' => $distributorId,
+                            'leg'            => $extraLeg,
+                        ]);
+                        Account::create([
+                            'distributor_id' => $distributorId,
+                            'node_id'        => $extraNode->id,
+                            'product_id'     => $productId,
+                            'sponsor_id'     => $sponsorId,
+                        ]);
+                        $nodes[] = $extraNode;
+                    }
+
                 } else {
+                    // Very first node in the entire system — becomes the root
+                    $mainNode = Node::create(['parent_id' => null, 'distributor_id' => $distributorId, 'leg' => 1]);
+                    Account::create([
+                        'distributor_id' => $distributorId,
+                        'node_id'        => $mainNode->id,
+                        'product_id'     => $productId,
+                        'sponsor_id'     => $sponsorId,
+                    ]);
+                    $nodes[] = $mainNode;
+
+                    for ($i = 1; $i < $quantity; $i++) {
+                        $extraLeg  = $i + 1; // legs 2, 3, 4
+                        $extraNode = Node::create([
+                            'parent_id'      => $mainNode->id,
+                            'distributor_id' => $distributorId,
+                            'leg'            => $extraLeg,
+                        ]);
+                        Account::create([
+                            'distributor_id' => $distributorId,
+                            'node_id'        => $extraNode->id,
+                            'product_id'     => $productId,
+                            'sponsor_id'     => $sponsorId,
+                        ]);
+                        $nodes[] = $extraNode;
+                    }
+                }
+
+            // ── CASE B: Distributor already has a main node ────────────────────
+            // Doubling / tripling / quadrupling. Each new node is placed via BFS
+            // under the distributor's own main node (respecting preferredLeg for
+            // the very first extra node if supplied).
+            } else {
+                for ($i = 0; $i < $quantity; $i++) {
+                    $placementNode = null;
+                    $leg = null;
+
                     if ($i === 0 && $preferredLeg) {
                         $existingLegChild = Node::where('parent_id', $mainNode->id)->where('leg', $preferredLeg)->first();
                         if ($existingLegChild) {
@@ -84,27 +150,20 @@ class MlmEngineService
                         }
                         $leg = $this->calculateNextLeg($placementNode->id);
                     }
-                }
 
-                if ($placementNode) {
                     $newNode = Node::create([
                         'parent_id'      => $placementNode->id,
                         'distributor_id' => $distributorId,
                         'leg'            => $leg,
                     ]);
-                    if (!$mainNode) $mainNode = $newNode;
-                } else {
-                    $newNode = $mainNode;
+                    Account::create([
+                        'distributor_id' => $distributorId,
+                        'node_id'        => $newNode->id,
+                        'product_id'     => $productId,
+                        'sponsor_id'     => $sponsorId,
+                    ]);
+                    $nodes[] = $newNode;
                 }
-
-                Account::create([
-                    'distributor_id' => $distributorId,
-                    'node_id'        => $newNode->id,
-                    'product_id'     => $productId,
-                    'sponsor_id'     => $sponsorId,
-                ]);
-
-                $nodes[] = $newNode;
             }
 
             // Mark distributor as paid
@@ -123,8 +182,9 @@ class MlmEngineService
             DB::rollBack();
             Log::error('MLM processPurchase Error: ' . $e->getMessage(), [
                 'distributor_id' => $distributorId,
-                'product_id' => $productId,
-                'file' => $e->getFile() . ':' . $e->getLine(),
+                'product_id'     => $productId,
+                'file'           => $e->getFile() . ':' . $e->getLine(),
+                'trace'          => substr($e->getTraceAsString(), 0, 2000),
             ]);
             throw $e;
         }
