@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
         }
 
         // Owner account
-        User::firstOrCreate(
+        User::updateOrCreate(
             ['email' => 'miki@gmail.com'],
             [
                 'name'     => 'Miki Owner',
@@ -50,7 +50,7 @@ class DatabaseSeeder extends Seeder
         );
 
         // Additional owner account
-        User::firstOrCreate(
+        User::updateOrCreate(
             ['email' => 'mikila@gmail.com'],
             [
                 'name'     => 'Owner',
