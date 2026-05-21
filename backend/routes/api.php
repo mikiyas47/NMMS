@@ -20,6 +20,17 @@ Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
+// ── Admin Area ───────────────────────────────────────────────────────────────
+use App\Http\Controllers\Api\AdminController;
+Route::middleware('auth:sanctum,api')->prefix('admin')->group(function () {
+    Route::get('/users', [AdminController::class, 'getAllUsers']);
+    Route::post('/users', [AdminController::class, 'createUser']);
+    Route::put('/users/{id}', [AdminController::class, 'updateUser']);
+    Route::patch('/users/{id}/status', [AdminController::class, 'toggleStatus']);
+    Route::get('/sales-report', [AdminController::class, 'salesReport']);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 Route::get('/products', [\App\Http\Controllers\ProductController::class, 'index']);
 Route::middleware('auth:sanctum,api')->group(function () {
     Route::post('/products', [\App\Http\Controllers\ProductController::class, 'store']);
