@@ -19,7 +19,14 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:8081',
+        'exp://localhost:8081',
+        'https://nmms-frontend.onrender.com',
+        // Add your production frontend URL here if different
+    ],
 
     'allowed_origins_patterns' => [],
 
