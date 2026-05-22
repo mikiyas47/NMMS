@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use App\Models\Distributor;
 use App\Models\Account;
 use App\Models\Node;
@@ -152,13 +151,6 @@ class CustomerUpgradeController extends Controller
 
             } else {
                 // Distributor record already exists — update password and activate
-                Log::info('CustomerUpgrade: Activating existing distributor', [
-                    'distributor_id' => $distributor->distributor_id,
-                    'email'          => $email,
-                    'old_status'     => $distributor->status,
-                    'old_is_paid'    => $distributor->is_paid,
-                ]);
-
                 // Use DB::update for a direct SQL update — avoids any model cast issues
                 DB::table('distributors')
                     ->where('distributor_id', $distributor->distributor_id)
@@ -240,12 +232,6 @@ class CustomerUpgradeController extends Controller
                         }
                     }
                 }
-
-                Log::info('CustomerUpgrade: Distributor activated', [
-                    'distributor_id' => $distributor->distributor_id,
-                    'new_status'     => $distributor->status,
-                    'new_is_paid'    => $distributor->is_paid,
-                ]);
             }
 
             // ── Step 3: Mark payment as success and pay commission ────────────
@@ -283,12 +269,6 @@ class CustomerUpgradeController extends Controller
 
             DB::commit();
 
-            Log::info('CustomerUpgrade: Complete', [
-                'distributor_id' => $distributor->distributor_id,
-                'status'         => $distributor->status,
-                'is_paid'        => $distributor->is_paid,
-            ]);
-
             return response()->json([
                 'status'       => 'success',
                 'message'      => 'Welcome! Your distributor account is now active.',
@@ -302,15 +282,9 @@ class CustomerUpgradeController extends Controller
 
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('CustomerUpgrade: Error', [
-                'email'   => $email,
-                'tx_ref'  => $data['tx_ref'],
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile() . ':' . $e->getLine(),
-                'trace'   => substr($e->getTraceAsString(), 0, 3000),
-            ]);
             return response()->json([
                 'message' => 'Account activation failed: ' . $e->getMessage(),
+                'debug'   => basename($e->getFile()) . ':' . $e->getLine(),
             ], 500);
         }
     }
