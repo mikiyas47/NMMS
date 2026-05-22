@@ -118,6 +118,7 @@ class DistributorJoinController extends Controller
             return response()->json([
                 'status'  => 'error',
                 'message' => $e->getMessage(),
+                'debug'   => $e->getFile() . ':' . $e->getLine(),
             ], 500);
         }
     }
