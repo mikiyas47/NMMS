@@ -22,6 +22,7 @@ class DistributorJoinController extends Controller
      */
     public function join(Request $request, MlmEngineService $mlm)
     {
+        try {
         $user = $request->user();
 
         if (!$user) {
@@ -73,7 +74,6 @@ class DistributorJoinController extends Controller
             ], 422);
         }
 
-        try {
             // Pass the full quantity in one call — processPurchase handles the loop
             // internally inside a single DB transaction.
             $account = $mlm->processPurchase($distributorId, $data['product_id'], $sponsorId, $quantity, $preferredLeg);
@@ -110,7 +110,7 @@ class DistributorJoinController extends Controller
             ]);
         } catch (\Throwable $e) {
             Log::error('DistributorJoin: Failed', [
-                'distributor_id' => $distributorId,
+                'distributor_id' => $distributorId ?? 'unknown',
                 'error'          => $e->getMessage(),
                 'file'           => $e->getFile() . ':' . $e->getLine(),
                 'trace'          => substr($e->getTraceAsString(), 0, 2000),
@@ -118,7 +118,7 @@ class DistributorJoinController extends Controller
             return response()->json([
                 'status'  => 'error',
                 'message' => $e->getMessage(),
-                'debug'   => $e->getFile() . ':' . $e->getLine(),
+                'debug'   => basename($e->getFile()) . ':' . $e->getLine(),
             ], 500);
         }
     }
