@@ -549,43 +549,53 @@ const SuccessScreen = ({
   const [joinError, setJoinError] = useState(null);
   const joinCalledRef = useRef(false);
 
-  useEffect(() => {
+   useEffect(() => {
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
 
     if (isSelfPurchase) {
-      // Self-purchase: call joinNetwork to register the doubled node
       if (!joinCalledRef.current) {
         joinCalledRef.current = true;
         setJoiningNetwork(true);
+        setJoinError(null);
         getDistributorStatus()
           .then(statusRes => {
             console.log("CustomerPayScreen statusRes:", statusRes);
+            const sponsorId = statusRes?.upline_id ?? null;
+            if (!sponsorId) {
+              console.log("CustomerPayScreen: no upline_id — attempting joinNetwork with no sponsor (tree root will be used)");
+            }
             const joinPayload = {
-              product_id: productId,
-              sponsor_id: statusRes?.upline_id ?? null,
-              quantity: quantity ?? 1,
+              product_id:   productId,
+              sponsor_id:   sponsorId,
+              quantity:     quantity ?? 1,
               preferred_leg: preferredLeg ?? null,
             };
             console.log("CustomerPayScreen joinNetwork payload:", joinPayload);
             return joinNetwork(joinPayload);
           })
-          .then(() => {
+          .then(res => {
+            console.log("CustomerPayScreen joinNetwork SUCCESS:", res);
             setJoinDone(true);
             setJoiningNetwork(false);
           })
           .catch(err => {
-            console.log("CustomerPayScreen joinNetwork Chain Error:", err.message);
+            console.error("CustomerPayScreen joinNetwork ERROR:", err.message);
+            setJoinError(err.message || 'Registration failed. Please contact your distributor for help.');
+            setJoiningNetwork(false);
+            // Fallback: check status one more time
             getDistributorStatus()
               .then(s => {
                 console.log("CustomerPayScreen fallback status:", s);
-                if (s?.has_joined) setJoinDone(true);
-                else setJoinError(err.message);
+                if (s?.has_joined) {
+                  setJoinDone(true);
+                  setJoinError(null);
+                }
+                // If has_joined is still false, leave joinError showing to user
               })
               .catch(fallbackErr => {
-                console.log("CustomerPayScreen fallback Error:", fallbackErr.message);
-                setJoinError(err.message);
-              })
-              .finally(() => setJoiningNetwork(false));
+                console.error("CustomerPayScreen fallback status ERROR:", fallbackErr.message);
+                // leave joinError as-is
+              });
           });
       }
     } else {

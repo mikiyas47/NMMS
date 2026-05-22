@@ -105,6 +105,7 @@ const CustomerPay = () => {
   const [password, setPassword]         = useState('');
   const [confirmPw, setConfirmPw]       = useState('');
   const [upgradeError, setUpgradeError] = useState('');
+  const [stayError, setStayError]       = useState('');
   const stayCalledRef                   = useRef(false);
 
   useEffect(() => {
@@ -129,13 +130,22 @@ const CustomerPay = () => {
   useEffect(() => {
     if (paymentStatus === 'success' && txRef && email && !stayCalledRef.current) {
       stayCalledRef.current = true;
+      setStayError('');
       fetch(`${API_BASE}/payments/stay-as-customer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ tx_ref: txRef, customer_email: email }),
-      }).catch(e => console.log('stayAsCustomer error (non-fatal):', e.message));
+        body: JSON.stringify({ tx_ref: txRef, customer_email: email, distributor_id: distributorId }),
+      }).then(async r => {
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          throw new Error(d.message || 'Registration failed');
+        }
+      }).catch(e => {
+        console.error('stayAsCustomer error:', e.message);
+        setStayError('⚠️ Could not register your node in the network. Contact your distributor for support, or try again later.');
+      });
     }
-  }, [paymentStatus, txRef, email]);
+  }, [paymentStatus, txRef, email, distributorId]);
 
   const loadProducts = async () => {
     try {
@@ -298,6 +308,13 @@ const CustomerPay = () => {
             </div>
           ))}
         </div>
+
+        {/* Node registration error */}
+        {stayError && (
+          <div style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#FCA5A5', padding: '0.9rem 1rem', borderRadius: '12px', marginBottom: '1.25rem', fontWeight: '500', fontSize: '0.85rem' }}>
+            {stayError}
+          </div>
+        )}
 
         {/* Upgrade choice — only for real customers, not distributors buying for themselves */}
         {!isSelfPurchase && upgradeStep === 'choice' && (

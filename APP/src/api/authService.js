@@ -555,11 +555,15 @@ export const joinNetwork = async ({ product_id, sponsor_id, quantity = 1, prefer
             accounts: statusRes.data.accounts || [],
           };
         }
-      } catch {}
+      } catch (fallbackErr) {
+        console.error("joinNetwork fallback status check error:", fallbackErr?.message);
+      }
+      // Network error with no prior registration — give server time to cool start
       throw new Error('The server is starting up. Please wait 30 seconds and try again.');
     }
-    if (error.response?.data?.message) throw new Error(error.response.data.message);
-    throw new Error(error.message || 'Could not connect to the server.');
+    // API responded with an error — forward the message
+    const apiMessage = error?.response?.data?.message || error.message || 'Could not connect to the server.';
+    throw new Error(apiMessage);
   }
 };
 

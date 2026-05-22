@@ -126,7 +126,13 @@ class PaymentController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // 2. WEBHOOK — POST /api/payments/webhook  (PUBLIC — no auth)
-    //    Chapa calls this after every payment attempt
+    //    Chapa calls this after every payment attempt.
+    //
+    //    IMPORTANT: This endpoint verifies the incoming webhook signature using
+    //    HMAC-SHA256 with CHAPA_SECRET_KEY. If the key is a test/placeholder
+    //    value (e.g. "CHASECK_TEST-...") the signature will never match and
+    //    ALL webhooks will be rejected silently. Set the real live secret key in
+    //    your Render environment variables before enabling production payments.
     // ─────────────────────────────────────────────────────────────────────────
     public function webhook(Request $request)
     {
@@ -548,8 +554,21 @@ class PaymentController extends Controller
             ])->get(self::CHAPA_BASE . '/transaction/verify/' . $txRef);
 
             $body = $response->json();
-            return ($body['status'] ?? '') === 'success'
-                && strtolower($body['data']['status'] ?? '') === 'success';
+
+            $dataStatus = $body['data']['status'] ?? null;
+            $status     = $body['status'] ?? null;
+
+            // Guard: require both top-level and data-level status to be truthy
+            if (!$status || !$dataStatus || strtolower((string) $dataStatus) !== 'success') {
+                Log::warning('Chapa verify: not successful', [
+                    'status' => $status,
+                    'data_status' => $dataStatus,
+                    'tx_ref' => $txRef,
+                ]);
+                return false;
+            }
+
+            return true;
         } catch (\Exception $e) {
             Log::error('Chapa verify failed: ' . $e->getMessage());
             return false;
