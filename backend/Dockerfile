@@ -43,7 +43,16 @@ RUN cp /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini && \
     sed -i 's/post_max_size = 8M/post_max_size = 100M/' /usr/local/etc/php/php.ini && \
     sed -i 's/memory_limit = 128M/memory_limit = 256M/' /usr/local/etc/php/php.ini
 
-RUN a2enmod rewrite
+RUN a2enmod rewrite headers
+
+# Add CORS headers at Apache level — ensures headers are present even on 500 errors
+RUN echo '<IfModule mod_headers.c>\n\
+    Header always set Access-Control-Allow-Origin "*"\n\
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, PATCH, OPTIONS"\n\
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin"\n\
+    Header always set Access-Control-Max-Age "86400"\n\
+</IfModule>' > /etc/apache2/conf-available/cors.conf \
+    && a2enconf cors
 
 # Expose port
 EXPOSE 80

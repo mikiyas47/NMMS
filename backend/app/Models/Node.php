@@ -9,6 +9,7 @@ class Node extends Model
     protected $fillable = [
         'parent_id',
         'leg',
+        'rank',
         'distributor_id',
     ];
 

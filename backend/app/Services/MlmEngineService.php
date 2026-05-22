@@ -179,6 +179,9 @@ class MlmEngineService
                     } else {
                         // No preferred leg — BFS from main node
                         $placementNode = $this->findPlacementNodeFromMap($mainNodeId, $allNodes, $childrenMap);
+                        if (!$placementNode) {
+                            throw new \Exception('No available placement slot in the tree. Your tree is full.');
+                        }
                         $leg = count($childrenMap[$placementNode->id] ?? []) + 1;
                         if ($leg > 4) $leg = 4;
                     }
