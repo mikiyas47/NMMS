@@ -14,6 +14,8 @@
 - ✅ Added CORS headers at Apache level (Dockerfile) - always present
 - ✅ Added CORS headers in exception handler - present even on errors
 - ✅ Changed from specific origins to `*` - works from any origin
+- ✅ Updated ForceApiCors middleware to reflect ANY origin back (allows credentials)
+- ✅ Updated config/cors.php to allow all origins
 
 **Result:** CORS errors are gone, API calls work from localhost and production
 
