@@ -16,7 +16,6 @@ import DistributorOverview from './distributor/DistributorOverview';
 import MyNetwork          from './distributor/MyNetwork';
 import TreeScreen         from './distributor/TreeScreen';
 import EarningsScreen     from './distributor/EarningsScreen';
-import GoalsScreen        from './distributor/GoalsScreen';
 import ProfileScreen      from './distributor/ProfileScreen';
 import ProductsScreen     from './distributor/ProductsScreen';
 import ContactsScreen     from './distributor/ContactsScreen';
@@ -36,7 +35,6 @@ const MENU = [
   { id: 'performance',label: 'Performance', icon: Zap,        gradient: ['#8B5CF6','#A78BFA'],  section: 'main' },
   { id: 'products',  label: 'Products',    icon: ShoppingBag,gradient: ['#8B5CF6','#A78BFA'],  section: 'main' },
   { id: 'earnings',  label: 'Earnings',    icon: DollarSign, gradient: ['#EF4444','#F97316'],  section: 'finance' },
-  { id: 'goals',     label: 'Goals',       icon: Target,     gradient: ['#EC4899','#F472B6'],  section: 'finance' },
   { id: 'profile',   label: 'Profile',     icon: User,       gradient: ['#3B82F6','#60A5FA'],  section: 'account' },
 ];
 
@@ -117,7 +115,6 @@ const DistributorDashboard = ({ navigation }) => {
       case 'performance':return <PerformanceScreen C={C} />;
       case 'products':  return <ProductsScreen C={C} navigation={navigation} />;
       case 'earnings':  return <EarningsScreen C={C} />;
-      case 'goals':     return <GoalsScreen C={C} />;
       case 'profile':   return <ProfileScreen C={C} />;
       default:          return <DistributorOverview C={C} />;
     }
