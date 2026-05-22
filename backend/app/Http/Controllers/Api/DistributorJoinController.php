@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Account;
 use App\Services\MlmEngineService;
-use Illuminate\Support\Facades\Log;
 
 class DistributorJoinController extends Controller
 {
@@ -26,7 +25,6 @@ class DistributorJoinController extends Controller
         $user = $request->user();
 
         if (!$user) {
-            Log::error('DistributorJoin: No authenticated user found');
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Authentication required. Please log in again.',
@@ -34,12 +32,6 @@ class DistributorJoinController extends Controller
         }
 
         $distributorId = $user->distributor_id ?? $user->id;
-
-        Log::info('DistributorJoin: Starting join request', [
-            'distributor_id' => $distributorId,
-            'email'          => $user->email ?? 'N/A',
-            'request_data'   => $request->only(['product_id', 'sponsor_id', 'quantity']),
-        ]);
 
         $data = $request->validate([
             'product_id'    => 'required|exists:products,id',
@@ -60,12 +52,6 @@ class DistributorJoinController extends Controller
         // Validate account count before touching the DB
         $existingCount = Account::where('distributor_id', $distributorId)->count();
         $maxAccounts   = 4;
-
-        Log::info('DistributorJoin: Pre-check', [
-            'existing_accounts' => $existingCount,
-            'requested_qty'     => $quantity,
-            'sponsor_id'        => $sponsorId,
-        ]);
 
         if ($existingCount + $quantity > $maxAccounts) {
             return response()->json([
@@ -94,13 +80,6 @@ class DistributorJoinController extends Controller
             // Reload the distributor to get fresh is_paid value
             $user->refresh();
 
-            Log::info('DistributorJoin: Join complete', [
-                'distributor_id'   => $distributorId,
-                'quantity'         => $quantity,
-                'total_accounts'   => $accounts->count(),
-                'is_paid'          => $user->is_paid,
-            ]);
-
             return response()->json([
                 'status'   => 'success',
                 'message'  => "Successfully joined with {$quantity} account" . ($quantity > 1 ? 's' : '') . '.',
@@ -109,12 +88,6 @@ class DistributorJoinController extends Controller
                 'account_count' => $accounts->count(),
             ]);
         } catch (\Throwable $e) {
-            Log::error('DistributorJoin: Failed', [
-                'distributor_id' => $distributorId ?? 'unknown',
-                'error'          => $e->getMessage(),
-                'file'           => $e->getFile() . ':' . $e->getLine(),
-                'trace'          => substr($e->getTraceAsString(), 0, 2000),
-            ]);
             return response()->json([
                 'status'  => 'error',
                 'message' => $e->getMessage(),
