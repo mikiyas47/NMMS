@@ -136,24 +136,35 @@ class MlmEngineService
 
             $nodes       = [];
             $lastAccount = null;
+            // Track accounts created in this transaction (not yet committed to DB)
+            $inTxAccounts = [];
 
             for ($i = 0; $i < $quantity; $i++) {
-                // Reload all nodes fresh each iteration so we see nodes from previous iterations
-                // AND nodes created by previous separate transactions (e.g. first join)
-                $allNodes    = Node::all()->keyBy('id');
-                $childrenMap = [];
-                foreach ($allNodes as $node) {
-                    if ($node->parent_id !== null) {
-                        $childrenMap[$node->parent_id][] = $node->id;
+                // Only reload from DB on the FIRST iteration.
+                // On subsequent iterations, use the in-memory maps which include
+                // nodes created earlier in this same (uncommitted) transaction.
+                if ($i === 0) {
+                    $allNodes    = Node::all()->keyBy('id');
+                    $childrenMap = [];
+                    foreach ($allNodes as $node) {
+                        if ($node->parent_id !== null) {
+                            $childrenMap[$node->parent_id][] = $node->id;
+                        }
                     }
                 }
 
-                // Re-fetch the first account so each iteration sees nodes from previous iterations
+                // Check for existing first account — include in-transaction accounts
                 $currentFirst = Account::where('distributor_id', $distributorId)->orderBy('id')->first();
+                // If not in DB yet, check in-transaction list
+                if (!$currentFirst && !empty($inTxAccounts)) {
+                    $currentFirst = (object) $inTxAccounts[0];
+                }
 
                 if ($currentFirst && $currentFirst->node_id) {
                     // ── Doubling: place new node under the main node ──────────
-                    $mainNodeId = Account::where('distributor_id', $distributorId)->orderBy('id')->value('node_id');
+                    // Use in-memory first account's node_id (works even inside transaction)
+                    $mainNodeId = $inTxAccounts[0]['node_id'] ?? 
+                                  Account::where('distributor_id', $distributorId)->orderBy('id')->value('node_id');
 
                     if ($preferredLeg) {
                         // Place at the specific leg the distributor selected
@@ -245,6 +256,15 @@ class MlmEngineService
                     'product_id'     => $productId,
                     'sponsor_id'     => $sponsorId,
                 ]);
+
+                // Track this account so next iteration knows a first account exists
+                $inTxAccounts[] = [
+                    'id'             => $lastAccount->id,
+                    'distributor_id' => $distributorId,
+                    'node_id'        => $newNode->id,
+                    'product_id'     => $productId,
+                    'sponsor_id'     => $sponsorId,
+                ];
 
                 $nodes[] = $newNode;
             }
